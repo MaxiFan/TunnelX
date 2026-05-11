@@ -21,12 +21,16 @@ Public downloads should be attached to GitHub Releases after the checklist is co
 
 ## Build
 
-Requirements:
+End-user requirements for the recommended standalone release:
 
 - Windows 10/11
 - 64-bit Windows (`win-x64`). 32-bit Windows is not supported by the current release package.
-- .NET 8 SDK
 - Administrator privileges when running the app, because route and packet interception features need elevated access
+- No separate .NET Runtime installation is required for the self-contained standalone EXE.
+
+Developer requirements for building from source:
+
+- .NET 8 SDK
 
 ```powershell
 dotnet build AppTunnel.sln -c Release

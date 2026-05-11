@@ -33,6 +33,8 @@ Use this checklist before making the repository public or attaching a release bu
 - [ ] Run `dotnet build AppTunnel.sln -c Release`.
 - [ ] Run standalone publish command from `docs/BUILD.md`.
 - [ ] Confirm final file name includes version, for example `TunnelX-v1.2.21-standalone-compressed.exe`.
+- [ ] Confirm public downloads are self-contained standalone builds, not framework-dependent developer builds.
+- [ ] Confirm release notes say the standalone EXE does not require a separate .NET Runtime installation.
 - [ ] Do not publish a 32-bit build unless x86 native dependencies and the full networking test matrix have been verified.
 
 ## Network Test Matrix
