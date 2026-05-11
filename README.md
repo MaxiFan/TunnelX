@@ -47,8 +47,7 @@ TunnelX is licensed under **GPL-3.0-or-later**. Bundled third-party components k
 
 TunnelX is free. Donations are optional and help keep the project maintained.
 
-- PayPal: `gallafan@gmail.com`
-- Crypto wallets: see `docs/DONATE.md`.
+Use the GitHub funding button or see `docs/DONATE.md` for donation options.
 
 ## Safety Notice
 
