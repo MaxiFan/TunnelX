@@ -24,6 +24,8 @@ Releases/
 sing-box-new/
 singbox-xhttp-test*.json
 *-local-test*.json
+create-icon.ps1
+create-ico.ps1
 
 # Personal notes and exported documents
 *.docx
