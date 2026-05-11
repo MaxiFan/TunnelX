@@ -37,7 +37,7 @@ dotnet build AppTunnel.sln -c Release
 dotnet publish AppTunnel\AppTunnel.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
 
-More release notes are in `docs/BUILD.md`.
+More release notes are in `docs/BUILD.md`. Future ideas are tracked in `docs/ROADMAP.md`.
 
 ## License
 
