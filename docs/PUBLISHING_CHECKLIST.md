@@ -17,6 +17,8 @@ Use this checklist before making the repository public or attaching a release bu
 - [ ] Verify current upstream licenses for Xray-core, sing-box, WinDivert, Wintun, GeoIP/GeoSite data, .NET, and NuGet packages.
 - [ ] Keep third-party license files/notices in binary releases.
 - [ ] Confirm donation text does not imply paid support unless that support exists.
+- [ ] Confirm README/legal text says the app is provided as-is and maintainers have no obligation to update or support it.
+- [ ] Confirm platform support is documented as Windows x64 only.
 
 ## App
 
@@ -31,6 +33,7 @@ Use this checklist before making the repository public or attaching a release bu
 - [ ] Run `dotnet build AppTunnel.sln -c Release`.
 - [ ] Run standalone publish command from `docs/BUILD.md`.
 - [ ] Confirm final file name includes version, for example `TunnelX-v1.2.21-standalone-compressed.exe`.
+- [ ] Do not publish a 32-bit build unless x86 native dependencies and the full networking test matrix have been verified.
 
 ## Network Test Matrix
 

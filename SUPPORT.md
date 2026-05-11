@@ -7,3 +7,5 @@ For public support after GitHub publication:
 - Remove server credentials, UUIDs, private keys, and private endpoints from logs before posting.
 
 Commercial or private support is not defined yet.
+
+TunnelX is provided for free, as-is. The maintainer has no obligation to provide updates, bug fixes, compatibility updates, release builds, or individual support.

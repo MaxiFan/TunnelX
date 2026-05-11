@@ -18,4 +18,12 @@ TunnelX is a network routing, VPN, proxy, and packet interception tool. Users ar
 
 TunnelX is provided without warranty. It can change routes, DNS behavior, local proxy behavior, and packet handling, so users should test carefully before relying on it.
 
+## No Maintenance Obligation
+
+Publishing TunnelX as free and open-source software does not create any obligation for MaxFan or other maintainers to provide updates, fixes, support, new releases, compatibility work, or continued availability. Contributions and maintenance are voluntary unless a separate written agreement says otherwise.
+
+## Platform Support
+
+The current release package is for 64-bit Windows only. 32-bit Windows is not supported unless a future release explicitly says otherwise.
+
 This document is not legal advice.

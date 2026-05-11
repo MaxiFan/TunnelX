@@ -15,6 +15,7 @@ TunnelX includes or works with third-party software. These notices are part of t
 
 - Keep this file with every binary release.
 - Keep `AppTunnel/NativeLibs/LICENSE` with WinDivert notices.
+- The current repository bundles x64 native components only. Do not advertise 32-bit Windows support unless separate x86 binaries and tests are added.
 - Do not remove upstream copyright or license notices.
 - If native binaries are updated, refresh this table and the release checklist.
 - If crypto, GeoIP, GeoSite, or core binaries are downloaded from upstream releases, record the exact version and source URL in the release notes.

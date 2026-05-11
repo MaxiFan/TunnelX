@@ -13,3 +13,5 @@ Before the repository is public, report security issues privately to the maintai
 ## Sensitive Data
 
 Do not include real VPN credentials, private configs, access tokens, wallet private keys, or private server addresses in issues, screenshots, logs, or pull requests.
+
+Security reports are welcome, but publication of this project does not create a guaranteed response time or an obligation to ship a fix.

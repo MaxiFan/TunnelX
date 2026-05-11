@@ -24,6 +24,7 @@ Public downloads should be attached to GitHub Releases after the checklist is co
 Requirements:
 
 - Windows 10/11
+- 64-bit Windows (`win-x64`). 32-bit Windows is not supported by the current release package.
 - .NET 8 SDK
 - Administrator privileges when running the app, because route and packet interception features need elevated access
 
@@ -52,3 +53,5 @@ TunnelX is free. Donations are optional and help keep the project maintained.
 ## Safety Notice
 
 TunnelX is a networking and routing tool. Use it only where you are allowed to run VPN, proxy, packet capture, and route-management software. The project does not provide legal advice.
+
+TunnelX is provided as-is, without warranty and without any obligation from the maintainer to provide updates, fixes, support, or continued availability.
