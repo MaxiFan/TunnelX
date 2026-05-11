@@ -1,0 +1,861 @@
+﻿<Window x:Class="AppTunnel.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:AppTunnel.Converters"
+        xmlns:views="clr-namespace:AppTunnel.Views"
+        xmlns:vm="clr-namespace:AppTunnel.ViewModels"
+        xmlns:model="clr-namespace:AppTunnel.Models"
+        Title="TunnelX — Split Traffic Per App"
+        Width="580" Height="760"
+        MinWidth="540" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FlowDirection="RightToLeft"
+        MouseLeftButtonDown="OnTitleBarMouseDown">
+
+    <Window.Resources>
+        <conv:BoolToColorConverter x:Key="BoolToColor"/>
+        <conv:StringToColorConverter x:Key="StringToColor"/>
+        <conv:InverseBoolConverter x:Key="InverseBool"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <conv:TextToFlowDirectionConverter x:Key="TextToFlowDirection"/>
+    </Window.Resources>
+
+    <!-- Main Container with rounded corners and shadow -->
+    <Border x:Name="OuterBorder" Background="{StaticResource BackgroundBrush}" 
+            CornerRadius="12" 
+            BorderBrush="{StaticResource CardBrush}" 
+            BorderThickness="1"
+            Cursor="Arrow"
+            SizeChanged="OnOuterBorderSizeChanged">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="20" Opacity="0.5" ShadowDepth="0"/>
+        </Border.Effect>
+
+        <Grid>
+        <Grid Margin="0" FlowDirection="LeftToRight">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ═══ MAIN CONTENT ═══ -->
+            <Grid Grid.Column="0" FlowDirection="RightToLeft">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ═══ CUSTOM TITLE BAR ═══ -->
+            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" 
+                    CornerRadius="12,0,0,0" Padding="16,10">
+                <Grid FlowDirection="LeftToRight">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Logo & Title -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <!-- Tx Icon SVG -->
+                        <Viewbox Width="28" Height="28" Margin="0,0,10,0">
+                            <Canvas Width="48" Height="48">
+                                <Rectangle Width="48" Height="48" RadiusX="8" RadiusY="8" Fill="{StaticResource PrimaryBrush}"/>
+                                <TextBlock Text="Tx" FontSize="24" FontWeight="Bold" 
+                                           Foreground="White" Canvas.Left="6" Canvas.Top="8"
+                                           FontFamily="Segoe UI"/>
+                            </Canvas>
+                        </Viewbox>
+                        <StackPanel VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Tunnel" FontSize="17" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="X" FontSize="17" FontWeight="Bold"
+                                           Foreground="{StaticResource AccentBrush}"/>
+                            </StackPanel>
+                            <TextBlock Text="Split Traffic Per App" FontSize="9"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Connection Status + Compact Health Chips -->
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border HorizontalAlignment="Center"
+                                CornerRadius="12" Padding="12,5" Background="#18FFFFFF">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,8,0"
+                                         Fill="{Binding StatusColor, Converter={StaticResource StringToColor}}"/>
+                                <TextBlock Text="{Binding StatusText}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5,0,0"
+                                    FlowDirection="LeftToRight">
+                            <Border Background="#12FFFFFF" CornerRadius="8" Padding="7,2" Margin="0,0,4,0">
+                                <TextBlock Text="{Binding HeaderCoreText}" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </Border>
+                            <Border Background="#12FFFFFF" CornerRadius="8" Padding="7,2" Margin="0,0,4,0">
+                                <TextBlock Text="{Binding HeaderRouteText}" FontSize="9"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </Border>
+                            <Border Background="#12FFFFFF" CornerRadius="8" Padding="7,2">
+                                <TextBlock Text="{Binding HeaderLeakText}" FontSize="9"
+                                           Foreground="{Binding HeaderLeakColor, Converter={StaticResource StringToColor}}"/>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Details Button -->
+                    <Button Grid.Column="2" Content="🔍 جزئیات" 
+                            Click="OnShowLogClick"
+                            Background="#11FFFFFF" 
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            BorderThickness="0" 
+                            Padding="10,6" 
+                            Margin="0,0,8,0"
+                            FontSize="11"
+                            Cursor="Hand"
+                            VerticalAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" 
+                                                    CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#22FFFFFF"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- Window Controls: Minimize → Close (standard Windows order) -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal">
+                        <Button Content="—" Click="OnMinimizeClick" 
+                                ToolTip="کوچک کردن به System Tray"
+                                Style="{StaticResource WindowControlButton}" 
+                                Width="36" Height="28" FontSize="16" Padding="0,-4,0,0"/>
+                        <Button Content="✕" Click="OnCloseClick" 
+                                ToolTip="خروج از برنامه"
+                                Style="{StaticResource WindowControlButton}" 
+                                Width="36" Height="28" FontSize="14" Margin="4,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ═══ MAIN CONTENT ═══ -->
+            <Grid Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+            <TabControl Grid.Row="0" Style="{StaticResource ModernTabControl}" Margin="8,6,8,6">
+
+            <!-- ███ TAB 1: CONNECTION ███ -->
+            <TabItem Style="{StaticResource ModernTabItem}">
+                <TabItem.Header>
+                    <TextBlock Text="⚡ اتصال"/>
+                </TabItem.Header>
+                <views:ConnectionTabView/>
+            </TabItem>
+            <TabItem Style="{StaticResource ModernTabItem}">
+                <TabItem.Header>
+                    <TextBlock Text="📱 برنامه‌ها"/>
+                </TabItem.Header>
+                <views:AppsTabView/>
+            </TabItem>
+
+            <TabItem Style="{StaticResource ModernTabItem}">
+                <TabItem.Header>
+                    <TextBlock Text="⚙ تنظیمات"/>
+                </TabItem.Header>
+                <views:SettingsTabView/>
+            </TabItem>
+
+            <!-- ███ TAB 3: ROUTING RULES ███ -->
+            <TabItem Style="{StaticResource ModernTabItem}">
+                <TabItem.Header>
+                    <TextBlock Text="🧭 قوانین مسیر"/>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,0">
+                    <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
+
+                    <Border Background="#12FFFFFF" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
+                        <TextBlock Text="استثناها مقصدها را مستقیم نگه می‌دارند؛ لزومی‌ها مقصدها را حتی بدون انتخاب برنامه از تونل عبور می‌دهند."
+                                   TextWrapping="Wrap"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                    <!-- Info Card -->
+                    <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="🚫 لیست استثنا (Exclude List)" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                       Text="دامنه یا آی‌پی‌هایی که نمی‌خواهید از تونل عبور کنند را اینجا وارد کنید. حتی اگر برنامه‌های هدف بخواهند به این آدرس‌ها وصل شوند، ترافیک مستقیم (بدون VPN) ارسال می‌شود."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Tip for Excludes -->
+                    <Border Background="#1547A3F3" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="💡" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="کاربرد استثنا" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#47A3F3"/>
+                            </StackPanel>
+                            <TextBlock TextWrapping="Wrap" FontSize="10" LineHeight="16"
+                                       Foreground="{StaticResource TextSecondaryBrush}">
+• سایت‌های ایرانی را استثنا کنید تا مستقیم وصل شوند (سرعت بهتر)
+• سرورهای بازی داخلی را استثنا کنید تا پینگ کم شود
+• آی‌پی سرور SSH/FTP داخلی را اضافه کنید
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Add Entry -->
+                    <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding ExcludeInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Tag="دامنه یا آی‌پی (مثلاً google.com یا 1.2.3.4)"
+                                     FlowDirection="LeftToRight"
+                                     FontSize="13" Padding="10,8"
+                                     Margin="0,0,8,0">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding AddExcludeCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <Button Grid.Column="1" Style="{StaticResource PrimaryButton}"
+                                    Content="➕ افزودن"
+                                    Command="{Binding AddExcludeCommand}"
+                                    FontSize="12" Padding="16,8"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Exclude List -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"
+                                       Text="آدرس‌های استثنا شده:"/>
+                            <ListView ItemsSource="{Binding ExcludedDestinations}"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      FlowDirection="LeftToRight"
+                                      Cursor="Arrow"
+                                      PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#11FFFFFF" CornerRadius="6"
+                                                Padding="10,6" Margin="0,2" Cursor="Arrow">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="🚫"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="13" VerticalAlignment="Center"
+                                                           FlowDirection="LeftToRight"/>
+                                                <Button Grid.Column="2" Style="{StaticResource DangerButton}"
+                                                        Content="✕" FontSize="14"
+                                                        Command="{Binding DataContext.RemoveExcludeCommand,
+                                                            RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListViewItem">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                            </ListView>
+                        </DockPanel>
+                    </Border>
+
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Width="1" Background="#18FFFFFF" Margin="0,2"/>
+
+                    <StackPanel Grid.Column="2">
+
+                    <!-- Include Info -->
+                    <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="✅ لیست لزومی (Include List)" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                       Text="دامنه یا آی‌پی‌هایی که حتماً باید از تونل عبور کنند را اینجا وارد کنید. حتی اگر برنامه در لیست برنامه‌های تونل نباشد، این مقصدها از VPN ارسال می‌شوند."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Add Include Entry -->
+                    <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding IncludeInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Tag="دامنه یا آی‌پی (مثلاً example.com یا 1.2.3.4)"
+                                     FlowDirection="LeftToRight"
+                                     FontSize="13" Padding="10,8"
+                                     Margin="0,0,8,0">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding AddIncludeCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <Button Grid.Column="1" Style="{StaticResource PrimaryButton}"
+                                    Content="➕ افزودن"
+                                    Command="{Binding AddIncludeCommand}"
+                                    FontSize="12" Padding="16,8"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Include List -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"
+                                       Text="آدرس‌های لزومی:"/>
+                            <ListView ItemsSource="{Binding IncludedDestinations}"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      FlowDirection="LeftToRight"
+                                      Cursor="Arrow"
+                                      PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#11FFFFFF" CornerRadius="6"
+                                                Padding="10,6" Margin="0,2" Cursor="Arrow">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="✅"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="13" VerticalAlignment="Center"
+                                                           FlowDirection="LeftToRight"/>
+                                                <Button Grid.Column="2" Style="{StaticResource DangerButton}"
+                                                        Content="✕" FontSize="14"
+                                                        Command="{Binding DataContext.RemoveIncludeCommand,
+                                                            RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListViewItem">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                            </ListView>
+                        </DockPanel>
+                    </Border>
+
+                    </StackPanel>
+                    </Grid>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ███ TAB 5: TRAFFIC MONITOR ███ -->
+            <TabItem Style="{StaticResource ModernTabItem}">
+                <TabItem.Header>
+                    <TextBlock Text="📊 ترافیک"/>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,0">
+                    <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
+
+                    <!-- Summary Card -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="⏱ مدت" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding ConnectionDuration}" FontSize="20"
+                                           FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           FlowDirection="LeftToRight"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                <TextBlock Text="🌐 IP" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding VpnIp}" FontSize="14"
+                                           FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           FlowDirection="LeftToRight"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="📊 تونل" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding TotalTraffic}" FontSize="14"
+                                           FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           FlowDirection="LeftToRight"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                <TextBlock Text="📡 مستقیم" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding DirectTraffic}" FontSize="14"
+                                           FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           FlowDirection="LeftToRight"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Split Tunnel Health -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="Leak" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding HealthLeakText}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{Binding HeaderLeakColor, Converter={StaticResource StringToColor}}"
+                                           HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                <TextBlock Text="DNS" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding HealthDnsText}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="IPv6" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding HealthIpv6Text}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource WarningBrush}"
+                                           HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                <TextBlock Text="Route" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding HealthRoutesText}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Expander Header="📜 تاریخچه اتصالات"
+                              IsExpanded="False"
+                              Foreground="{StaticResource TextPrimaryBrush}"
+                              Margin="0,0,0,8">
+                        <views:HistoryTabView/>
+                    </Expander>
+
+                    <!-- Per-App Traffic -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionHeader}"
+                                       Text="ترافیک به تفکیک برنامه"/>
+                            <Grid Margin="0,6,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="#11FFFFFF" CornerRadius="8" Padding="10,7">
+                                    <StackPanel Orientation="Horizontal" FlowDirection="LeftToRight">
+                                        <TextBlock Text="برنامه‌ها: " FontSize="11"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding AppTrafficTotal}" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource AccentBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="2" Background="#11FFFFFF" CornerRadius="8" Padding="10,7">
+                                    <StackPanel Orientation="Horizontal" FlowDirection="LeftToRight">
+                                        <TextBlock Text="سایر تونل: " FontSize="11"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding OtherTunnelTraffic}" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource WarningBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding TunnelApps}" Cursor="Arrow">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#11FFFFFF" CornerRadius="8"
+                                                Padding="12,10" Margin="0,3" Cursor="Arrow">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Image Grid.Column="0" Source="{Binding Icon}"
+                                                       Width="24" Height="24" Margin="0,0,10,0"/>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               FontSize="13"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                                                                FlowDirection="LeftToRight">
+                                                        <TextBlock Text="↑ " Foreground="{StaticResource WarningBrush}"
+                                                                   FontSize="10"/>
+                                                        <TextBlock Text="{Binding BytesSent, StringFormat={}{0:N0} B ↑}"
+                                                                   Foreground="{StaticResource WarningBrush}"
+                                                                   FontSize="10" Margin="0,0,10,0"/>
+                                                        <TextBlock Text="{Binding BytesReceived, StringFormat={}{0:N0} B ↓}"
+                                                                   Foreground="{StaticResource SuccessBrush}"
+                                                                   FontSize="10"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Column="2" Text="{Binding TrafficDisplay}"
+                                                           Foreground="{StaticResource AccentBrush}"
+                                                           FontSize="14" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"
+                                                           FlowDirection="LeftToRight"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Empty state -->
+                            <TextBlock Text="هنوز برنامه‌ای اضافه نشده. از تب «برنامه‌ها» اضافه کنید."
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="13" HorizontalAlignment="Center"
+                                       Margin="0,20">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TunnelApps.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+            <!-- Global Connect/Disconnect Action (sticky in page, all tabs) -->
+            <Grid Grid.Row="1" Margin="8,0,8,10">
+                <Button Command="{Binding ConnectCommand}"
+                        MinWidth="210"
+                        Height="42"
+                        HorizontalAlignment="Center"
+                        Padding="20,8"
+                        Cursor="Hand"
+                        ToolTip="اتصال سریع VPN">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#10B981"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush" Value="#7DFFF4D0"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <Setter Property="FontSize" Value="13"/>
+                            <Setter Property="Content" Value="اتصال VPN"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="18"
+                                                Padding="{TemplateBinding Padding}">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
+                                                <Ellipse Width="8" Height="8" Fill="#E8FFFFFF" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="⏻" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <ContentPresenter VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#0EA371"/>
+                                    <Setter Property="BorderBrush" Value="#CCFFFFFF"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding ConnectionState}" Value="{x:Static model:ConnectionState.Connected}">
+                                    <Setter Property="Content" Value="قطع VPN"/>
+                                    <Setter Property="Background" Value="#DC2626"/>
+                                    <Setter Property="BorderBrush" Value="#80FFD2D2"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="ToolTip" Value="قطع سریع اتصال VPN"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ConnectionState}" Value="{x:Static model:ConnectionState.Connecting}">
+                                    <Setter Property="Content" Value="لغو اتصال"/>
+                                    <Setter Property="Background" Value="#D97706"/>
+                                    <Setter Property="BorderBrush" Value="#80FFE3BF"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="ToolTip" Value="لغو تلاش اتصال"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ConnectionState}" Value="{x:Static model:ConnectionState.Disconnecting}">
+                                    <Setter Property="Content" Value="در حال قطع"/>
+                                    <Setter Property="Background" Value="#52525B"/>
+                                    <Setter Property="BorderBrush" Value="#7DFFFFFF"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="ToolTip" Value="در حال قطع اتصال VPN"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ConnectionState}" Value="{x:Static model:ConnectionState.Error}">
+                                    <Setter Property="Content" Value="اتصال مجدد"/>
+                                    <Setter Property="Background" Value="#B91C1C"/>
+                                    <Setter Property="BorderBrush" Value="#80FFD2D2"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="ToolTip" Value="اتصال مجدد VPN"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+            </Grid>
+
+            <!-- ═══ FOOTER ═══ -->
+            <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" 
+                    CornerRadius="0,0,0,12" Padding="16,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="❓ راهنما"
+                            Click="OnShowHelpClick"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="10,5"
+                            FontSize="10"
+                            ToolTip="راهنما و عیب‌یابی"/>
+                    <TextBlock Text="ساخته شده توسط Maxi" 
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="10" Grid.Column="1"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Left" FlowDirection="LeftToRight">
+                        <TextBlock Text="TunnelX" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center"/>
+                        <TextBlock Text=" • " Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding AppVersion}" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            </Grid>  <!-- end main content column -->
+
+            <!-- ═══ LOG PANEL (RIGHT SIDE) ═══ -->
+            <Border x:Name="LogPanel" Grid.Column="1" Visibility="Collapsed"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource CardBrush}" BorderThickness="1,0,0,0">
+                <Grid Width="350">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Log Header -->
+                    <Border Grid.Row="0" Padding="12,10" Background="#11FFFFFF">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="🔍 جزئیات عملکرد" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="LogFilterCombo"
+                                      Grid.Column="1"
+                                      SelectedIndex="0"
+                                      SelectionChanged="OnLogFilterChanged"
+                                      Margin="0,0,6,0"
+                                      MinWidth="86"
+                                      Style="{StaticResource DarkComboBox}">
+                                <ComboBoxItem Content="همه" Tag="All"/>
+                                <ComboBoxItem Content="خطا" Tag="Error"/>
+                                <ComboBoxItem Content="هشدار" Tag="Warn"/>
+                                <ComboBoxItem Content="DNS" Tag="Dns"/>
+                                <ComboBoxItem Content="Route" Tag="Route"/>
+                            </ComboBox>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                <Button Content="🗑" ToolTip="پاک کردن" Click="OnLogClearClick"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Padding="8,4" FontSize="12" Margin="0,0,4,0"/>
+                                <Button Content="⚠" ToolTip="کپی آخرین خطا یا هشدار" Click="OnLogCopyLastErrorClick"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Padding="8,4" FontSize="12" Margin="0,0,4,0"/>
+                                <Button Content="📋" ToolTip="کپی کردن" Click="OnLogCopyClick"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Padding="8,4" FontSize="12"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Log Content -->
+                    <TextBox x:Name="LogTextBox" Grid.Row="1"
+                             Background="{StaticResource SurfaceBrush}"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             BorderThickness="0"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Padding="8"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             FlowDirection="LeftToRight"
+                             VerticalScrollBarVisibility="Auto"/>
+                </Grid>
+            </Border>
+
+        </Grid>
+
+        <!-- Toast Notification Overlay -->
+        <Border x:Name="ToastPanel" 
+                Background="#E0303030" CornerRadius="8"
+                Padding="14,8" Margin="0,0,0,16"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Visibility="Collapsed"
+                IsHitTestVisible="False">
+            <Border.Effect>
+                <DropShadowEffect Color="Black" BlurRadius="12" Opacity="0.4" ShadowDepth="2"/>
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="ToastIcon" Text="✅" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock x:Name="ToastMessage" Text="" FontSize="12"
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Startup Loading Overlay — dismissed quickly while app discovery continues in the background. -->
+        <Border x:Name="LoadingOverlay" CornerRadius="12"
+                Background="{StaticResource BackgroundBrush}"
+                FlowDirection="LeftToRight">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <!-- Logo -->
+                <Viewbox Width="60" Height="60" HorizontalAlignment="Center" Margin="0,0,0,20">
+                    <Canvas Width="48" Height="48">
+                        <Rectangle Width="48" Height="48" RadiusX="8" RadiusY="8"
+                                   Fill="{StaticResource PrimaryBrush}"/>
+                        <TextBlock Text="Tx" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" Canvas.Left="6" Canvas.Top="8"
+                                   FontFamily="Segoe UI"/>
+                    </Canvas>
+                </Viewbox>
+                <!-- App name -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                    <TextBlock Text="Tunnel" FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="X" FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"/>
+                </StackPanel>
+                <TextBlock Text="Split Traffic Per App" FontSize="11"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,0,28"/>
+                <!-- Indeterminate progress bar -->
+                <ProgressBar IsIndeterminate="True" Width="220" Height="3"
+                             BorderThickness="0"
+                             Foreground="{StaticResource AccentBrush}"
+                             Background="#22FFFFFF"/>
+                <!-- Status text -->
+                <TextBlock x:Name="LoadingStatusText"
+                           Text="در حال بارگذاری..."
+                           FontSize="11" HorizontalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,14,0,0"/>
+            </StackPanel>
+        </Border>
+
+        </Grid>
+    </Border>
+</Window>

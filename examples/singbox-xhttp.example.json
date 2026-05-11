@@ -1,0 +1,31 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "vless-out",
+      "server": "example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      },
+      "transport": {
+        "type": "xhttp",
+        "path": "/path",
+        "headers": {
+          "Host": "example.com",
+          "User-Agent": "chrome"
+        },
+        "xPaddingBytes": "100-1000"
+      }
+    }
+  ]
+}

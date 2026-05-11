@@ -1,0 +1,117 @@
+<UserControl x:Class="AppTunnel.Views.SettingsTabView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,4">
+
+            <!-- Local Proxy Settings -->
+            <Border Style="{StaticResource CardPanel}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="🧦 پروکسی محلی"
+                               Margin="0,0,0,4"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="پورت SOCKS5"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="2"
+                                 Style="{StaticResource ModernTextBox}"
+                                 Text="{Binding Socks5PortText, UpdateSourceTrigger=PropertyChanged}"
+                                 FlowDirection="LeftToRight"
+                                 FontSize="12"
+                                 Padding="8,5"
+                                 ToolTip="پورت داخلی 127.0.0.1 برای پروکسی SOCKS5"/>
+                        <TextBlock Grid.Column="4"
+                                   Text="{Binding Socks5PortStatusText}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBlock Text="پورت‌های زیر 1024 و چند پورت رایج مثل 2080، 3000، 3389، 8080 و 9090 مجاز نیستند تا با سرویس‌های سیستم یا ابزارهای توسعه تداخل نداشته باشند."
+                               FontSize="10"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Performance Tuning -->
+            <Border Style="{StaticResource CardPanel}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="🚀 بهینه‌سازی تونل"
+                               Margin="0,0,0,4"/>
+
+                    <Grid Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="MTU خودکار" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="در زمان اتصال، MTU مناسب بر اساس شبکه فعلی انتخاب می‌شود."
+                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding AutoTuneMtu, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="DNS Optimization + Cache" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="برای Resolveها از cache کوتاه‌مدت استفاده می‌شود و DNS redirect مسیر پایدارتر می‌گیرد."
+                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IsDnsOptimizationEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Game Mode" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding GameModeStatusText}" FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IsGameModeEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

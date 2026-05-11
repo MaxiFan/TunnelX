@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports
+    url: https://github.com/MaxiFan/TunnelX/security/advisories
+    about: Please use private advisories for sensitive reports when available.

@@ -1,0 +1,40 @@
+# Build outputs
+bin/
+obj/
+
+# Local IDE and tooling state
+.vs/
+.vscode/
+.github/copilot-instructions.md
+*.user
+*.suo
+
+# Publish and release artifacts
+publish/
+Releases/
+*.msi
+*.msix
+*.appx
+*.nupkg
+
+# Downloaded dependency archives and extracted tool drops
+*.zip
+*.7z
+*.rar
+sing-box-new/
+singbox-xhttp-test*.json
+*-local-test*.json
+
+# Personal notes and exported documents
+*.docx
+
+# Logs and temporary files
+*.log
+*.tmp
+*.cache
+TestResults/
+*.binlog
+
+# Local secrets and machine-specific settings
+.env
+.env.*

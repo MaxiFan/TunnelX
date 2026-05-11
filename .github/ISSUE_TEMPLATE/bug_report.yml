@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible TunnelX problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TunnelX version
+      placeholder: v1.2.21
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Routing mode
+      options:
+        - Split route
+        - Full route
+        - App toggle
+        - Startup/connect/disconnect
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest steps that trigger the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove credentials, UUIDs, private keys, and private endpoints.
+      render: text

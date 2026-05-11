@@ -1,0 +1,139 @@
+<UserControl x:Class="AppTunnel.Views.HistoryTabView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,0">
+        <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
+
+        <!-- History Header -->
+        <Border Style="{StaticResource CardPanel}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.Column="0">
+                    <TextBlock Text="📜 تاریخچه اتصالات" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="سوابق اتصالات قبلی شما در این بخش نمایش داده می‌شود"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource DangerButton}"
+                        Content="🗑 پاک کردن"
+                        Command="{Binding ClearHistoryCommand}"
+                        FontSize="11" Padding="12,8"/>
+
+                <!-- Total History Data Summary -->
+                <Border Grid.Row="1" Grid.ColumnSpan="2" 
+                        Background="#15E07820" CornerRadius="8" 
+                        Padding="14,10" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                FlowDirection="LeftToRight">
+                        <TextBlock Text="📊 مجموع مصرف داده: " FontSize="13"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FlowDirection="RightToLeft"/>
+                        <TextBlock Text="{Binding TotalHistoryData}" FontSize="15"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource WarningBrush}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- History List -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding ConnectionHistory}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#11FFFFFF" CornerRadius="8"
+                                    Padding="14,12" Margin="0,4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <!-- Profile name and server -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding ProfileName}" 
+                                                       FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            <TextBlock Text=" → " 
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding ServerAddress}" 
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       FlowDirection="LeftToRight"/>
+                                        </StackPanel>
+
+                                        <!-- Date and time -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                                    FlowDirection="LeftToRight">
+                                            <TextBlock Text="🕐 " FontSize="11"/>
+                                            <TextBlock Text="{Binding ConnectedAt, StringFormat={}{0:yyyy/MM/dd HH:mm}}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="11"/>
+                                        </StackPanel>
+
+                                        <!-- Duration and data -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                                    FlowDirection="LeftToRight">
+                                            <TextBlock Text="⏱ " FontSize="11"/>
+                                            <TextBlock Text="{Binding DurationText}"
+                                                       Foreground="{StaticResource SuccessBrush}"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="  •  📊 " FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <TextBlock Text="{Binding TotalDataText}"
+                                                       Foreground="{StaticResource WarningBrush}"
+                                                       FontSize="11"/>
+                                        </StackPanel>
+
+                                        <!-- Sent/Received breakdown -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                                    FlowDirection="LeftToRight">
+                                            <TextBlock Text="↑ " Foreground="#E07820" FontSize="10"/>
+                                            <TextBlock Text="{Binding SentText}"
+                                                       Foreground="#E07820" FontSize="10"/>
+                                            <TextBlock Text="  ↓ " Foreground="#4CAF50" FontSize="10"/>
+                                            <TextBlock Text="{Binding ReceivedText}"
+                                                       Foreground="#4CAF50" FontSize="10"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Empty state -->
+                <TextBlock Text="هنوز اتصالی ثبت نشده است."
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="14" HorizontalAlignment="Center"
+                           Margin="0,30">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConnectionHistory.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+    </ScrollViewer>
+</UserControl>

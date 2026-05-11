@@ -1,0 +1,74 @@
+<Window x:Class="AppTunnel.Views.ModernDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TunnelX"
+        Width="340" Height="200"
+        MinWidth="300" MinHeight="170"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FlowDirection="RightToLeft"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize">
+
+    <!-- Modal overlay with dark shadow -->
+    <Border Background="{StaticResource BackgroundBrush}" 
+            CornerRadius="16" 
+            BorderBrush="{StaticResource PrimaryBrush}" 
+            BorderThickness="1.5">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="30" Opacity="0.7" ShadowDepth="0"/>
+        </Border.Effect>
+
+        <Grid Margin="18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Icon -->
+            <Viewbox Grid.Row="0" Width="36" Height="36" Margin="0,0,0,10" HorizontalAlignment="Center">
+                <TextBlock x:Name="IconText" Text="❓" FontSize="32"/>
+            </Viewbox>
+
+            <!-- Title -->
+            <TextBlock x:Name="TitleText" Grid.Row="1"
+                       Text="تاییدیه"
+                       FontSize="15" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8"/>
+
+            <!-- Message -->
+            <TextBlock x:Name="MessageText" Grid.Row="2"
+                       Text="آیا مطمئن هستید؟"
+                       FontSize="13"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Margin="0,0,0,14"
+                       LineHeight="20"/>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" 
+                        HorizontalAlignment="Center" 
+                        FlowDirection="RightToLeft">
+                <Button x:Name="PrimaryButton" Content="بله" 
+                        Style="{StaticResource PrimaryButton}"
+                        MinWidth="80" Margin="0,0,6,0"
+                        FontSize="13" Padding="16,8"
+                        Click="OnPrimaryClick"/>
+                <Button x:Name="SecondaryButton" Content="خیر" 
+                        Style="{StaticResource SecondaryButton}"
+                        MinWidth="80"
+                        FontSize="13" Padding="16,8"
+                        Click="OnSecondaryClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

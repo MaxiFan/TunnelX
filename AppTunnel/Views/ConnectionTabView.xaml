@@ -1,0 +1,477 @@
+<UserControl x:Class="AppTunnel.Views.ConnectionTabView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:AppTunnel.Converters"
+             xmlns:models="clr-namespace:AppTunnel.Models">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <conv:StringToColorConverter x:Key="StringToColor"/>
+        <conv:EnumToVisibilityConverter x:Key="EnumToVis"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,4">
+
+        <!-- ══ DISCONNECTED STATE: Show connection form ══ -->
+        <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource InverseBoolToVis}}">
+
+        <!-- ── Profile Card ── -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <!-- Header -->
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="📋 پروفایل اتصال" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Text="{Binding SaveStatusText}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <Button Style="{StaticResource SecondaryButton}"
+                                Content="📋" FontSize="12" Padding="7,4" Width="30"
+                                ToolTip="کپی از پروفایل فعلی"
+                                Command="{Binding DuplicateProfileCommand}"
+                                Margin="0,0,4,0"/>
+                        <Button Style="{StaticResource DangerButton}"
+                                Content="🗑" FontSize="12" Padding="7,4" Width="30"
+                                ToolTip="حذف پروفایل"
+                                Command="{Binding DeleteProfileCommand}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Profile selector + New button -->
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ComboBox Grid.Column="0"
+                              Style="{StaticResource DarkComboBox}"
+                              ItemsSource="{Binding Profiles}"
+                              SelectedItem="{Binding SelectedProfile}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" Padding="2,0"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Style="{StaticResource PrimaryButton}"
+                            Content="➕ جدید" FontSize="11" Padding="12,7"
+                            ToolTip="ساخت پروفایل جدید"
+                            Command="{Binding NewProfileCommand}"/>
+                </Grid>
+
+                <!-- Profile Name -->
+                <TextBlock Style="{StaticResource FieldLabel}" Text="نام پروفایل"/>
+                <TextBox Style="{StaticResource ModernTextBox}"
+                         Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}"
+                         HorizontalContentAlignment="Right"
+                         LostFocus="OnProfileNameChanged"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Server Settings Card ── -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 تنظیمات سرور"
+                           Margin="0,0,0,4"/>
+
+                <!-- Tunnel Type selector -->
+                <TextBlock Style="{StaticResource FieldLabel}" Text="نوع اتصال"/>
+                <ComboBox Style="{StaticResource DarkComboBox}"
+                          SelectedValue="{Binding CurrentTunnelType, Mode=TwoWay}"
+                          SelectedValuePath="Tag"
+                          Margin="0,0,0,8">
+                    <ComboBoxItem Content="L2TP/IPsec"
+                                  Tag="{x:Static models:TunnelType.L2tpIpsec}"/>
+                    <ComboBoxItem Content="V2Ray / Xray"
+                                  Tag="{x:Static models:TunnelType.V2Ray}"/>
+                </ComboBox>
+
+                <!-- L2TP fields (shown only when TunnelType = L2tpIpsec) -->
+                <StackPanel Visibility="{Binding CurrentTunnelType,
+                            Converter={StaticResource EnumToVis},
+                            ConverterParameter=L2tpIpsec}">
+
+                <!-- Row 1: Server + Username -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="آدرس سرور"/>
+                        <TextBox Style="{StaticResource ModernTextBox}"
+                                 Text="{Binding ServerAddress, UpdateSourceTrigger=PropertyChanged}"
+                                 FlowDirection="LeftToRight"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="نام کاربری"/>
+                        <TextBox Style="{StaticResource ModernTextBox}"
+                                 Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                 FlowDirection="LeftToRight"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Row 2: Password + PSK -->
+                <Grid Margin="0,5,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="رمز عبور"/>
+                        <PasswordBox x:Name="PasswordField"
+                                     Style="{StaticResource ModernPasswordBox}"
+                                     FlowDirection="LeftToRight"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Pre-Shared Key"/>
+                        <PasswordBox x:Name="PskField"
+                                     Style="{StaticResource ModernPasswordBox}"
+                                     FlowDirection="LeftToRight"/>
+                    </StackPanel>
+                </Grid>
+
+                </StackPanel>
+                <!-- End L2TP fields -->
+
+                <!-- V2Ray fields (shown only when TunnelType = V2Ray) -->
+                <StackPanel Visibility="{Binding CurrentTunnelType,
+                            Converter={StaticResource EnumToVis},
+                            ConverterParameter=V2Ray}">
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="کانفیگ V2Ray"/>
+                    <TextBox Style="{StaticResource ModernTextBox}"
+                             Text="{Binding SelectedV2RayConfig,
+                                    Mode=TwoWay,
+                                    UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True"
+                             MinHeight="96"
+                             FontFamily="Consolas"
+                             FlowDirection="LeftToRight"
+                             VerticalScrollBarVisibility="Auto"
+                             TextWrapping="Wrap"/>
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0"
+                                Style="{StaticResource SecondaryButton}"
+                                Content="پیست"
+                                Command="{Binding PasteConfigCommand}"
+                                FontSize="10"
+                                Padding="10,5"
+                                ToolTip="خواندن کانفیگ از کلیپ‌بورد"/>
+                        <Button Grid.Column="2"
+                                Style="{StaticResource SecondaryButton}"
+                                Content="پاک کردن"
+                                Command="{Binding ClearConfigCommand}"
+                                FontSize="10"
+                                Padding="10,5"/>
+                        <TextBlock Grid.Column="4"
+                                   Text="{Binding ConfigCoreHint}"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="6"
+                                   Text="{Binding ConfigValidationText}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FlowDirection="LeftToRight"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+                <!-- End V2Ray fields -->
+
+                <Border Background="#11FFFFFF" CornerRadius="8" Padding="10,8" Margin="0,8,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="🏓 سرور" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{Binding ServerPingResult}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   FlowDirection="LeftToRight"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <Button Grid.Column="4"
+                                Style="{StaticResource SecondaryButton}"
+                                Content="{Binding ServerPingButtonText}"
+                                Command="{Binding TestServerPingCommand}"
+                                FontSize="11"
+                                Padding="10,5"
+                                ToolTip="قبل از اتصال، دسترسی و latency سرور را تست می‌کند"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        </StackPanel>
+        <!-- End Disconnected State -->
+
+        <!-- ══ CONNECTED STATE: Show disconnect button + info ══ -->
+        <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}">
+
+            <!-- Connected Badge -->
+            <Border Background="#1A6CCB5F" CornerRadius="12" Padding="16,12" 
+                    HorizontalAlignment="Center" Margin="0,8,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Text="✓" FontSize="28" FontWeight="Bold"
+                               Foreground="{StaticResource SuccessBrush}"
+                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="متصل به VPN" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{StaticResource SuccessBrush}"/>
+                        <TextBlock Text="{Binding SelectedProfile.Name}" FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Connection Info - 4 cards in one row -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Duration -->
+                <Border Grid.Column="0" Background="#11FFFFFF" CornerRadius="10" Padding="10,10"
+                        ToolTip="مدت زمان اتصال فعلی از لحظه برقراری اتصال">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="⏱" FontSize="14" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding ConnectionDuration}" FontSize="16"
+                                   FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0"
+                                   FlowDirection="LeftToRight"/>
+                        <TextBlock Text="مدت" FontSize="9"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- VPN IP -->
+                <Border Grid.Column="2" Background="#11FFFFFF" CornerRadius="10" Padding="10,10"
+                        ToolTip="آدرس IP اختصاص‌یافته توسط سرور VPN به این دستگاه">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="🌐" FontSize="14" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding VpnIp}" FontSize="13"
+                                   FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0"
+                                   FlowDirection="LeftToRight"/>
+                        <TextBlock Text="IP" FontSize="9"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Traffic -->
+                <Border Grid.Column="4" Background="#11FFFFFF" CornerRadius="10" Padding="10,10"
+                        ToolTip="مجموع ترافیک ارسال و دریافت عبوری از تونل VPN (کل تونل)">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="📊" FontSize="14" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding TotalTraffic}" FontSize="13"
+                                   FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0"
+                                   FlowDirection="LeftToRight"/>
+                        <TextBlock Text="تونل" FontSize="9"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Server -->
+                <Border Grid.Column="6" Background="#11FFFFFF" CornerRadius="10" Padding="10,10"
+                        ToolTip="ترافیک مستقیم خارج از تونل: شامل برنامه‌های غیرفعال، IPها و دامنه‌های وایت‌لیست‌شده و ترافیک سیستم">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="📡" FontSize="14" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding DirectTraffic}" FontSize="13"
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0"
+                                   FlowDirection="LeftToRight"/>
+                        <TextBlock Text="مستقیم" FontSize="9"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Apps + SOCKS5 in one row -->
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Apps Routed -->
+                <Border Grid.Column="0" Background="#11FFFFFF" CornerRadius="10" Padding="12,10"
+                        ToolTip="تعداد برنامه‌هایی که ترافیکشان از طریق تونل VPN عبور می‌کند">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="📱" FontSize="16" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="برنامه‌ها در تونل" FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <Border Grid.Column="2" Background="{StaticResource PrimaryBrush}" 
+                                CornerRadius="8" Padding="10,3">
+                            <TextBlock Text="{Binding EnabledAppsCount}" FontSize="13" FontWeight="Bold"
+                                       Foreground="White"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- SOCKS5 Proxy -->
+                <Border Grid.Column="2" Background="#11FFFFFF" CornerRadius="10" Padding="12,10"
+                        ToolTip="پروکسی SOCKS5 داخلی روی 127.0.0.1:1080 — برای برنامه‌هایی که از VPN تشخیص داده نمی‌شوند می‌توانید پروکسی را دستی تنظیم کنید">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="🧦" FontSize="16" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="SOCKS5" FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <Border Grid.Column="2" Background="#1AE8803A" CornerRadius="8" Padding="8,3">
+                            <TextBlock Text="{Binding Socks5Info}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       FlowDirection="LeftToRight"/>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Route Mode + Ping -->
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="#11FFFFFF" CornerRadius="10" Padding="12,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="🌐 عبور کل سیستم" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding RouteModeTitle}" FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       Margin="0,3,0,0"/>
+                            <TextBlock Text="{Binding RouteModeDescription}" FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IsFullRouteEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"
+                                  ToolTip="روشن: کل ویندوز از تونل. خاموش: فقط برنامه‌ها و قوانین انتخابی."/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="2" Background="#11FFFFFF" CornerRadius="10" Padding="12,10">
+                    <StackPanel>
+                        <TextBlock Text="🏓 تست مسیر از تونل" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding PingTarget, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ModernTextBox}"
+                                     FlowDirection="LeftToRight" FontSize="11"
+                                     Padding="6,4" VerticalAlignment="Center"
+                                     ToolTip="IP یا دامنه مقصد برای تست از داخل تونل"/>
+                            <Button Grid.Column="2" Content="{Binding PingButtonText}"
+                                    Command="{Binding TogglePingCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    FontSize="11" Padding="10,5"/>
+                        </Grid>
+                        <TextBlock Text="{Binding PingResult}" FontSize="11"
+                                   FontWeight="SemiBold" FlowDirection="LeftToRight"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Margin="0,6,0,0"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+        </StackPanel>
+        <!-- End Connected State -->
+
+        <!-- Split Tunnel Tip (always visible) -->
+        <Border Background="#1AFFC107" BorderBrush="#33FFC107" BorderThickness="1"
+                CornerRadius="10" Padding="14,12" Margin="0,10,0,0">
+            <StackPanel>
+            <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="20"
+                       Foreground="{StaticResource TextPrimaryBrush}">
+                <Run Text="💡  فقط ترافیک برنامه‌هایی از تونل VPN عبور می‌کند که از تب "/>
+                <Run Text="«برنامه‌ها»" FontWeight="SemiBold"/>
+                <Run Text=" فعال‌سازی شده باشند. سایر برنامه‌ها مستقیماً به اینترنت متصل می‌شوند."/>
+            </TextBlock>
+            <Border Background="#22FFFFFF" Height="1" Margin="0,8,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="20"
+                       Foreground="{StaticResource TextSecondaryBrush}">
+                <Run Text="📌  "/>
+                <Run Text="تلگرام، واتس‌اپ و سایر برنامه‌های مایکروسافت استور"
+                     FontWeight="SemiBold"/>
+                <Run Text=" معمولاً از موتور مرورگر داخلی ویندوز استفاده می‌کنند. برای تونل‌کردن صحیح ترافیک آن‌ها، علاوه‌بر خود برنامه، حتماً "/>
+                <Run Text="Microsoft Edge WebView2" FontWeight="SemiBold"
+                     Foreground="{StaticResource AccentBrush}"/>
+                <Run Text=" را هم از ستون "/>
+                <Run Text="«برنامه‌های نصب‌شده»" FontWeight="SemiBold"/>
+                <Run Text=" به لیست تونل اضافه کنید."/>
+            </TextBlock>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+    </ScrollViewer>
+</UserControl>

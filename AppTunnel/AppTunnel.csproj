@@ -1,0 +1,95 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>TunnelX</AssemblyName>
+    <RootNamespace>AppTunnel</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <PlatformTarget>x64</PlatformTarget>
+    <Authors>MaxFan</Authors>
+    <Company>MaxFan</Company>
+    <Product>TunnelX</Product>
+    <Description>Free and open-source Windows split-tunneling client for app-based and full-route VPN workflows.</Description>
+    <Copyright>Copyright © MaxFan</Copyright>
+    <RepositoryUrl>https://github.com/MaxiFan/TunnelX</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/MaxiFan/TunnelX</PackageProjectUrl>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <NeutralLanguage>fa-IR</NeutralLanguage>
+    
+    <!-- Version Management -->
+    <Version>1.2.21</Version>
+    <AssemblyVersion>1.2.21.0</AssemblyVersion>
+    <FileVersion>1.2.21.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- WinDivert native binaries — copied to output directory on build -->
+  <ItemGroup>
+    <None Include="NativeLibs\x64\WinDivert.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>WinDivert.dll</Link>
+    </None>
+    <None Include="NativeLibs\x64\WinDivert64.sys">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>WinDivert64.sys</Link>
+    </None>
+    <None Include="NativeLibs\x64\sing-box.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>sing-box.exe</Link>
+    </None>
+    <None Include="NativeLibs\x64\xray.exe" Condition="Exists('NativeLibs\x64\xray.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>xray.exe</Link>
+    </None>
+    <!-- Embed sing-box.exe so the self-contained single-file build works
+         without requiring a side-by-side file. Extracted to %LOCALAPPDATA%\TunnelX\singbox\
+         on first V2Ray connection (skipped if the file is already next to the exe). -->
+    <EmbeddedResource Include="NativeLibs\x64\sing-box.exe">
+      <LogicalName>sing-box.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="NativeLibs\x64\xray.exe" Condition="Exists('NativeLibs\x64\xray.exe')">
+      <LogicalName>xray.exe</LogicalName>
+    </EmbeddedResource>
+    <!-- Embed WinDivert native files so the standalone single-file build works
+         without side-by-side DLLs. Extracted to AppContext.BaseDirectory on startup
+         (skipped if the files are already next to the exe — i.e. regular build). -->
+    <EmbeddedResource Include="NativeLibs\x64\WinDivert.dll">
+      <LogicalName>WinDivert.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="NativeLibs\x64\WinDivert64.sys">
+      <LogicalName>WinDivert64.sys</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="NativeLibs\x64\wintun.dll" Condition="Exists('NativeLibs\x64\wintun.dll')">
+      <LogicalName>wintun.dll</LogicalName>
+    </EmbeddedResource>
+    <None Include="NativeLibs\x64\wintun.dll" Condition="Exists('NativeLibs\x64\wintun.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>wintun.dll</Link>
+    </None>
+  </ItemGroup>
+
+  <!-- Embedded Persian Font -->
+  <ItemGroup>
+    <Resource Include="Fonts\Vazirmatn-Regular.ttf" />
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+  <!-- Post-Build: no-op for Releases folder.
+       The standalone exe (built via 'dotnet publish') already embeds all native libs
+       (WinDivert.dll, WinDivert64.sys, wintun.dll, sing-box.exe) and extracts them on
+       first run. Nothing needs to be copied to Releases by the regular build. -->
+  <Target Name="CopyVersionedRelease" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+  </Target>
+
+</Project>
