@@ -4,7 +4,7 @@ Thanks for helping TunnelX. The project is built by MaxFan and published as free
 
 ## Development
 
-1. Use Windows and .NET 8 SDK.
+1. Use Windows and .NET 10 SDK.
 2. Build with `dotnet build AppTunnel.sln -c Release`.
 3. Keep changes focused. Avoid unrelated formatting churn.
 4. For networking changes, include log samples and explain the tested mode: split route, full route, app toggle, DNS, IPv6, and leak guard.

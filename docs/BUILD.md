@@ -4,7 +4,7 @@
 
 TunnelX currently targets 64-bit Windows only. The project file sets `PlatformTarget` to `x64`, and the bundled native components under `AppTunnel/NativeLibs/x64` are required for the current build.
 
-Building from source requires the .NET 8 SDK. Running a framework-dependent developer build requires the .NET 8 Desktop Runtime or SDK on the machine.
+Building from source requires the .NET 10 SDK. Running a framework-dependent developer build requires the .NET 10 Desktop Runtime or SDK on the machine.
 
 ```powershell
 dotnet build AppTunnel.sln -c Release
@@ -12,7 +12,7 @@ dotnet build AppTunnel.sln -c Release
 
 ## Standalone Compressed EXE
 
-This is the recommended public release format. It is self-contained, so users do not need to install .NET 8 separately. Native components are bundled and extracted by the app at runtime when needed.
+This is the recommended public release format. It is self-contained, so users do not need to install .NET 10 separately. Native components are bundled and extracted by the app at runtime when needed.
 
 ```powershell
 dotnet publish AppTunnel\AppTunnel.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o publish\TunnelX-standalone-compressed-exe

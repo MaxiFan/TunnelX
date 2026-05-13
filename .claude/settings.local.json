@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/Projects/TunnelX log --oneline)"
+    ]
+  }
+}

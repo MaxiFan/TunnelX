@@ -17,12 +17,12 @@ TunnelX is a free and open-source Windows split-tunneling client built by **MaxF
 
 ## Screenshots
 
-| Connection dashboard | Profile and server setup |
-| --- | --- |
+| Connection dashboard                                                                   | Profile and server setup                                                                   |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | ![TunnelX connection dashboard](docs/ScreenShots/Screenshot%202026-05-12%20115349.png) | ![TunnelX profile and server setup](docs/ScreenShots/Screenshot%202026-05-12%20115544.png) |
 
-| App split tunneling | Tunnel settings |
-| --- | --- |
+| App split tunneling                                                                   | Tunnel settings                                                                   |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | ![TunnelX app split tunneling](docs/ScreenShots/Screenshot%202026-05-12%20115646.png) | ![TunnelX tunnel settings](docs/ScreenShots/Screenshot%202026-05-12%20115718.png) |
 
 ## Download
@@ -44,7 +44,7 @@ End-user requirements for the recommended standalone release:
 
 Developer requirements for building from source:
 
-- .NET 8 SDK
+- .NET 10 SDK
 
 ```powershell
 dotnet build AppTunnel.sln -c Release
