@@ -74,6 +74,17 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>wintun.dll</Link>
     </None>
+    <None Include="NativeLibs\x64\openvpn.exe" Condition="Exists('NativeLibs\x64\openvpn.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>openvpn.exe</Link>
+    </None>
+    <!-- Embed openvpn.exe so the self-contained single-file build works
+         without requiring a side-by-side file. Extracted to %LOCALAPPDATA%\TunnelX\
+         on startup (skipped if already present with matching size). -->
+    <EmbeddedResource Include="NativeLibs\x64\openvpn.exe"
+      Condition="Exists('NativeLibs\x64\openvpn.exe')">
+      <LogicalName>openvpn.exe</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <!-- Embedded Persian Font -->
   <ItemGroup>

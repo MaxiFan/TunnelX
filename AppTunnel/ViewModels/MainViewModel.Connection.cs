@@ -54,6 +54,7 @@ public partial class MainViewModel
             StatusText = "کانفیگ V2Ray را وارد کنید";
             return;
         }
+        // OpenVPN: no config validation — user manages profiles inside OpenVPN Connect
         if (!ValidateSocks5Port(out var socksError))
         {
             StatusText = socksError;
@@ -370,6 +371,22 @@ public partial class MainViewModel
             }
 
             var rawConfig = SelectedV2RayConfig.Trim();
+            if (CurrentTunnelType == TunnelType.OpenVpn)
+            {
+                if (!TryExtractOpenVpnRemote(SelectedOpenVpnConfig.Trim(), out var ovpnHost, out _))
+                {
+                    ServerPingResult = "دستور remote در کانفیگ OpenVPN پیدا نشد";
+                    return;
+                }
+
+                using var ping = new Ping();
+                var reply = await ping.SendPingAsync(ovpnHost, 3000);
+                ServerPingResult = reply.Status == IPStatus.Success
+                    ? $"ICMP {reply.RoundtripTime} ms"
+                    : $"ICMP {reply.Status}";
+                return;
+            }
+
             if (!TryExtractProxyEndpointDetails(rawConfig, out var endpoint, out var error))
             {
                 ServerPingResult = error;
@@ -797,7 +814,7 @@ public partial class MainViewModel
         // server_name (0x0000): list_len(2) + name_type(1) + host_len(2) + host
         var sniExt = new List<byte> { 0x00, 0x00 }; // ext type
         int sniListLen = 1 + 2 + sni.Length;
-        int sniExtLen  = 2 + sniListLen;
+        int sniExtLen = 2 + sniListLen;
         sniExt.AddRange(new byte[] { (byte)(sniExtLen >> 8), (byte)sniExtLen });
         sniExt.AddRange(new byte[] { (byte)(sniListLen >> 8), (byte)sniListLen });
         sniExt.Add(0x00); // host_name type

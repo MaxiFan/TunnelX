@@ -25,8 +25,9 @@ public class VpnService
         _activeProvider = config.TunnelType switch
         {
             TunnelType.L2tpIpsec => new L2tpTunnelProvider(),
-            TunnelType.V2Ray     => TunnelProviderFactory.Create(config.V2RayConfig),
-            _                    => throw new NotImplementedException($"نوع تانل ناشناخته: {config.TunnelType}")
+            TunnelType.V2Ray => TunnelProviderFactory.Create(config.V2RayConfig),
+            TunnelType.OpenVpn => new OpenVpnTunnelProvider(),
+            _ => throw new NotImplementedException($"نوع تانل ناشناخته: {config.TunnelType}")
         };
 
         // Wire up the tunnel-failure watchdog for V2Ray connections.

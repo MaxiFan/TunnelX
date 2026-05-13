@@ -12,6 +12,11 @@ public class ServerConfig
     public string ConnectionName { get; set; } = "TunnelX";
     public TunnelType TunnelType { get; set; } = TunnelType.L2tpIpsec;
     public string V2RayConfig { get; set; } = "";
+    public string OpenVpnConfig { get; set; } = "";
+    public string OpenVpnExePath { get; set; } = "";
+    public string OpenVpnUsername { get; set; } = "";
+    public string OpenVpnPassword { get; set; } = "";
+    public string OpenVpnPrivateKeyPassword { get; set; } = "";
     public bool AutoTuneMtu { get; set; } = true;
     public bool EnableDnsOptimization { get; set; } = true;
     public bool EnableGameMode { get; set; } = false;

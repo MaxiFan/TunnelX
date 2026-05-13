@@ -7,7 +7,8 @@ namespace AppTunnel.Models;
 public enum TunnelType
 {
     L2tpIpsec,
-    V2Ray
+    V2Ray,
+    OpenVpn
 }
 
 /// <summary>
@@ -28,6 +29,11 @@ public class ConnectionProfile : INotifyPropertyChanged
     private List<string> _excludedDestinations = new();
     private TunnelType _tunnelType = TunnelType.L2tpIpsec;
     private string _v2RayConfig = "";
+    private string _openVpnConfig = "";
+    private string _openVpnExePath = "";
+    private string _openVpnUsername = "";
+    private string _openVpnPassword = "";
+    private string _openVpnPrivateKeyPassword = "";
     private int _socks5Port = 1080;
     private bool _autoTuneMtu = true;
     private bool _enableDnsOptimization = true;
@@ -110,6 +116,32 @@ public class ConnectionProfile : INotifyPropertyChanged
         set => SetField(ref _v2RayConfig, value);
     }
 
+    public string OpenVpnConfig
+    {
+        get => _openVpnConfig;
+        set => SetField(ref _openVpnConfig, value);
+    }
+    /// <summary>Optional explicit path to openvpn.exe selected by the user.</summary>
+    public string OpenVpnExePath
+    {
+        get => _openVpnExePath;
+        set => SetField(ref _openVpnExePath, value);
+    }
+    public string OpenVpnUsername
+    {
+        get => _openVpnUsername;
+        set => SetField(ref _openVpnUsername, value);
+    }
+    public string OpenVpnPassword
+    {
+        get => _openVpnPassword;
+        set => SetField(ref _openVpnPassword, value);
+    }
+    public string OpenVpnPrivateKeyPassword
+    {
+        get => _openVpnPrivateKeyPassword;
+        set => SetField(ref _openVpnPrivateKeyPassword, value);
+    }
     public int Socks5Port
     {
         get => _socks5Port;
@@ -146,6 +178,11 @@ public class ConnectionProfile : INotifyPropertyChanged
         ConnectionName = ConnectionName,
         TunnelType = TunnelType,
         V2RayConfig = V2RayConfig,
+        OpenVpnConfig = OpenVpnConfig,
+        OpenVpnExePath = OpenVpnExePath,
+        OpenVpnUsername = OpenVpnUsername,
+        OpenVpnPassword = OpenVpnPassword,
+        OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword,
         AutoTuneMtu = AutoTuneMtu,
         EnableDnsOptimization = EnableDnsOptimization,
         EnableGameMode = EnableGameMode

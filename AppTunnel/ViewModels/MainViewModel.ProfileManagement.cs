@@ -34,6 +34,11 @@ public partial class MainViewModel
     /// </summary>
     public event Action<string, string>? PasswordChanged;
 
+    /// <summary>
+    /// Event to notify code-behind to update OpenVPN PasswordBox controls.
+    /// </summary>
+    public event Action<string, string>? OpenVpnCredentialsChanged;
+
     private void LoadProfiles()
     {
         var profiles = _profileService.LoadProfiles();
@@ -87,7 +92,8 @@ public partial class MainViewModel
                 ExecutableName = app.ExecutableName,
                 Icon = icon,
                 IsEnabled = app.IsEnabled
-            }) { IsEnabled = app.IsEnabled });
+            })
+            { IsEnabled = app.IsEnabled });
         }
         RefreshAllFilters();
         OnPropertyChanged(nameof(EnabledAppsCount));
@@ -111,6 +117,11 @@ public partial class MainViewModel
         _selectedProfile.PreSharedKey = PreSharedKey;
         _selectedProfile.TunnelType = _currentTunnelType;
         _selectedProfile.V2RayConfig = SelectedV2RayConfig;
+        _selectedProfile.OpenVpnConfig = SelectedOpenVpnConfig;
+        _selectedProfile.OpenVpnExePath = SelectedOpenVpnExePath;
+        _selectedProfile.OpenVpnUsername = SelectedOpenVpnUsername;
+        _selectedProfile.OpenVpnPassword = OpenVpnPassword;
+        _selectedProfile.OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword;
         _selectedProfile.Socks5Port = Socks5Port;
         _selectedProfile.AutoTuneMtu = AutoTuneMtu;
         _selectedProfile.EnableDnsOptimization = IsDnsOptimizationEnabled;
@@ -164,11 +175,21 @@ public partial class MainViewModel
         // while the new profile is being loaded.
         _currentTunnelType = profile.TunnelType;
         _selectedV2RayConfig = profile.V2RayConfig;
+        _selectedOpenVpnConfig = profile.OpenVpnConfig;
+        _selectedOpenVpnExePath = profile.OpenVpnExePath;
+        _openVpnUsername = profile.OpenVpnUsername;
+        _openVpnPassword = profile.OpenVpnPassword;
+        _openVpnPrivateKeyPassword = profile.OpenVpnPrivateKeyPassword;
         OnPropertyChanged(nameof(CurrentTunnelType));
         OnPropertyChanged(nameof(SelectedV2RayConfig));
+        OnPropertyChanged(nameof(SelectedOpenVpnConfig));
+        OnPropertyChanged(nameof(SelectedOpenVpnExePath));
+        OnPropertyChanged(nameof(SelectedOpenVpnUsername));
+        OnPropertyChanged(nameof(IsOpenVpnBinaryMissing));
         UpdateConfigDiagnostics();
 
         PasswordChanged?.Invoke(profile.Password, profile.PreSharedKey);
+        OpenVpnCredentialsChanged?.Invoke(profile.OpenVpnPassword, profile.OpenVpnPrivateKeyPassword);
     }
 
     private void CreateNewProfile()
@@ -196,6 +217,11 @@ public partial class MainViewModel
             PreSharedKey = _selectedProfile.PreSharedKey,
             TunnelType = _selectedProfile.TunnelType,
             V2RayConfig = _selectedProfile.V2RayConfig,
+            OpenVpnConfig = _selectedProfile.OpenVpnConfig,
+            OpenVpnExePath = _selectedProfile.OpenVpnExePath,
+            OpenVpnUsername = _selectedProfile.OpenVpnUsername,
+            OpenVpnPassword = _selectedProfile.OpenVpnPassword,
+            OpenVpnPrivateKeyPassword = _selectedProfile.OpenVpnPrivateKeyPassword,
             Socks5Port = _selectedProfile.Socks5Port,
             AutoTuneMtu = _selectedProfile.AutoTuneMtu,
             EnableDnsOptimization = _selectedProfile.EnableDnsOptimization,

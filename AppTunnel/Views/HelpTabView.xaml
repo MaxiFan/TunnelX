@@ -51,7 +51,8 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="پروژه آزاد و حمایت"/>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="پروژه آزاد و حمایت"/>
                         <TextBlock Text="{Binding AppCreatorText}"
                                    FontSize="11"
                                    Foreground="{StaticResource TextPrimaryBrush}"
@@ -112,7 +113,8 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="بروزرسانی"/>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="بروزرسانی"/>
                         <TextBlock Text="{Binding UpdateStatusText}"
                                    FontSize="11"
                                    Foreground="{StaticResource TextSecondaryBrush}"
@@ -140,7 +142,8 @@
             <!-- Quick Path -->
             <Border Style="{StaticResource CardPanel}">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="شروع سریع"/>
+                    <TextBlock Style="{StaticResource SectionHeader}"
+                            Text="شروع سریع"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -153,43 +156,75 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" Grid.Column="0" Background="#11FFFFFF" CornerRadius="8" Padding="12,10">
+                        <Border Grid.Row="0"
+                                Grid.Column="0"
+                                Background="#11FFFFFF"
+                                CornerRadius="8"
+                                Padding="12,10">
                             <StackPanel>
-                                <TextBlock Text="۱. پروفایل" FontSize="12" FontWeight="SemiBold"
+                                <TextBlock Text="۱. پروفایل"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Text="نوع اتصال را انتخاب کنید و کانفیگ L2TP یا V2Ray/Xray را وارد کنید."
-                                           FontSize="10" TextWrapping="Wrap"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+                                <TextBlock Text="نوع اتصال را انتخاب کنید و کانفیگ L2TP، V2Ray/Xray یا OpenVPN را وارد کنید."
+                                           FontSize="10"
+                                        TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                        Margin="0,5,0,0"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="0" Grid.Column="2" Background="#11FFFFFF" CornerRadius="8" Padding="12,10">
+                        <Border Grid.Row="0"
+                                Grid.Column="2"
+                                Background="#11FFFFFF"
+                                CornerRadius="8"
+                                Padding="12,10">
                             <StackPanel>
-                                <TextBlock Text="۲. تست سرور" FontSize="12" FontWeight="SemiBold"
+                                <TextBlock Text="۲. تست سرور"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
                                 <TextBlock Text="قبل از اتصال، تست سرور را بزنید. برای TLS، handshake واقعی اندازه‌گیری می‌شود."
-                                           FontSize="10" TextWrapping="Wrap"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+                                           FontSize="10"
+                                        TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                        Margin="0,5,0,0"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="2" Grid.Column="0" Background="#11FFFFFF" CornerRadius="8" Padding="12,10">
+                        <Border Grid.Row="2"
+                                Grid.Column="0"
+                                Background="#11FFFFFF"
+                                CornerRadius="8"
+                                Padding="12,10">
                             <StackPanel>
-                                <TextBlock Text="۳. برنامه‌ها" FontSize="12" FontWeight="SemiBold"
+                                <TextBlock Text="۳. برنامه‌ها"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
                                 <TextBlock Text="برنامه‌هایی که باید از تونل عبور کنند را در تب برنامه‌ها فعال کنید."
-                                           FontSize="10" TextWrapping="Wrap"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+                                           FontSize="10"
+                                        TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                        Margin="0,5,0,0"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="2" Grid.Column="2" Background="#11FFFFFF" CornerRadius="8" Padding="12,10">
+                        <Border Grid.Row="2"
+                                Grid.Column="2"
+                                Background="#11FFFFFF"
+                                CornerRadius="8"
+                                Padding="12,10">
                             <StackPanel>
-                                <TextBlock Text="۴. اتصال" FontSize="12" FontWeight="SemiBold"
+                                <TextBlock Text="۴. اتصال"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
                                 <TextBlock Text="بعد از اتصال، کارت سلامت ترافیک را برای Leak، DNS، IPv6 و Route بررسی کنید."
-                                           FontSize="10" TextWrapping="Wrap"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+                                           FontSize="10"
+                                        TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                        Margin="0,5,0,0"/>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -204,9 +239,11 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="0"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="حالت انتخابی"/>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="حالت انتخابی"/>
                         <TextBlock Text="فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی از تونل عبور می‌کنند. این حالت برای مصرف کمتر و کنترل دقیق‌تر پیشنهاد می‌شود."
                                    FontSize="11"
                                    LineHeight="19"
@@ -215,9 +252,11 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="2"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="عبور کل سیستم"/>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="عبور کل سیستم"/>
                         <TextBlock Text="وقتی Full Route روشن باشد، کل ترافیک ویندوز از تونل عبور می‌کند. برای تست یا زمانی که همه برنامه‌ها باید VPN داشته باشند مناسب است."
                                    FontSize="11"
                                    LineHeight="19"
@@ -235,20 +274,28 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="0"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="برنامه‌ها"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="19"
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="برنامه‌ها"/>
+                        <TextBlock TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
                                    Foreground="{StaticResource TextSecondaryBrush}">
 برنامه‌های Store/MSIX و WebView2 ممکن است چند پردازش داشته باشند. اگر اپی دیده نشد، آن را باز کنید و دوباره بارگذاری برنامه‌ها را بزنید.
                         </TextBlock>
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="2"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="قوانین مسیر"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="19"
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="قوانین مسیر"/>
+                        <TextBlock TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
                                    Foreground="{StaticResource TextSecondaryBrush}">
 استثناها مقصد را مستقیم نگه می‌دارند. لزومی‌ها مقصد را حتی بدون انتخاب برنامه از تونل عبور می‌دهند. دامنه، IP و URL قابل استفاده است.
                         </TextBlock>
@@ -264,14 +311,21 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="0"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="SOCKS5 داخلی"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="19"
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="SOCKS5 داخلی"/>
+                        <TextBlock TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
                                    Foreground="{StaticResource TextSecondaryBrush}">
 پروکسی داخلی روی 127.0.0.1 اجرا می‌شود. پورت را قبل از اتصال انتخاب کنید؛ پورت‌های سیستم، رزرو و پورت‌های رایج توسعه محدود شده‌اند.
                         </TextBlock>
-                        <Border Background="#11FFFFFF" CornerRadius="6" Padding="8" Margin="0,8,0,0">
+                        <Border Background="#11FFFFFF"
+                                CornerRadius="6"
+                                Padding="8"
+                                Margin="0,8,0,0">
                             <TextBlock Text="127.0.0.1:1080"
                                        FontSize="11"
                                        FontFamily="Consolas"
@@ -281,10 +335,14 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Style="{StaticResource CardPanel}">
+                <Border Grid.Column="2"
+                        Style="{StaticResource CardPanel}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="کارت سلامت"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" LineHeight="19"
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                Text="کارت سلامت"/>
+                        <TextBlock TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
                                    Foreground="{StaticResource TextSecondaryBrush}">
 Leak باید صفر باشد. DNS نشان می‌دهد درخواست‌های DNS هدایت شده‌اند. IPv6 blocked یعنی مسیرهای IPv6 ناخواسته بسته شده‌اند. Route تعداد مسیرهای فعال و خطاها را نشان می‌دهد.
                         </TextBlock>
@@ -295,24 +353,40 @@ Leak باید صفر باشد. DNS نشان می‌دهد درخواست‌ها�
             <!-- Troubleshooting -->
             <Border Style="{StaticResource CardPanel}">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="عیب‌یابی سریع"/>
+                    <TextBlock Style="{StaticResource SectionHeader}"
+                            Text="عیب‌یابی سریع"/>
 
-                    <Expander Header="اتصال برقرار نمی‌شود" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0">
+                    <Expander Header="اتصال برقرار نمی‌شود"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            Margin="0,4,0,0">
                         <TextBlock Text="دسترسی Administrator، فایروال، پورت SOCKS5 و صحت کانفیگ را بررسی کنید. در کانفیگ‌های xhttp، هسته باید Xray باشد."
-                                   TextWrapping="Wrap" FontSize="11" LineHeight="19"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,8,0,0"/>
+                                   TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                Margin="0,8,0,0"/>
                     </Expander>
 
-                    <Expander Header="ترافیک برنامه از تونل عبور نمی‌کند" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,8,0,0">
+                    <Expander Header="ترافیک برنامه از تونل عبور نمی‌کند"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            Margin="0,8,0,0">
                         <TextBlock Text="برنامه را در تب برنامه‌ها فعال کنید. برای اپ‌های Store، برنامه را باز نگه دارید و لیست برنامه‌ها را دوباره بارگذاری کنید."
-                                   TextWrapping="Wrap" FontSize="11" LineHeight="19"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,8,0,0"/>
+                                   TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                Margin="0,8,0,0"/>
                     </Expander>
 
-                    <Expander Header="سایت داخلی باید مستقیم باز شود" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,8,0,0">
+                    <Expander Header="سایت داخلی باید مستقیم باز شود"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            Margin="0,8,0,0">
                         <TextBlock Text="دامنه یا IP را به استثناها اضافه کنید. برای عبور اجباری یک مقصد از VPN، آن را به لزومی‌ها اضافه کنید."
-                                   TextWrapping="Wrap" FontSize="11" LineHeight="19"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,8,0,0"/>
+                                   TextWrapping="Wrap"
+                                FontSize="11"
+                                LineHeight="19"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                Margin="0,8,0,0"/>
                     </Expander>
                 </StackPanel>
             </Border>

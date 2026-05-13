@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
@@ -8,6 +9,7 @@ using System.Windows;
 using System.Windows.Input;
 using Application = System.Windows.Application;
 using System.Windows.Threading;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using AppTunnel.Models;
 using AppTunnel.Services;
 
@@ -60,8 +62,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         // Ping command
         TogglePingCommand = new RelayCommand(_ => TogglePing(), _ => IsConnected);
         TestServerPingCommand = new RelayCommand(_ => _ = TestServerPingAsync(), _ => !IsConnected && !IsTestingServerPing);
-        PasteConfigCommand = new RelayCommand(_ => PasteConfigFromClipboard(), _ => !IsConnected && CurrentTunnelType == TunnelType.V2Ray);
-        ClearConfigCommand = new RelayCommand(_ => SelectedV2RayConfig = "", _ => !IsConnected && CurrentTunnelType == TunnelType.V2Ray);
+        PasteConfigCommand = new RelayCommand(_ => PasteConfigFromClipboard(), _ => !IsConnected && (CurrentTunnelType == TunnelType.V2Ray || CurrentTunnelType == TunnelType.OpenVpn));
+        ClearConfigCommand = new RelayCommand(_ => ClearCurrentConfig(), _ => !IsConnected && (CurrentTunnelType == TunnelType.V2Ray || CurrentTunnelType == TunnelType.OpenVpn));
+        BrowseOpenVpnExeCommand = new RelayCommand(_ => BrowseForOpenVpnExe(), _ => !IsConnected && CurrentTunnelType == TunnelType.OpenVpn);
         OpenGitHubCommand = new RelayCommand(_ => OpenExternalLink(AppInfo.GitHubUrl));
         OpenDonateCommand = new RelayCommand(_ => OpenExternalLink(AppInfo.PayPalDonateUrl));
         CopyDonationInfoCommand = new RelayCommand(_ => CopyDonationInfoToClipboard());
@@ -346,6 +349,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (_currentTunnelType == value) return;
             _currentTunnelType = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsOpenVpnBinaryMissing));
             if (_selectedProfile != null)
                 _selectedProfile.TunnelType = value;
             UpdateConfigDiagnostics();
@@ -372,6 +376,71 @@ public partial class MainViewModel : INotifyPropertyChanged
             SaveCurrentState();
             CommandManager.InvalidateRequerySuggested();
         }
+    }
+
+    private string _selectedOpenVpnConfig = "";
+    public string SelectedOpenVpnConfig
+    {
+        get => _selectedOpenVpnConfig;
+        set
+        {
+            if (_selectedOpenVpnConfig == value) return;
+            _selectedOpenVpnConfig = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnConfig = value;
+            OnPropertyChanged();
+            UpdateConfigDiagnostics();
+            RaiseHealthStatusChanged();
+            SaveCurrentState();
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private string _selectedOpenVpnExePath = "";
+    public string SelectedOpenVpnExePath
+    {
+        get => _selectedOpenVpnExePath;
+        set
+        {
+            if (_selectedOpenVpnExePath == value) return;
+            _selectedOpenVpnExePath = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnExePath = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsOpenVpnBinaryMissing));
+            SaveCurrentState();
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private string _openVpnUsername = "";
+    public string SelectedOpenVpnUsername
+    {
+        get => _openVpnUsername;
+        set
+        {
+            if (_openVpnUsername == value) return;
+            _openVpnUsername = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUsername = value;
+            OnPropertyChanged();
+            SaveCurrentState();
+        }
+    }
+
+    // Handled via PasswordBox code-behind (not directly bindable)
+    private string _openVpnPassword = "";
+    public string OpenVpnPassword
+    {
+        get => _openVpnPassword;
+        set { _openVpnPassword = value; OnPropertyChanged(); }
+    }
+
+    private string _openVpnPrivateKeyPassword = "";
+    public string OpenVpnPrivateKeyPassword
+    {
+        get => _openVpnPrivateKeyPassword;
+        set { _openVpnPrivateKeyPassword = value; OnPropertyChanged(); }
     }
 
     private string _configCoreHint = "";
@@ -490,8 +559,49 @@ public partial class MainViewModel : INotifyPropertyChanged
         TunnelType.L2tpIpsec => "L2TP",
         TunnelType.V2Ray when TunnelProviderFactory.RequiresXray(SelectedV2RayConfig) => "Xray",
         TunnelType.V2Ray => "sing-box",
+        TunnelType.OpenVpn => "OpenVPN",
         _ => "-"
     };
+
+    /// <summary>
+    /// True when the user has selected OpenVPN mode but openvpn.exe cannot be found.
+    /// Drives the warning banner in the connection tab.
+    /// </summary>
+    public bool IsOpenVpnBinaryMissing =>
+        CurrentTunnelType == TunnelType.OpenVpn &&
+        !OpenVpnBinaryExists();
+
+    private bool OpenVpnBinaryExists()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedOpenVpnExePath) && File.Exists(_selectedOpenVpnExePath))
+            return true;
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        // OpenVPN Connect (preferred)
+        if (File.Exists(Path.Combine(pf, "OpenVPN Connect", "OpenVPNConnect.exe"))) return true;
+        if (File.Exists(Path.Combine(pfx86, "OpenVPN Connect", "OpenVPNConnect.exe"))) return true;
+        if (File.Exists(Path.Combine(local, "Programs", "OpenVPN Connect", "OpenVPNConnect.exe"))) return true;
+        // Community openvpn.exe
+        if (File.Exists(Path.Combine(local, "TunnelX", "openvpn.exe"))) return true;
+        if (File.Exists(Path.Combine(AppContext.BaseDirectory, "openvpn.exe"))) return true;
+        if (File.Exists(Path.Combine(pf, "OpenVPN", "bin", "openvpn.exe"))) return true;
+        if (File.Exists(Path.Combine(pfx86, "OpenVPN", "bin", "openvpn.exe"))) return true;
+        return false;
+    }
+
+    private void BrowseForOpenVpnExe()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = "انتخاب OpenVPN Connect یا openvpn.exe",
+            Filter = "OpenVPN executables|OpenVPNConnect.exe;openvpn.exe|EXE files (*.exe)|*.exe",
+            FileName = "OpenVPNConnect.exe",
+            CheckFileExists = true
+        };
+        if (dlg.ShowDialog() == true)
+            SelectedOpenVpnExePath = dlg.FileName;
+    }
 
     private string _totalTraffic = "0 B";
     public string TotalTraffic
@@ -672,6 +782,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand TestServerPingCommand { get; }
     public ICommand PasteConfigCommand { get; }
     public ICommand ClearConfigCommand { get; }
+    public ICommand BrowseOpenVpnExeCommand { get; }
     public ICommand OpenGitHubCommand { get; }
     public ICommand OpenDonateCommand { get; }
     public ICommand CopyDonationInfoCommand { get; }
@@ -776,7 +887,13 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             if (System.Windows.Clipboard.ContainsText())
-                SelectedV2RayConfig = System.Windows.Clipboard.GetText().Trim();
+            {
+                var text = System.Windows.Clipboard.GetText().Trim();
+                if (CurrentTunnelType == TunnelType.OpenVpn)
+                    SelectedOpenVpnConfig = text;
+                else
+                    SelectedV2RayConfig = text;
+            }
         }
         catch (Exception ex)
         {
@@ -784,9 +901,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private void ClearCurrentConfig()
+    {
+        if (CurrentTunnelType == TunnelType.OpenVpn)
+            SelectedOpenVpnConfig = "";
+        else
+            SelectedV2RayConfig = "";
+    }
+
     private void UpdateConfigDiagnostics()
     {
-        if (CurrentTunnelType != TunnelType.V2Ray)
+        if (CurrentTunnelType == TunnelType.L2tpIpsec)
         {
             ConfigCoreHint = "L2TP/IPsec";
             ConfigValidationText = string.IsNullOrWhiteSpace(ServerAddress)
@@ -795,21 +920,65 @@ public partial class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        var config = SelectedV2RayConfig.Trim();
-        if (string.IsNullOrWhiteSpace(config))
+        if (CurrentTunnelType == TunnelType.OpenVpn)
+        {
+            var config = SelectedOpenVpnConfig.Trim();
+            if (string.IsNullOrWhiteSpace(config))
+            {
+                ConfigCoreHint = "OpenVPN";
+                ConfigValidationText = "کانفیگ OpenVPN (.ovpn) را وارد یا پیست کنید";
+                return;
+            }
+
+            ConfigCoreHint = "هسته: OpenVPN";
+            ConfigValidationText = TryExtractOpenVpnRemote(config, out var server, out var port)
+                ? $"سرور: {server}:{port}"
+                : "دستور remote در کانفیگ پیدا نشد";
+            return;
+        }
+
+        var v2rayConfig = SelectedV2RayConfig.Trim();
+        if (string.IsNullOrWhiteSpace(v2rayConfig))
         {
             ConfigCoreHint = "منتظر کانفیگ";
             ConfigValidationText = "کانفیگ V2Ray/Xray را وارد یا پیست کنید";
             return;
         }
 
-        ConfigCoreHint = TunnelProviderFactory.RequiresXray(config)
+        ConfigCoreHint = TunnelProviderFactory.RequiresXray(v2rayConfig)
             ? "هسته: Xray-core"
             : "هسته: sing-box";
 
-        ConfigValidationText = TryExtractProxyEndpoint(config, out var server, out var port, out var error)
-            ? $"سرور: {server}:{port}"
+        ConfigValidationText = TryExtractProxyEndpoint(v2rayConfig, out var v2rayServer, out var v2rayPort, out var error)
+            ? $"سرور: {v2rayServer}:{v2rayPort}"
             : error;
+    }
+
+    private static bool TryExtractOpenVpnRemote(string config, out string server, out int port)
+    {
+        server = "";
+        port = 1194;
+
+        foreach (var line in config.Split('\n'))
+        {
+            var raw = line.Trim();
+            if (string.IsNullOrWhiteSpace(raw) || raw.StartsWith("#") || raw.StartsWith(";"))
+                continue;
+
+            if (!raw.StartsWith("remote ", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parts = raw.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                server = parts[1];
+                if (parts.Length >= 3 && int.TryParse(parts[2], out var parsedPort))
+                    port = parsedPort;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool ValidateSocks5Port(out string message)

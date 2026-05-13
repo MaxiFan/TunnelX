@@ -192,12 +192,12 @@ public partial class App : Application
         {
             var killSingBox = new ProcessStartInfo
             {
-                FileName               = "taskkill",
-                Arguments              = "/F /IM sing-box.exe",
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
+                FileName = "taskkill",
+                Arguments = "/F /IM sing-box.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true
+                RedirectStandardError = true
             };
             using var kp = Process.Start(killSingBox);
             kp?.WaitForExit(3000);
@@ -288,7 +288,7 @@ public partial class App : Application
     {
         var asm = Assembly.GetExecutingAssembly();
 
-        foreach (var name in new[] { "WinDivert.dll", "WinDivert64.sys", "wintun.dll" })
+        foreach (var name in new[] { "WinDivert.dll", "WinDivert64.sys", "wintun.dll", "openvpn.exe" })
         {
             try
             {

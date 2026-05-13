@@ -77,6 +77,11 @@ public class ProfileService
                 PreSharedKey = DecryptString(s.EncryptedPsk),
                 TunnelType = s.TunnelType,
                 V2RayConfig = s.V2RayConfig,
+                OpenVpnConfig = s.OpenVpnConfig,
+                OpenVpnExePath = s.OpenVpnExePath,
+                OpenVpnUsername = s.OpenVpnUsername,
+                OpenVpnPassword = DecryptString(s.EncryptedOpenVpnPassword),
+                OpenVpnPrivateKeyPassword = DecryptString(s.EncryptedOpenVpnPrivateKeyPassword),
                 Socks5Port = s.Socks5Port > 0 ? s.Socks5Port : 1080,
                 AutoTuneMtu = s.AutoTuneMtu,
                 EnableDnsOptimization = s.EnableDnsOptimization,
@@ -108,6 +113,11 @@ public class ProfileService
             EncryptedPsk = EncryptString(p.PreSharedKey),
             TunnelType = p.TunnelType,
             V2RayConfig = p.V2RayConfig,
+            OpenVpnConfig = p.OpenVpnConfig,
+            OpenVpnExePath = p.OpenVpnExePath,
+            OpenVpnUsername = p.OpenVpnUsername,
+            EncryptedOpenVpnPassword = EncryptString(p.OpenVpnPassword),
+            EncryptedOpenVpnPrivateKeyPassword = EncryptString(p.OpenVpnPrivateKeyPassword),
             Socks5Port = p.Socks5Port,
             AutoTuneMtu = p.AutoTuneMtu,
             EnableDnsOptimization = p.EnableDnsOptimization,
@@ -165,6 +175,11 @@ public class ProfileService
         public string EncryptedPsk { get; set; } = "";
         public TunnelType TunnelType { get; set; } = TunnelType.L2tpIpsec;
         public string V2RayConfig { get; set; } = "";
+        public string OpenVpnConfig { get; set; } = "";
+        public string OpenVpnExePath { get; set; } = "";
+        public string OpenVpnUsername { get; set; } = "";
+        public string EncryptedOpenVpnPassword { get; set; } = "";
+        public string EncryptedOpenVpnPrivateKeyPassword { get; set; } = "";
         public int Socks5Port { get; set; } = 1080;
         public bool AutoTuneMtu { get; set; } = true;
         public bool EnableDnsOptimization { get; set; } = true;
