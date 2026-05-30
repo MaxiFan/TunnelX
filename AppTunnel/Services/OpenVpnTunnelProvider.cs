@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Collections.Concurrent;
 using System.Net;
@@ -103,6 +104,7 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                     Logger.Error($"  '{p}' → {(File.Exists(p) ? "FOUND" : "not found")}");
                 foreach (var p in GetOpenVpnConnectPaths())
                     Logger.Warning($"[OpenVPN] OpenVPN Connect check: '{p}' → {(Directory.Exists(p) || File.Exists(p) ? "FOUND (GUI only, not split-compatible)" : "not found")}");
+                ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Fail, Status.Message);
                 return false;
             }
             if (string.IsNullOrWhiteSpace(config.OpenVpnConfig))
@@ -173,7 +175,23 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                 if (Status.State == ConnectionState.Connected)
                     NotifySessionDropOnce();
             };
-            _process.Start();
+
+            try
+            {
+                _process.Start();
+            }
+            catch (Exception ex)
+            {
+                Status.State = ConnectionState.Error;
+                Status.Message = LocalizationService.Instance.Format(
+                    "اجرای openvpn.exe ناموفق بود: {0}. OpenVPN Community را نصب کنید یا TunnelX را با Administrator اجرا کنید.",
+                    ex.Message);
+                Logger.Error("[OpenVPN] Process.Start failed", ex);
+                ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Fail, Status.Message);
+                await KillProcessAsync();
+                return false;
+            }
+
             WriteTunnelXOpenVpnPid(_process.Id);
             _ = Task.Run(() => PumpOpenVpnOutputAsync(_process.StandardOutput, ct));
             _ = Task.Run(() => PumpOpenVpnOutputAsync(_process.StandardError, ct));
@@ -200,12 +218,27 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                     break;
                 }
 
+                if (_authFailedDetected)
+                {
+                    if (_process.HasExited)
+                    {
+                        LogRecentOpenVpnOutput();
+                        Status.State = ConnectionState.Error;
+                        UpdateDisconnectInsight();
+                        ReportStepFailure("tun_interface", _lastDisconnectReason, _controlChannelResetCount);
+                        return false;
+                    }
+
+                    await Task.Delay(500, ct);
+                    continue;
+                }
+
                 if (_process.HasExited)
                 {
                     LogRecentOpenVpnOutput();
                     Status.State = ConnectionState.Error;
                     Status.Message = LocalizationService.Instance.Format("OpenVPN زودتر از اتصال بسته شد (exit={0})", _process.ExitCode);
-                    ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
+                    ReportStepFailure("tun_interface", "OpenVPN زودتر از اتصال بسته شد (exit={0})", _process.ExitCode.ToString(CultureInfo.InvariantCulture));
                     return false;
                 }
 
@@ -221,7 +254,7 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                     Logger.Error($"  name='{nic.Name}' desc='{nic.Description}' status={nic.OperationalStatus}");
                 Status.State = ConnectionState.Error;
                 Status.Message = BuildAdapterTimeoutMessage();
-                ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
+                ReportStepFailure("tun_interface", _lastDisconnectReason, _controlChannelResetCount);
                 await KillProcessAsync();
                 return false;
             }
@@ -777,6 +810,15 @@ public class OpenVpnTunnelProvider : ITunnelProvider
         _lastDisconnectReason = reason;
         return OpenVpnDisconnectInsight.BuildUserMessage(reason, _controlChannelResetCount);
     }
+
+    private static void ReportStepFailure(string stepId, OpenVpnDisconnectReason reason, int controlResets)
+    {
+        var (key, formatArg) = OpenVpnDisconnectInsight.GetMessageTemplate(reason, controlResets);
+        ConnectionProgressService.Report(stepId, ConnectionProgressPhase.Fail, key, detailFormatArg: formatArg);
+    }
+
+    private static void ReportStepFailure(string stepId, string messageKey, string? formatArg = null)
+        => ConnectionProgressService.Report(stepId, ConnectionProgressPhase.Fail, messageKey, detailFormatArg: formatArg);
 
     /// <summary>Called before UI shows an unexpected drop (VPN monitor) when insight was not set yet.</summary>
     public void PrepareDropStatusIfNeeded()

@@ -100,6 +100,19 @@ public static class AppNotificationService
             () => _mainWindow?.BringToForeground());
     }
 
+    /// <summary>Always shown — e.g. when the app moves to the system tray so the user knows it was not closed.</summary>
+    public static void ShowTrayForced(
+        string titleKey,
+        string messageKey,
+        AppNotificationKind kind = AppNotificationKind.Info)
+    {
+        TrayToastWindow.ShowFromKeys(
+            titleKey,
+            messageKey,
+            kind,
+            () => _mainWindow?.BringToForeground());
+    }
+
     public static void ShowTrayFormat(
         string titleKey,
         string messageFormatKey,

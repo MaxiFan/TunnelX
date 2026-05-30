@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using AppTunnel.Helpers;
 
 namespace AppTunnel.Models;
 
@@ -15,18 +16,5 @@ public class TunnelApp
     public long BytesSent { get; set; }
     public long BytesReceived { get; set; }
 
-    public string TrafficDisplay
-    {
-        get
-        {
-            var total = BytesSent + BytesReceived;
-            return total switch
-            {
-                < 1024 => $"{total} B",
-                < 1024 * 1024 => $"{total / 1024.0:F1} KB",
-                < 1024 * 1024 * 1024 => $"{total / (1024.0 * 1024):F1} MB",
-                _ => $"{total / (1024.0 * 1024 * 1024):F2} GB"
-            };
-        }
-    }
+    public string TrafficDisplay => ByteSizeFormatter.Format(BytesSent + BytesReceived);
 }

@@ -42,20 +42,39 @@ public partial class MainViewModel
             filtered.Where(a => !tunnelExes.Contains(a.ExecutablePath)));
     }
 
+    private static IEnumerable<AppItemViewModel> OrderTunnelAppsByTraffic(IEnumerable<AppItemViewModel> apps) =>
+        apps.OrderByDescending(a => a.TotalTrafficBytes)
+            .ThenBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase);
+
     private void FilterTunnelApps()
     {
-        if (string.IsNullOrWhiteSpace(TunnelSearchText))
+        IEnumerable<AppItemViewModel> source = TunnelApps;
+        if (!string.IsNullOrWhiteSpace(TunnelSearchText))
         {
-            FilteredTunnelApps = new ObservableCollection<AppItemViewModel>(TunnelApps);
+            source = source.Where(a =>
+                a.DisplayName.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase) ||
+                a.ExecutableName.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase) ||
+                a.ExecutablePath.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase));
         }
-        else
+
+        FilteredTunnelApps = new ObservableCollection<AppItemViewModel>(OrderTunnelAppsByTraffic(source));
+    }
+
+    private void ResortTunnelAppsByTraffic()
+    {
+        if (TunnelApps.Count <= 1)
+            return;
+
+        var ordered = OrderTunnelAppsByTraffic(TunnelApps).ToList();
+        for (var targetIndex = 0; targetIndex < ordered.Count; targetIndex++)
         {
-            FilteredTunnelApps = new ObservableCollection<AppItemViewModel>(
-                TunnelApps.Where(a =>
-                    a.DisplayName.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase) ||
-                    a.ExecutableName.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase) ||
-                    a.ExecutablePath.Contains(TunnelSearchText, StringComparison.OrdinalIgnoreCase)));
+            var item = ordered[targetIndex];
+            var currentIndex = TunnelApps.IndexOf(item);
+            if (currentIndex >= 0 && currentIndex != targetIndex)
+                TunnelApps.Move(currentIndex, targetIndex);
         }
+
+        FilterTunnelApps();
     }
 
     private void RefreshAllFilters()

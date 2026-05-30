@@ -1,7 +1,10 @@
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using AppTunnel.Helpers;
 using AppTunnel.Services;
 using AppTunnel.ViewModels;
+using FlowDirection = System.Windows.FlowDirection;
 
 namespace AppTunnel.Views;
 
@@ -15,12 +18,50 @@ public partial class ConnectionTabView : System.Windows.Controls.UserControl
         LocalizationService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
-    private void OnLanguageChanged(object? sender, EventArgs e) =>
+    private void ApplyTabFlowDirection()
+    {
+        FlowDirection = LocalizationService.Instance.FlowDirection;
+        ApplyProfileCardLayout();
+    }
+
+    private void ApplyProfileCardLayout()
+    {
+        var loc = LocalizationService.Instance;
+        var flow = loc.FlowDirection;
+        var align = loc.TextAlignment;
+        var start = loc.StartHorizontalAlignment;
+
+        ProfileQuickActionsCard.FlowDirection = flow;
+        ProfileQuickActionsHeader.FlowDirection = flow;
+        ProfileQuickActionsButtons.FlowDirection = flow;
+        ProfileQuickActionsButtons.HorizontalAlignment = start;
+
+        foreach (var textBlock in ProfileQuickActionsHeader.Children.OfType<TextBlock>())
+        {
+            textBlock.FlowDirection = flow;
+            textBlock.TextAlignment = align;
+            textBlock.HorizontalAlignment = textBlock.TextWrapping == TextWrapping.Wrap
+                ? System.Windows.HorizontalAlignment.Stretch
+                : start;
+        }
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        ApplyTabFlowDirection();
         LocalizationLayoutHelper.ApplyTo(this);
+        Dispatcher.BeginInvoke(() =>
+            LocalizationLayoutHelper.RefreshLayoutBindings(this),
+            System.Windows.Threading.DispatcherPriority.Loaded);
+    }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        ApplyTabFlowDirection();
         LocalizationLayoutHelper.ApplyTo(this);
+        Dispatcher.BeginInvoke(() =>
+            LocalizationLayoutHelper.RefreshLayoutBindings(this),
+            System.Windows.Threading.DispatcherPriority.Loaded);
         if (DataContext is not MainViewModel vm) return;
 
         // Wire up PasswordBox (can't bind directly in WPF)
@@ -133,5 +174,4 @@ public partial class ConnectionTabView : System.Windows.Controls.UserControl
         // ListBox auto-scroll on selection causes visible jumps while wheel-scrolling.
         e.Handled = true;
     }
-
 }

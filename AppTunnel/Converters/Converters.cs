@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using AppTunnel.Helpers;
 using AppTunnel.Services;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
@@ -92,8 +93,15 @@ public class TextToFlowDirectionConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is string text && IsTechnicalOnly(text))
-            return FlowDirection.LeftToRight;
+        if (value is string text && !string.IsNullOrWhiteSpace(text))
+        {
+            if (TextHelper.IsPersianText(text))
+                return FlowDirection.RightToLeft;
+            if (IsTechnicalOnly(text))
+                return FlowDirection.LeftToRight;
+            if (TextHelper.IsEnglishText(text))
+                return FlowDirection.LeftToRight;
+        }
 
         return LocalizationService.Instance.FlowDirection;
     }
@@ -134,8 +142,13 @@ public class TextToTextAlignmentConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is string text && TextToFlowDirectionConverter.IsTechnicalOnly(text))
-            return TextAlignment.Left;
+        if (value is string text && !string.IsNullOrWhiteSpace(text))
+        {
+            if (TextHelper.IsPersianText(text))
+                return TextAlignment.Right;
+            if (TextToFlowDirectionConverter.IsTechnicalOnly(text) || TextHelper.IsEnglishText(text))
+                return TextAlignment.Left;
+        }
 
         return LocalizationService.Instance.TextAlignment;
     }

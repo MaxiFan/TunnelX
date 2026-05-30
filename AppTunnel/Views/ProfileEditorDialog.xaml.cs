@@ -171,35 +171,83 @@ public partial class ProfileEditorDialog : Window
         }
     }
 
-    private void OnPasteV2RayClick(object sender, RoutedEventArgs e)
+    private void OnPasteV2RayClick(object sender, RoutedEventArgs e) => PasteConfigFromClipboardIntoEditor();
+
+    private void OnPasteWireGuardClick(object sender, RoutedEventArgs e) => PasteConfigFromClipboardIntoEditor();
+
+    private void PasteConfigFromClipboardIntoEditor()
     {
         try
         {
-            if (System.Windows.Clipboard.ContainsText())
-                _profile.V2RayConfig = System.Windows.Clipboard.GetText().Trim();
+            if (!System.Windows.Clipboard.ContainsText())
+                return;
+
+            ApplyImportedConfigText(System.Windows.Clipboard.GetText());
         }
         catch (Exception ex)
         {
             ValidationText.Text = LocalizationService.Instance.Format("خواندن کلیپ‌بورد ناموفق بود: {0}", ex.Message);
         }
+    }
+
+    private void ApplyImportedConfigText(string? rawText)
+    {
+        var drafts = ConfigImportService.ParseClipboard(rawText);
+        var valid = drafts.Where(d => string.IsNullOrWhiteSpace(d.SkipReason)).ToList();
+
+        if (valid.Count > 1)
+        {
+            ValidationText.Text = LocalizationService.Instance.T("چند کانفیگ پیدا شد؛ از دکمه «چسباندن کانفیگ» در تب اتصال استفاده کنید.");
+            return;
+        }
+
+        if (valid.Count == 1)
+        {
+            ApplyDraftToProfile(valid[0]);
+            if (string.IsNullOrWhiteSpace(_profile.Name))
+                ProfileNameField.Text = valid[0].SuggestedName;
+            ValidationText.Text = "";
+            RefreshOpenVpnProfileUi();
+            return;
+        }
+
+        ValidationText.Text = drafts.FirstOrDefault()?.SkipReason
+                              ?? LocalizationService.Instance.T("فرمت کانفیگ شناخته نشد");
+    }
+
+    private void ApplyDraftToProfile(ImportedConfigDraft draft)
+    {
+        _profile.TunnelType = draft.TunnelType;
+        switch (draft.TunnelType)
+        {
+            case TunnelType.V2Ray:
+                _profile.V2RayConfig = draft.ConfigText;
+                break;
+            case TunnelType.OpenVpn:
+                _profile.OpenVpnConfig = draft.ConfigText;
+                _profile.OpenVpnConfigPath = "";
+                break;
+            case TunnelType.WireGuard:
+                _profile.WireGuardConfig = draft.ConfigText;
+                _profile.WireGuardConfigPath = "";
+                break;
+            case TunnelType.SocksProxy:
+                var socks = ConfigImportService.CreateProfile(draft);
+                _profile.ProxyProtocol = socks.ProxyProtocol;
+                _profile.ProxyServerAddress = socks.ProxyServerAddress;
+                _profile.ProxyPort = socks.ProxyPort;
+                _profile.ProxyUsername = socks.ProxyUsername;
+                ProxyPasswordField.Password = socks.ProxyPassword;
+                break;
+        }
+
+        if (string.IsNullOrWhiteSpace(_profile.Name))
+            _profile.Name = draft.SuggestedName;
     }
 
     private void OnClearV2RayClick(object sender, RoutedEventArgs e)
     {
         _profile.V2RayConfig = "";
-    }
-
-    private void OnPasteWireGuardClick(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (System.Windows.Clipboard.ContainsText())
-                _profile.WireGuardConfig = System.Windows.Clipboard.GetText().Trim();
-        }
-        catch (Exception ex)
-        {
-            ValidationText.Text = LocalizationService.Instance.Format("خواندن کلیپ‌بورد ناموفق بود: {0}", ex.Message);
-        }
     }
 
     private void OnClearWireGuardClick(object sender, RoutedEventArgs e)

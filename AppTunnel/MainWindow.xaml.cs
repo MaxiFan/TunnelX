@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private CancellationTokenSource _loadCts = new();
     private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private bool _isInTray;
     private bool _isRealExit;
     private ConnectionState _lastNotifiedConnectionState = ConnectionState.Disconnected;
     private bool _updateNotificationShown;
@@ -31,6 +33,10 @@ public partial class MainWindow : Window
     private const int ScMaximize = 0xF030;
     private const int ScKeyMenu = 0xF100;
     private const int ScRestore = 0xF120;
+    private const int ScMinimize = 0xF020;
+    private const int SwRestore = 9;
+    private const int SwShow = 5;
+    private const int SwMinimize = 6;
 
     public MainWindow()
     {
@@ -49,9 +55,45 @@ public partial class MainWindow : Window
 
         AppNotificationService.Initialize(this);
         InitializeTrayIcon();
+        PreviewKeyDown += OnWindowPreviewKeyDown;
         Loaded += OnLoaded;
         Closing += OnClosing;
+        _viewModel.SelectedMainTabIndex = 0;
     }
+
+    private void OnMainTabSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (MainTabControl.SelectedIndex >= 0)
+            _viewModel.SelectedMainTabIndex = MainTabControl.SelectedIndex;
+    }
+
+    private void OnWindowPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.V || Keyboard.Modifiers != ModifierKeys.Control)
+            return;
+
+        if (IsTextInputFocusedForQuickImport())
+            return;
+
+        if (!_viewModel.TryImportConfigsFromClipboard())
+            return;
+
+        e.Handled = true;
+    }
+
+    private static bool IsTextInputFocusedForQuickImport()
+    {
+        var focused = Keyboard.FocusedElement;
+        return focused is System.Windows.Controls.TextBox
+            or System.Windows.Controls.PasswordBox
+            or System.Windows.Controls.Primitives.TextBoxBase
+            or System.Windows.Controls.ComboBox;
+    }
+
+    private const double DesignWidth = 640;
+    private const double DesignHeight = 800;
+    private const double DesignMinWidth = 580;
+    private const double DesignMinHeight = 680;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -66,11 +108,16 @@ public partial class MainWindow : Window
 
     private void ApplyAdaptiveWindowSize()
     {
+        Width = DesignWidth;
+        Height = DesignHeight;
+        MinWidth = DesignMinWidth;
+        MinHeight = DesignMinHeight;
+
         var workArea = SystemParameters.WorkArea;
         const double screenMargin = 24;
 
-        Width = Math.Min(Width, Math.Max(MinWidth, workArea.Width - screenMargin));
-        Height = Math.Min(Height, Math.Max(MinHeight, workArea.Height - screenMargin));
+        Width = Math.Min(DesignWidth, Math.Max(DesignMinWidth, workArea.Width - screenMargin));
+        Height = Math.Min(DesignHeight, Math.Max(DesignMinHeight, workArea.Height - screenMargin));
 
         Left = workArea.Left + Math.Max(0, (workArea.Width - Width) / 2);
         Top = workArea.Top + Math.Max(0, (workArea.Height - Height) / 2);
@@ -94,6 +141,19 @@ public partial class MainWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    private void MinimizeToTaskbar()
+    {
+        _isInTray = false;
+        if (_trayIcon != null)
+            _trayIcon.Visible = false;
+
+        ShowInTaskbar = true;
+        WindowState = WindowState.Minimized;
+
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+            ShowWindow(source.Handle, SwMinimize);
     }
 
     private void InitializeTrayIcon()
@@ -192,28 +252,62 @@ public partial class MainWindow : Window
 
     public void BringToForeground()
     {
-        Dispatcher.Invoke(() =>
+        void ShowMainWindow()
         {
+            _isInTray = false;
+            if (_trayIcon != null)
+                _trayIcon.Visible = false;
+
             Show();
-            if (WindowState == WindowState.Minimized)
-                WindowState = WindowState.Normal;
+            Visibility = Visibility.Visible;
+            WindowState = WindowState.Normal;
+
+            if (PresentationSource.FromVisual(this) is HwndSource source)
+            {
+                ShowWindow(source.Handle, SwRestore);
+                ShowWindow(source.Handle, SwShow);
+                SetForegroundWindow(source.Handle);
+            }
+
             Activate();
             Topmost = true;
             Topmost = false;
             Focus();
-            if (_trayIcon != null) _trayIcon.Visible = false;
-        });
+        }
+
+        if (Dispatcher.CheckAccess())
+            ShowMainWindow();
+        else
+            Dispatcher.Invoke(ShowMainWindow);
+    }
+
+    /// <summary>
+    /// Borderless windows can become Minimized without a tray hand-off: process stays alive,
+    /// but there is no window, no tray icon, and no notification. Recover on startup or relaunch.
+    /// </summary>
+    internal void EnsureStartupVisible()
+    {
+        if (_isRealExit || _isInTray)
+            return;
+
+        if (!IsVisible || WindowState == WindowState.Minimized)
+            BringToForeground();
     }
 
     private void MinimizeToTray()
     {
+        if (_isInTray && !IsVisible)
+            return;
+
+        _isInTray = true;
+        WindowState = WindowState.Normal;
         Hide();
         if (_trayIcon != null)
         {
             _trayIcon.Visible = true;
-            AppNotificationService.ShowTray(
-                "TunnelX در پس‌زمینه فعال است",
-                "برای باز کردن پنجره، روی آیکن کنار ساعت دوبار کلیک کنید.",
+            AppNotificationService.ShowTrayForced(
+                "TunnelX در System Tray است",
+                "برنامه بسته نشده است. برای باز کردن، روی آیکن کنار ساعت دوبار کلیک کنید.",
                 AppNotificationKind.Info);
         }
     }
@@ -291,6 +385,10 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _isInTray = false;
+        Visibility = Visibility.Visible;
+        WindowState = WindowState.Normal;
+
         LocalizationService.Instance.ApplyTo(this);
         UpdateLogPanelCornerState(LogPanel.Visibility == Visibility.Visible);
         RefreshTrayText();
@@ -372,10 +470,10 @@ public partial class MainWindow : Window
     }
 
     private void OnMinimizeClick(object sender, RoutedEventArgs e)
-    {
-        // Minimize button → minimize to tray
-        MinimizeToTray();
-    }
+        => MinimizeToTaskbar();
+
+    private void OnSendToTrayClick(object sender, RoutedEventArgs e)
+        => MinimizeToTray();
 
     private async void OnCloseClick(object sender, RoutedEventArgs e)
         => await TryExitApplicationAsync();
@@ -490,9 +588,9 @@ public partial class MainWindow : Window
             _isLogPanelAnimating = false;
         };
 
-        BeginAnimation(WidthProperty, windowAnimation, HandoffBehavior.SnapshotAndReplace);
-        LogPanel.BeginAnimation(FrameworkElement.WidthProperty, panelAnimation, HandoffBehavior.SnapshotAndReplace);
-        LogPanel.BeginAnimation(OpacityProperty, opacityAnimation, HandoffBehavior.SnapshotAndReplace);
+        BeginAnimation(WidthProperty, windowAnimation);
+        LogPanel.BeginAnimation(FrameworkElement.WidthProperty, panelAnimation);
+        LogPanel.BeginAnimation(OpacityProperty, opacityAnimation);
     }
 
     private void UpdateLogPanelCornerState(bool logOpen)
@@ -824,4 +922,10 @@ public partial class MainWindow : Window
 
         ToastIcon.Foreground = accent ?? ToastMessage.Foreground;
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }

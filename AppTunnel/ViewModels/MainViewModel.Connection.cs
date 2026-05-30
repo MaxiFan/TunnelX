@@ -280,7 +280,7 @@ public partial class MainViewModel
                 ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Fail, "اتصال بیش از حد طول کشید و متوقف شد");
                 CompleteConnectionProgress(false, "اتصال بیش از حد طول کشید و متوقف شد");
                 ConnectionState = ConnectionState.Error;
-                StatusText = "اتصال بیش از حد طول کشید و متوقف شد";
+                StatusText = ResolveShortConnectionStatus(tunnelType, "اتصال بیش از حد طول کشید و متوقف شد");
                 IsBusy = false;
                 return;
             }
@@ -307,7 +307,7 @@ public partial class MainViewModel
                 ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Fail, "خطا: {0}", "خطا: {0}", ex.Message);
                 CompleteConnectionProgress(false, errorDetailKey: "خطا: {0}", errorDetailRaw: ex.Message);
                 ConnectionState = ConnectionState.Error;
-                StatusText = LocalizationService.Instance.Format("خطا: {0}", ex.Message);
+                StatusText = ResolveShortConnectionStatus(tunnelType, LocalizationService.Instance.Format("خطا: {0}", ex.Message));
             }
             IsBusy = false;
             return;
@@ -371,7 +371,7 @@ public partial class MainViewModel
                         failMessage);
                     CompleteConnectionProgress(false, errorDetailRaw: failMessage);
                     ConnectionState = ConnectionState.Error;
-                    StatusText = failMessage;
+                    StatusText = ResolveShortConnectionStatus(tunnelType, failMessage);
                     IsBusy = false;
                     return;
                 }
@@ -395,6 +395,7 @@ public partial class MainViewModel
                 RaiseHealthStatusChanged();
 
                 _vpnHealthCheckCounter = 0;
+                _trafficSortCounter = 0;
                 _timer.Start();
 
                 _ = RefreshExitIpAsync();
@@ -417,29 +418,67 @@ public partial class MainViewModel
                 ConnectionProgressService.Report("split_router", ConnectionProgressPhase.Fail, "خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}", "خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}", ex.Message);
                 CompleteConnectionProgress(false, errorDetailKey: "خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}", errorDetailRaw: ex.Message);
                 ConnectionState = ConnectionState.Error;
-                StatusText = LocalizationService.Instance.Format("خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}", ex.Message);
+                StatusText = ResolveShortConnectionStatus(
+                    tunnelType,
+                    LocalizationService.Instance.Format("خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}", ex.Message));
             }
         }
         else
         {
             var failedState = _vpnService.Status.State;
             var failedMessage = _vpnService.Status.Message;
+            var shortStatus = ResolveShortConnectionStatus(tunnelType, failedMessage);
             await CleanupAfterFailedConnectionAsync();
             ConnectionProgressService.Report(ResolveConnectionFailStepId(failedMessage), ConnectionProgressPhase.Fail, failedMessage);
             CompleteConnectionProgress(false, errorDetailRaw: failedMessage);
             if (failedState == ConnectionState.Disconnected)
             {
                 ConnectionState = ConnectionState.Disconnected;
-                StatusText = failedMessage;
+                StatusText = shortStatus;
             }
             else
             {
                 ConnectionState = ConnectionState.Error;
-                StatusText = failedMessage;
+                StatusText = shortStatus;
             }
+
+            if (tunnelType == TunnelType.OpenVpn)
+                TryShowOpenVpnInstallGuidance(failedMessage);
         }
 
         IsBusy = false;
+    }
+
+    private static bool IsOpenVpnInstallRelatedMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return false;
+
+        return message.Contains("OpenVPN Community", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("openvpn.exe", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("OpenVPN Connect", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("Community", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("اوپن‌وی‌پی‌ان", StringComparison.Ordinal) ||
+               message.Contains("OpenVPN", StringComparison.OrdinalIgnoreCase) &&
+               message.Contains("پیدا نشد", StringComparison.Ordinal);
+    }
+
+    private void TryShowOpenVpnInstallGuidance(string? message)
+    {
+        if (!IsOpenVpnInstallRelatedMessage(message))
+            return;
+
+        RefreshOpenVpnInstallStatus();
+        ShowOpenVpnInstallGuideDialog();
+    }
+
+    private void ShowConnectionFailureToast(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        if (Application.Current?.MainWindow is MainWindow mainWindow)
+            mainWindow.ShowAppToast(message, AppNotificationKind.Warning, durationMs: 8000);
     }
 
     private async Task HandlePrerequisiteFailureAsync(
@@ -450,7 +489,7 @@ public partial class MainViewModel
         ConnectionProgressService.Report("validate", ConnectionProgressPhase.Fail, preflight.UserMessage);
         CompleteConnectionProgress(false, errorDetailRaw: preflight.UserMessage);
         ConnectionState = ConnectionState.Error;
-        StatusText = preflight.UserMessage;
+        StatusText = ResolveShortConnectionStatus(tunnelType, preflight.UserMessage, preflight.FailureKind);
         ConfigValidationText = preflight.UserMessage;
 
         if (tunnelType == TunnelType.OpenVpn)
@@ -467,6 +506,8 @@ public partial class MainViewModel
                 ShowWireGuardInstallGuideDialog();
                 break;
         }
+
+        ShowConnectionFailureToast(preflight.UserMessage);
 
         await Task.CompletedTask;
         IsBusy = false;
@@ -499,6 +540,21 @@ public partial class MainViewModel
         TunnelType.WireGuard => TimeSpan.FromSeconds(35),
         _ => TimeSpan.FromSeconds(45)
     };
+
+    private string ResolveShortConnectionStatus(
+        TunnelType tunnelType,
+        string? fullMessage,
+        PrerequisiteFailureKind prerequisiteKind = PrerequisiteFailureKind.None)
+    {
+        if (tunnelType == TunnelType.OpenVpn)
+        {
+            var fromProvider = _vpnService.GetOpenVpnDisconnectShortStatus();
+            if (!string.IsNullOrWhiteSpace(fromProvider))
+                return fromProvider;
+        }
+
+        return ConnectionFailureInsight.GetShortStatus(tunnelType, fullMessage, prerequisiteKind);
+    }
 
     private async Task CleanupAfterFailedConnectionAsync()
     {
@@ -666,6 +722,7 @@ public partial class MainViewModel
             app.BytesSent = 0;
             app.BytesReceived = 0;
         }
+        ResortTunnelAppsByTraffic();
         IsBusy = false;
     }
 
@@ -1143,6 +1200,8 @@ public partial class MainViewModel
     }
 
     private int _vpnHealthCheckCounter;
+    private int _trafficSortCounter;
+    private const int TrafficSortIntervalSeconds = 3;
     private bool _isRefreshingOpenVpnRouter;
     private int _currentVpnInterfaceIndex = -1;
     private string _currentVpnGatewayIp = "";
@@ -1178,6 +1237,12 @@ public partial class MainViewModel
             var (sent, received) = _trafficRouter.GetTraffic(app.ExecutableName);
             app.BytesSent = sent;
             app.BytesReceived = received;
+        }
+
+        if (++_trafficSortCounter >= TrafficSortIntervalSeconds)
+        {
+            _trafficSortCounter = 0;
+            ResortTunnelAppsByTraffic();
         }
 
         // Total tunnel usage: use the authoritative VPN-interface counter.
@@ -1299,16 +1364,7 @@ public partial class MainViewModel
         });
     }
 
-    internal static string FormatBytes(long bytes)
-    {
-        return bytes switch
-        {
-            < 1024 => $"{bytes} B",
-            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-            < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-            _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
-        };
-    }
+    internal static string FormatBytes(long bytes) => Helpers.ByteSizeFormatter.Format(bytes);
 
     private static string ResolveInterfaceName(int interfaceIndex)
     {
@@ -2217,151 +2273,9 @@ public partial class MainViewModel
     /// replies with response data or RST after 1 RTT). Either way, time-to-first-
     /// byte is the real RTT.
     /// </summary>
-    private static async Task<long> PingViaSocks5Async(
+    private static Task<long> PingViaSocks5Async(
         string host, int port, int socks5Port, CancellationToken ct, int probeTimeoutMs = 5000)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(probeTimeoutMs);
-
-        using var tcp = new System.Net.Sockets.TcpClient();
-        tcp.NoDelay = true;
-        await tcp.ConnectAsync("127.0.0.1", socks5Port, cts.Token);
-
-        var stream = tcp.GetStream();
-
-        // ── SOCKS5 greeting (untimed — local loopback only) ──
-        await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, cts.Token);
-        var greet = new byte[2];
-        await ReadExactlyAsync(stream, greet, cts.Token);
-        if (greet[0] != 0x05 || greet[1] != 0x00)
-            throw new Exception("SOCKS5 handshake rejected");
-
-        // ── SOCKS5 CONNECT request (untimed — proxy may pre-reply) ──
-        var hostBytes = System.Text.Encoding.ASCII.GetBytes(host);
-        var req = new byte[7 + hostBytes.Length];
-        req[0] = 0x05;                              // VER
-        req[1] = 0x01;                              // CMD = CONNECT
-        req[2] = 0x00;                              // RSV
-        req[3] = 0x03;                              // ATYP = DOMAINNAME
-        req[4] = (byte)hostBytes.Length;
-        hostBytes.CopyTo(req, 5);
-        req[5 + hostBytes.Length] = (byte)(port >> 8);
-        req[6 + hostBytes.Length] = (byte)(port & 0xFF);
-        await stream.WriteAsync(req, cts.Token);
-
-        // Read SOCKS5 CONNECT response header (4 fixed bytes + bound addr + port).
-        var resp = new byte[4];
-        await ReadExactlyAsync(stream, resp, cts.Token);
-        if (resp[1] != 0x00)
-            throw new Exception($"SOCKS5 connect failed (code {resp[1]})");
-
-        switch (resp[3])
-        {
-            case 0x01: await ReadExactlyAsync(stream, new byte[6], cts.Token); break;
-            case 0x03:
-                var lenBuf = new byte[1];
-                await ReadExactlyAsync(stream, lenBuf, cts.Token);
-                await ReadExactlyAsync(stream, new byte[lenBuf[0] + 2], cts.Token);
-                break;
-            case 0x04: await ReadExactlyAsync(stream, new byte[18], cts.Token); break;
-        }
-
-        // ── Real round-trip: send probe + read first response byte ──
-        // For port 443 we send a minimal TLS ClientHello so the remote server
-        // replies with ServerHello in exactly 1 RTT. For other ports an HTTP
-        // GET works (most servers reply with data or RST in 1 RTT).
-        byte[] probe = port == 443
-            ? BuildTlsClientHello(host)
-            : System.Text.Encoding.ASCII.GetBytes($"GET / HTTP/1.0\r\nHost: {host}\r\n\r\n");
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        await stream.WriteAsync(probe, cts.Token);
-
-        // Wait for the first byte of any upstream response. The connection may
-        // be RST/closed by the remote (returns 0 from Read) — that's still a
-        // valid 1-RTT measurement.
-        var oneByte = new byte[1];
-        try
-        {
-            int got = await stream.ReadAsync(oneByte, 0, 1, cts.Token);
-            sw.Stop();
-            // Guard: replies arriving in <= 1 ms almost certainly came from the
-            // local proxy (closed connection, refused, etc.) rather than the
-            // upstream server. Treat as a failure to avoid showing fake numbers.
-            if (sw.ElapsedMilliseconds <= 1 && got == 0)
-                throw new Exception("upstream closed (no data)");
-            return sw.ElapsedMilliseconds;
-        }
-        catch (System.IO.IOException) when (sw.ElapsedMilliseconds > 1)
-        {
-            // Remote sent RST after a real round-trip — still a valid measurement.
-            sw.Stop();
-            return sw.ElapsedMilliseconds;
-        }
-    }
-
-    /// <summary>
-    /// Builds a minimal TLS 1.2 ClientHello with the given SNI hostname.
-    /// Any compliant TLS server replies with ServerHello after one full RTT,
-    /// so the time between sending this and receiving the first response byte
-    /// equals the network round-trip through the proxy chain to the server.
-    /// </summary>
-    private static byte[] BuildTlsClientHello(string sniHost)
-    {
-        var sni = System.Text.Encoding.ASCII.GetBytes(sniHost);
-
-        // ── extensions ──
-        // server_name (0x0000): list_len(2) + name_type(1) + host_len(2) + host
-        var sniExt = new List<byte> { 0x00, 0x00 }; // ext type
-        int sniListLen = 1 + 2 + sni.Length;
-        int sniExtLen  = 2 + sniListLen;
-        sniExt.AddRange(new byte[] { (byte)(sniExtLen >> 8), (byte)sniExtLen });
-        sniExt.AddRange(new byte[] { (byte)(sniListLen >> 8), (byte)sniListLen });
-        sniExt.Add(0x00); // host_name type
-        sniExt.AddRange(new byte[] { (byte)(sni.Length >> 8), (byte)sni.Length });
-        sniExt.AddRange(sni);
-
-        // supported_versions (0x002b): TLS 1.3 + TLS 1.2 — accepted by all modern servers
-        var verExt = new byte[] { 0x00, 0x2b, 0x00, 0x05, 0x04, 0x03, 0x04, 0x03, 0x03 };
-        // supported_groups (0x000a): x25519
-        var grpExt = new byte[] { 0x00, 0x0a, 0x00, 0x04, 0x00, 0x02, 0x00, 0x1d };
-        // signature_algorithms (0x000d): rsa_pss_rsae_sha256, ecdsa_secp256r1_sha256
-        var sigExt = new byte[] { 0x00, 0x0d, 0x00, 0x06, 0x00, 0x04, 0x08, 0x04, 0x04, 0x03 };
-
-        var extensions = new List<byte>();
-        extensions.AddRange(sniExt);
-        extensions.AddRange(verExt);
-        extensions.AddRange(grpExt);
-        extensions.AddRange(sigExt);
-
-        // ── ClientHello body ──
-        var body = new List<byte>();
-        body.AddRange(new byte[] { 0x03, 0x03 });           // legacy_version = TLS 1.2
-        for (int i = 0; i < 32; i++) body.Add(0xAA);        // random (fixed bytes are fine)
-        body.Add(0x00);                                     // session_id length
-        body.AddRange(new byte[] { 0x00, 0x02, 0x13, 0x01 }); // cipher_suites: TLS_AES_128_GCM_SHA256
-        body.AddRange(new byte[] { 0x01, 0x00 });           // compression_methods: null
-        body.AddRange(new byte[] {
-            (byte)(extensions.Count >> 8), (byte)extensions.Count
-        });
-        body.AddRange(extensions);
-
-        // Handshake header: type(1) + length(3)
-        var handshake = new List<byte> { 0x01 };
-        handshake.AddRange(new byte[] {
-            0x00, (byte)(body.Count >> 8), (byte)body.Count
-        });
-        handshake.AddRange(body);
-
-        // TLS record header: type(1) + version(2) + length(2)
-        var record = new List<byte> {
-            0x16, 0x03, 0x01,
-            (byte)(handshake.Count >> 8), (byte)handshake.Count
-        };
-        record.AddRange(handshake);
-
-        return record.ToArray();
-    }
+        => Socks5LatencyProbe.MeasureAsync(host, port, socks5Port, ct, probeTimeoutMs);
 
     private static async Task ReadExactlyAsync(
         System.Net.Sockets.NetworkStream stream, byte[] buffer, CancellationToken ct)
@@ -2370,7 +2284,8 @@ public partial class MainViewModel
         while (offset < buffer.Length)
         {
             int read = await stream.ReadAsync(buffer, offset, buffer.Length - offset, ct);
-            if (read == 0) throw new Exception("SOCKS5 connection closed unexpectedly");
+            if (read == 0)
+                throw new InvalidOperationException("SOCKS5 connection closed unexpectedly");
             offset += read;
         }
     }

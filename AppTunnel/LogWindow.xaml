@@ -69,6 +69,7 @@
                          TextWrapping="Wrap"
                          FlowDirection="LeftToRight"
                          TextAlignment="Left"
+                         Language="en-US"
                          VerticalScrollBarVisibility="Auto"/>
 
                 <Border x:Name="LogToastPanel"

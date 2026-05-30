@@ -6,8 +6,8 @@
         xmlns:vm="clr-namespace:AppTunnel.ViewModels"
         xmlns:model="clr-namespace:AppTunnel.Models"
         Title="TunnelX — Split Traffic Per App"
-        Width="620" Height="740"
-        MinWidth="560" MinHeight="620"
+        Width="640" Height="800"
+        MinWidth="580" MinHeight="680"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -26,16 +26,19 @@
         <conv:TextToTextAlignmentConverter x:Key="TextToTextAlignment"/>
     </Window.Resources>
 
-    <!-- Main Container with rounded corners and shadow -->
-    <Border x:Name="OuterBorder" Background="{StaticResource BackgroundBrush}" 
-            CornerRadius="12" 
-            BorderBrush="{StaticResource CardBrush}" 
-            BorderThickness="1"
-            Cursor="Arrow"
-            SizeChanged="OnOuterBorderSizeChanged">
-        <Border.Effect>
-            <DropShadowEffect Color="Black" BlurRadius="20" Opacity="0.5" ShadowDepth="0"/>
-        </Border.Effect>
+    <!-- Main container: static shadow plate avoids per-frame DropShadowEffect compositing -->
+    <Grid Cursor="Arrow">
+        <Border CornerRadius="12"
+                Margin="0,2,3,0"
+                Background="#65000000"
+                IsHitTestVisible="False"/>
+        <Border x:Name="OuterBorder"
+                Margin="0,0,3,2"
+                Background="{StaticResource BackgroundBrush}"
+                CornerRadius="12"
+                BorderBrush="{StaticResource CardBrush}"
+                BorderThickness="1"
+                SizeChanged="OnOuterBorderSizeChanged">
 
         <Grid>
         <Grid Margin="0" FlowDirection="LeftToRight">
@@ -72,14 +75,9 @@
                         <Viewbox Width="30" Height="30" Margin="0,0,10,0">
                             <Grid Width="48" Height="48">
                                 <Border CornerRadius="7"
-                                        Background="{StaticResource PrimaryBrush}">
-                                    <Border.Effect>
-                                        <DropShadowEffect Color="#C2410C"
-                                                          BlurRadius="8"
-                                                          Opacity="0.22"
-                                                          ShadowDepth="0"/>
-                                    </Border.Effect>
-                                </Border>
+                                        Background="{StaticResource PrimaryBrush}"
+                                        BorderBrush="#44C2410C"
+                                        BorderThickness="1"/>
                                 <TextBlock Text="Tx"
                                            FontSize="24"
                                            FontWeight="Bold"
@@ -133,7 +131,10 @@
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
                                            MaxWidth="210"
-                                           TextTrimming="CharacterEllipsis"/>
+                                           TextTrimming="CharacterEllipsis"
+                                           FlowDirection="{Binding StatusText, Converter={StaticResource TextToFlowDirection}}"
+                                           TextAlignment="{Binding StatusText, Converter={StaticResource TextToTextAlignment}}"
+                                           ToolTip="{Binding StatusBarToolTipText}"/>
                             </StackPanel>
                         </Border>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5,0,0"
@@ -193,7 +194,7 @@
                                     <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
                                         <DataTrigger.EnterActions>
                                             <BeginStoryboard>
-                                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <Storyboard RepeatBehavior="Forever" AutoReverse="True" Timeline.DesiredFrameRate="15">
                                                     <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                                                      To="0.72"
                                                                      Duration="0:0:0.9"/>
@@ -251,15 +252,22 @@
                         </Button.Style>
                     </Button>
 
-                    <!-- Window Controls: Minimize → Close (standard Windows order) -->
+                    <!-- Window Controls: Minimize → Tray → Close (standard Windows order) -->
                     <StackPanel Grid.Column="4" Orientation="Horizontal">
-                        <Button Content="—" Click="OnMinimizeClick" 
-                                ToolTip="کوچک کردن به System Tray"
-                                Style="{StaticResource WindowControlButton}" 
+                        <Button Content="—" Click="OnMinimizeClick"
+                                ToolTip="کوچک کردن"
+                                Style="{StaticResource WindowControlButton}"
                                 Width="36" Height="28" FontSize="16" Padding="0,-4,0,0"/>
-                        <Button Content="✕" Click="OnCloseClick" 
+                        <Button Click="OnSendToTrayClick"
+                                ToolTip="رفتن به System Tray"
+                                Style="{StaticResource WindowControlButton}"
+                                Width="36" Height="28" FontSize="13" Margin="4,0,0,0"
+                                Padding="0,1,0,0">
+                            <TextBlock Text="⏷" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Content="✕" Click="OnCloseClick"
                                 ToolTip="خروج از برنامه"
-                                Style="{StaticResource WindowControlButton}" 
+                                Style="{StaticResource WindowControlButton}"
                                 Width="36" Height="28" FontSize="14" Margin="4,0,0,0"/>
                     </StackPanel>
                 </Grid>
@@ -272,7 +280,11 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-            <TabControl Grid.Row="0" Style="{StaticResource ModernTabControl}" Margin="8,6,8,6">
+            <TabControl x:Name="MainTabControl"
+                        Grid.Row="0"
+                        Style="{StaticResource ModernTabControl}"
+                        Margin="8,6,8,6"
+                        SelectionChanged="OnMainTabSelectionChanged">
 
             <!-- ███ TAB 1: CONNECTION ███ -->
             <TabItem Style="{StaticResource ModernTabItem}" ToolTip="وضعیت اتصال VPN و کنترل اتصال">
@@ -769,10 +781,10 @@
                                                                 FlowDirection="LeftToRight">
                                                         <TextBlock Text="↑ " Foreground="{StaticResource WarningBrush}"
                                                                    FontSize="10"/>
-                                                        <TextBlock Text="{Binding BytesSent, StringFormat={}{0:N0} B ↑}"
+                                                        <TextBlock Text="{Binding SentTrafficDisplay, StringFormat={}{0} ↑}"
                                                                    Foreground="{StaticResource WarningBrush}"
                                                                    FontSize="10" Margin="0,0,10,0"/>
-                                                        <TextBlock Text="{Binding BytesReceived, StringFormat={}{0:N0} B ↓}"
+                                                        <TextBlock Text="{Binding ReceivedTrafficDisplay, StringFormat={}{0} ↓}"
                                                                    Foreground="{StaticResource SuccessBrush}"
                                                                    FontSize="10"/>
                                                     </StackPanel>
@@ -991,8 +1003,9 @@
                              Padding="8"
                              IsReadOnly="True"
                              TextWrapping="Wrap"
-                             FlowDirection="{Binding Text, ElementName=LogTextBox, Converter={StaticResource TextToFlowDirection}}"
-                             TextAlignment="{Binding Text, ElementName=LogTextBox, Converter={StaticResource TextToTextAlignment}}"
+                             FlowDirection="LeftToRight"
+                             TextAlignment="Left"
+                             Language="en-US"
                              VerticalScrollBarVisibility="Auto"/>
 
                     <!-- In-panel toast (copy / clear feedback) -->
@@ -1138,4 +1151,5 @@
 
         </Grid>
     </Border>
+    </Grid>
 </Window>

@@ -103,6 +103,9 @@ public partial class App : Application
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
+        mainWindow.Dispatcher.BeginInvoke(
+            () => mainWindow.EnsureStartupVisible(),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         Logger.Info("TunnelX application started");
 

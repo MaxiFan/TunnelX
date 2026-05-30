@@ -26,15 +26,17 @@ public partial class MainViewModel
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(_connectionErrorDetailKey) &&
-                !string.IsNullOrWhiteSpace(_connectionErrorDetailRaw) &&
-                _connectionErrorDetailKey.Contains("{0}", StringComparison.Ordinal))
-                return LocalizationService.Instance.Format(_connectionErrorDetailKey, _connectionErrorDetailRaw);
-
-            if (!string.IsNullOrWhiteSpace(_connectionErrorDetailRaw))
+            if (string.IsNullOrWhiteSpace(_connectionErrorDetailKey))
                 return _connectionErrorDetailRaw;
 
-            return LocalizationService.Instance.T(_connectionErrorDetailKey);
+            if (_connectionErrorDetailKey.Contains("{0}", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(_connectionErrorDetailRaw))
+                return LocalizationService.Instance.Format(_connectionErrorDetailKey, _connectionErrorDetailRaw);
+
+            if (LocalizationService.Instance.IsPersianSourceKey(_connectionErrorDetailKey))
+                return LocalizationService.Instance.T(_connectionErrorDetailKey);
+
+            return _connectionErrorDetailKey;
         }
     }
 
@@ -48,6 +50,13 @@ public partial class MainViewModel
     public string ConnectionStagesHeaderText => LocalizationService.Instance.T("مراحل اتصال");
 
     public string ConnectionErrorHeaderText => LocalizationService.Instance.T("اتصال برقرار نشد");
+
+    public string ConnectionErrorCloseButtonText => LocalizationService.Instance.T("متوجه شدم");
+
+    public string StatusBarToolTipText =>
+        HasConnectionError && !string.IsNullOrWhiteSpace(ConnectionErrorDetail)
+            ? ConnectionErrorDetail
+            : "";
 
     public string ConnectionElapsedLabelText => LocalizationService.Instance.T("زمان سپری‌شده");
 
@@ -97,7 +106,11 @@ public partial class MainViewModel
         }
 
         if (!string.IsNullOrWhiteSpace(evt.MessageKey))
-            StatusText = evt.MessageKey;
+        {
+            StatusText = evt.Phase == ConnectionProgressPhase.Fail
+                ? ResolveShortConnectionStatus(CurrentTunnelType, evt.MessageKey)
+                : evt.MessageKey;
+        }
 
         OnPropertyChanged(nameof(ConnectionSteps));
     }
@@ -118,7 +131,12 @@ public partial class MainViewModel
     }
 
     private static bool IsLiveStepDetail(string detailKey)
-        => detailKey.Contains('\n') || detailKey.Contains('\r');
+    {
+        if (LocalizationService.Instance.IsKnownMessageKey(detailKey))
+            return false;
+
+        return detailKey.Contains('\n') || detailKey.Contains('\r');
+    }
 
     private static string FormatStepDetail(string detailKey, string? formatArg)
     {
@@ -136,6 +154,7 @@ public partial class MainViewModel
         _connectionErrorDetailRaw = "";
         OnPropertyChanged(nameof(HasConnectionError));
         OnPropertyChanged(nameof(ConnectionErrorDetail));
+        OnPropertyChanged(nameof(StatusBarToolTipText));
         OnPropertyChanged(nameof(ShowConnectionErrorPanel));
 
         ConnectionSteps.Clear();
@@ -197,7 +216,10 @@ public partial class MainViewModel
             if (!string.IsNullOrWhiteSpace(detailKey))
                 SetStepDetail(step, detailKey, detailFormatArg);
             else
-                step.Detail = LocalizationService.Instance.T(messageKey);
+            {
+                var (resolvedKey, resolvedArg) = LocalizationService.Instance.ResolveStatusStorage(messageKey);
+                SetStepDetail(step, resolvedKey, resolvedArg);
+            }
         }
 
         foreach (var pending in ConnectionSteps.Where(s => s.Phase is ConnectionStepPhase.Pending or ConnectionStepPhase.Active && s.StepId != stepId))
@@ -217,11 +239,26 @@ public partial class MainViewModel
             return;
         }
 
-        _connectionErrorDetailKey = errorDetailKey ?? "";
-        _connectionErrorDetailRaw = errorDetailRaw ?? "";
+        if (!string.IsNullOrWhiteSpace(errorDetailKey))
+        {
+            _connectionErrorDetailKey = errorDetailKey;
+            _connectionErrorDetailRaw = errorDetailRaw ?? "";
+        }
+        else if (!string.IsNullOrWhiteSpace(errorDetailRaw))
+        {
+            var (key, formatArg) = LocalizationService.Instance.ResolveStatusStorage(errorDetailRaw);
+            _connectionErrorDetailKey = key;
+            _connectionErrorDetailRaw = formatArg ?? "";
+        }
+        else
+        {
+            _connectionErrorDetailKey = "";
+            _connectionErrorDetailRaw = "";
+        }
 
         OnPropertyChanged(nameof(HasConnectionError));
         OnPropertyChanged(nameof(ConnectionErrorDetail));
+        OnPropertyChanged(nameof(StatusBarToolTipText));
         OnPropertyChanged(nameof(ShowConnectionErrorPanel));
     }
 
@@ -325,6 +362,8 @@ public partial class MainViewModel
 
     private void RefreshConnectionProgressLocalization()
     {
+        NormalizeConnectionErrorStorage();
+
         OnPropertyChanged(nameof(ConnectionElapsedLabelText));
         OnPropertyChanged(nameof(ConnectionElapsedDisplayText));
 
@@ -341,5 +380,39 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(CancelConnectionToolTipText));
         OnPropertyChanged(nameof(ConnectionStagesHeaderText));
         OnPropertyChanged(nameof(ConnectionErrorHeaderText));
+        OnPropertyChanged(nameof(ConnectionErrorCloseButtonText));
+        OnPropertyChanged(nameof(StatusBarToolTipText));
+    }
+
+    private void QueueConnectionErrorDialog()
+    {
+        if (!HasConnectionError || _connectionState != ConnectionState.Error)
+            return;
+
+        var app = Application.Current;
+        if (app?.Dispatcher == null)
+            return;
+
+        app.Dispatcher.BeginInvoke(() =>
+        {
+            if (!HasConnectionError || _connectionState != ConnectionState.Error)
+                return;
+
+            Views.ConnectionErrorDialog.Show(this, app.MainWindow);
+        }, DispatcherPriority.Normal);
+    }
+
+    private void NormalizeConnectionErrorStorage()
+    {
+        if (!HasConnectionError)
+            return;
+
+        var snapshot = ConnectionErrorDetail;
+        if (string.IsNullOrWhiteSpace(snapshot))
+            return;
+
+        var (key, formatArg) = LocalizationService.Instance.ResolveStatusStorage(snapshot);
+        _connectionErrorDetailKey = key;
+        _connectionErrorDetailRaw = formatArg ?? "";
     }
 }

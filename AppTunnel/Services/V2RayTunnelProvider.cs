@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -359,117 +360,229 @@ public class V2RayTunnelProvider : ITunnelProvider
     private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort)
     {
         userConfig = userConfig.Trim();
-
-        JsonObject outbound;
-        string outboundTag;
-
         if (userConfig.StartsWith("{"))
-        {
-            // Raw sing-box JSON: user is responsible for the full document.
-            // Return as-is (overrides everything).
             return userConfig;
-        }
-        else if (userConfig.StartsWith("vmess://"))
-        {
-            (outbound, outboundTag) = ParseVmess(userConfig);
-            LogWebSocketEarlyDataIfPresent(outbound);
-        }
-        else if (userConfig.StartsWith("vless://"))
-        {
-            (outbound, outboundTag) = ParseVless(userConfig);
-        }
-        else if (userConfig.StartsWith("trojan://"))
-        {
-            (outbound, outboundTag) = ParseTrojan(userConfig);
-        }
-        else if (userConfig.StartsWith("ss://"))
-        {
-            (outbound, outboundTag) = ParseShadowsocks(userConfig);
-        }
-        else if (userConfig.StartsWith("socks5://") ||
-                 userConfig.StartsWith("socks://"))
-        {
-            (outbound, outboundTag) = ParseSocks5(userConfig);
-        }
-        else if (userConfig.StartsWith("http://"))
-        {
-            (outbound, outboundTag) = ParseHttp(userConfig);
-        }
-        else
-        {
-            throw new InvalidOperationException(
-                "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد");
-        }
 
-        // Pre-resolve the server hostname to an IPv4 address and write the IP
-        // into outbound["server"]. This is critical:
-        //   1. sing-box never has to do runtime DNS for the server domain,
-        //      which prevents a recursive lookup loop when the system DNS
-        //      server has a host route through our own TUN interface.
-        //   2. CDN behind the domain is captured at connect-time; the IP we
-        //      use exactly matches the IP excluded from WinDivert filters.
-        // SNI (tls.server_name) keeps the original hostname so TLS still
-        // validates correctly against the CDN certificate.
-        // WebSocket outbounds: keep the domain for dial (CDN/SNI); pinning IPv4 breaks many Iranian panels.
-        var skipServerPreResolve = outbound["transport"]?["type"]?.GetValue<string>() == "ws";
+        var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
+        ApplyServerPreResolve(outbound, enableDnsOptimization);
+        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: true, tunMtu);
+    }
 
-        if (enableDnsOptimization &&
-            !skipServerPreResolve &&
-            outbound["server"] is JsonValue sv &&
-            sv.TryGetValue<string>(out var srvHost) &&
-            !string.IsNullOrEmpty(srvHost) &&
-            !System.Net.IPAddress.TryParse(srvHost, out _))
+    internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true)
+    {
+        userConfig = userConfig.Trim();
+        if (userConfig.StartsWith("{"))
+            throw new InvalidOperationException(LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"));
+
+        var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
+        ApplyServerPreResolve(outbound, enableDnsOptimization);
+        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: false, DefaultTunMtu);
+    }
+
+    internal async Task<long> ProbeMixedProxyLatencyAsync(
+        string userConfig,
+        CancellationToken ct,
+        string probeHost = Socks5LatencyProbe.DefaultProbeHost,
+        int probePort = Socks5LatencyProbe.DefaultProbePort)
+    {
+        Directory.CreateDirectory(_workDir);
+        await NativeEngineSupport.EnsureEmbeddedExecutableAsync("sing-box.exe", _singBoxExe, ct);
+        if (!File.Exists(_singBoxExe))
+            throw new FileNotFoundException(LocalizationService.Instance.Format("فایل sing-box.exe پیدا نشد: {0}", _singBoxExe));
+
+        using var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17);
+        var mixedPort = portReservation.Port;
+        var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
+        Process? process = null;
+
+        try
+        {
+            var json = BuildMixedOnlySingBoxConfig(userConfig, mixedPort);
+            await File.WriteAllTextAsync(probeConfigPath, json, new UTF8Encoding(false), ct);
+
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = _singBoxExe,
+                    Arguments = $"run -c \"{probeConfigPath}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    WorkingDirectory = _workDir
+                },
+                EnableRaisingEvents = true
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    Logger.ProcessOutput("[sing-box probe stderr]", e.Data, isError: true);
+            };
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    Logger.ProcessOutput("[sing-box probe]", e.Data, isError: false);
+            };
+
+            process.Start();
+            process.BeginErrorReadLine();
+            process.BeginOutputReadLine();
+
+            await WaitForLocalPortAsync(mixedPort, TimeSpan.FromSeconds(12), ct);
+            if (process.HasExited)
+                throw new InvalidOperationException(LocalizationService.Instance.Format("sing-box probe exited early (code {0})", process.ExitCode));
+
+            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, mixedPort, ct);
+        }
+        finally
         {
             try
             {
-                var v4 = DnsResolverCache.ResolveFirstIpv4(srvHost);
-                if (v4 != null)
+                if (process is { HasExited: false })
                 {
-                    outbound["server"] = v4.ToString();
-                    var tlsSni = outbound["tls"]?["server_name"]?.GetValue<string>();
-                    Logger.Info($"[CONFIG] Pre-resolved sing-box server '{srvHost}' → {v4} (tls.server_name='{tlsSni ?? srvHost}')");
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync(CancellationToken.None);
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Logger.Warning($"[CONFIG] Could not pre-resolve server '{srvHost}': {ex.Message}");
+                // ignored
+            }
+
+            process?.Dispose();
+            try { if (File.Exists(probeConfigPath)) File.Delete(probeConfigPath); } catch { }
+        }
+    }
+
+    private static async Task WaitForLocalPortAsync(int port, TimeSpan timeout, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        Exception? lastError = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var tcp = new System.Net.Sockets.TcpClient();
+                await tcp.ConnectAsync("127.0.0.1", port, ct);
+                return;
+            }
+            catch (Exception ex) when (ex is SocketException or TimeoutException or OperationCanceledException)
+            {
+                lastError = ex;
+                if (ex is OperationCanceledException)
+                    throw;
+                await Task.Delay(250, ct);
             }
         }
+
+        throw new TimeoutException(lastError?.Message ?? LocalizationService.Instance.T("پورت محلی sing-box آماده نشد"));
+    }
+
+    private (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)
+    {
+        if (userConfig.StartsWith("vmess://"))
+        {
+            var parsed = ParseVmess(userConfig);
+            LogWebSocketEarlyDataIfPresent(parsed.outbound);
+            return parsed;
+        }
+
+        if (userConfig.StartsWith("vless://"))
+            return ParseVless(userConfig);
+        if (userConfig.StartsWith("trojan://"))
+            return ParseTrojan(userConfig);
+        if (userConfig.StartsWith("ss://"))
+            return ParseShadowsocks(userConfig);
+        if (userConfig.StartsWith("socks5://") || userConfig.StartsWith("socks://"))
+            return ParseSocks5(userConfig);
+        if (userConfig.StartsWith("http://"))
+            return ParseHttp(userConfig);
+
+        throw new InvalidOperationException(
+            "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد");
+    }
+
+    private static void ApplyServerPreResolve(JsonObject outbound, bool enableDnsOptimization)
+    {
+        var skipServerPreResolve = outbound["transport"]?["type"]?.GetValue<string>() == "ws";
+        if (!enableDnsOptimization ||
+            skipServerPreResolve ||
+            outbound["server"] is not JsonValue sv ||
+            !sv.TryGetValue<string>(out var srvHost) ||
+            string.IsNullOrEmpty(srvHost) ||
+            System.Net.IPAddress.TryParse(srvHost, out _))
+            return;
+
+        try
+        {
+            var v4 = DnsResolverCache.ResolveFirstIpv4(srvHost);
+            if (v4 == null)
+                return;
+
+            outbound["server"] = v4.ToString();
+            var tlsSni = outbound["tls"]?["server_name"]?.GetValue<string>();
+            Logger.Info($"[CONFIG] Pre-resolved sing-box server '{srvHost}' → {v4} (tls.server_name='{tlsSni ?? srvHost}')");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[CONFIG] Could not pre-resolve server '{srvHost}': {ex.Message}");
+        }
+    }
+
+    private static string SerializeSingBoxDocument(
+        JsonObject outbound,
+        string outboundTag,
+        int mixedProxyPort,
+        bool includeTun,
+        int tunMtu)
+    {
+        var inbounds = new JsonArray();
+        if (includeTun)
+        {
+            inbounds.Add(new JsonObject
+            {
+                ["type"] = "tun",
+                ["tag"] = "tun-in",
+                ["interface_name"] = TunInterfaceName,
+                ["address"] = new JsonArray { TunAddress },
+                ["mtu"] = TunnelPerformanceTuner.ClampTunMtu(tunMtu),
+                ["auto_route"] = false,
+                ["strict_route"] = false,
+                ["stack"] = "gvisor"
+            });
+        }
+
+        inbounds.Add(new JsonObject
+        {
+            ["type"] = "mixed",
+            ["tag"] = "mixed-in",
+            ["listen"] = "127.0.0.1",
+            ["listen_port"] = mixedProxyPort
+        });
+
+        var rules = new JsonArray();
+        if (includeTun)
+        {
+            rules.Add(new JsonObject
+            {
+                ["inbound"] = new JsonArray { "tun-in" },
+                ["outbound"] = outboundTag
+            });
+        }
+
+        rules.Add(new JsonObject
+        {
+            ["inbound"] = new JsonArray { "mixed-in" },
+            ["outbound"] = outboundTag
+        });
 
         var doc = new JsonObject
         {
             ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = false },
-            ["inbounds"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"]           = "tun",
-                    ["tag"]            = "tun-in",
-                    ["interface_name"] = TunInterfaceName,
-                    ["address"]        = new JsonArray { TunAddress },
-                    ["mtu"]            = TunnelPerformanceTuner.ClampTunMtu(tunMtu),
-                    ["auto_route"]     = false,
-                    ["strict_route"]   = false,
-                    ["stack"]          = "gvisor"
-                },
-                // Mixed SOCKS5/HTTP proxy inbound — used for accurate end-to-end
-                // ping measurement. Unlike the TUN inbound (which completes the
-                // TCP handshake locally before the remote connection is ready),
-                // this inbound only replies CONNECT_OK after the real upstream
-                // TCP handshake through the proxy chain has completed, giving a
-                // true end-to-end round-trip latency reading.
-                new JsonObject
-                {
-                    ["type"]         = "mixed",
-                    ["tag"]          = "mixed-in",
-                    ["listen"]       = "127.0.0.1",
-                    ["listen_port"]  = mixedProxyPort
-                }
-            },
-            // direct outbound is required so sing-box can reach the proxy
-            // server and any other untunneled endpoint without entering the
-            // VLESS path. Without it, system DNS lookups by sing-box may
-            // recurse back into the TUN.
+            ["inbounds"] = inbounds,
             ["outbounds"] = new JsonArray
             {
                 outbound,
@@ -477,28 +590,11 @@ public class V2RayTunnelProvider : ITunnelProvider
             },
             ["route"] = new JsonObject
             {
-                // Ask sing-box to track the system default interface so it can
-                // automatically reroute its own outbound (server) traffic when
-                // the physical NIC changes (Wi-Fi reconnect, etc.).
                 ["auto_detect_interface"] = true,
-                ["rules"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["inbound"]  = new JsonArray { "tun-in" },
-                        ["outbound"] = outboundTag
-                    },
-                    new JsonObject
-                    {
-                        ["inbound"]  = new JsonArray { "mixed-in" },
-                        ["outbound"] = outboundTag
-                    }
-                }
+                ["rules"] = rules
             }
         };
 
-        // Serialize using Utf8JsonWriter to avoid JsonSerializerOptions.TypeInfoResolver
-        // requirement introduced in .NET 8 trimming/AOT mode.
         using var ms = new MemoryStream();
         using var writer = new System.Text.Json.Utf8JsonWriter(ms, new System.Text.Json.JsonWriterOptions { Indented = true });
         doc.WriteTo(writer);

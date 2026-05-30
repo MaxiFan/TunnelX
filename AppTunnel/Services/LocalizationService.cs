@@ -45,15 +45,11 @@ public sealed class LocalizationService : INotifyPropertyChanged
     public System.Windows.FlowDirection FlowDirection => IsRightToLeft
         ? System.Windows.FlowDirection.RightToLeft
         : System.Windows.FlowDirection.LeftToRight;
-    public System.Windows.TextAlignment TextAlignment => IsRightToLeft
-        ? System.Windows.TextAlignment.Right
-        : System.Windows.TextAlignment.Left;
-    public System.Windows.HorizontalAlignment StartHorizontalAlignment => IsRightToLeft
-        ? System.Windows.HorizontalAlignment.Right
-        : System.Windows.HorizontalAlignment.Left;
-    public System.Windows.HorizontalAlignment EndHorizontalAlignment => IsRightToLeft
-        ? System.Windows.HorizontalAlignment.Left
-        : System.Windows.HorizontalAlignment.Right;
+    // WPF mirrors Left/Right alignment when FlowDirection is RTL, so logical
+    // "start" is always Left and logical "end" is always Right on RTL-aware elements.
+    public System.Windows.TextAlignment TextAlignment => System.Windows.TextAlignment.Left;
+    public System.Windows.HorizontalAlignment StartHorizontalAlignment => System.Windows.HorizontalAlignment.Left;
+    public System.Windows.HorizontalAlignment EndHorizontalAlignment => System.Windows.HorizontalAlignment.Right;
     public string ToggleLanguageText => IsRightToLeft ? "English" : "فارسی";
 
     public void Initialize(string? savedLanguage)
@@ -84,6 +80,70 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     public string Format(string sourceFormat, params object?[] args)
         => string.Format(CultureInfo.CurrentCulture, T(sourceFormat), args);
+
+    /// <summary>
+    /// Normalizes a display string (Persian key, English translation, or formatted message)
+    /// back to the Persian source key plus an optional format argument for re-localization.
+    /// </summary>
+    public (string Key, string? FormatArg) ResolveStatusStorage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return (message, null);
+
+        var resolved = ResolveSourceText(message);
+        if (IsPersianSourceKey(resolved))
+            return (resolved, null);
+
+        if (!_translations.TryGetValue(EnglishLanguage, out var table))
+            return (message, null);
+
+        foreach (var key in table.Keys)
+        {
+            if (!key.Contains('{', StringComparison.Ordinal))
+                continue;
+
+            if (TryMatchFormatTemplate(key, message, out var arg))
+                return (key, arg);
+
+            if (table.TryGetValue(key, out var englishTemplate) &&
+                TryMatchFormatTemplate(englishTemplate, message, out arg))
+                return (key, arg);
+        }
+
+        return (message, null);
+    }
+
+    public bool IsPersianSourceKey(string text)
+        => !string.IsNullOrEmpty(text) &&
+           _translations.TryGetValue(EnglishLanguage, out var table) &&
+           table.ContainsKey(text);
+
+    /// <summary>True when text is a Persian source key or a known translation of one (including multiline messages).</summary>
+    public bool IsKnownMessageKey(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var resolved = ResolveSourceText(text);
+        return IsPersianSourceKey(resolved);
+    }
+
+    private static bool TryMatchFormatTemplate(string template, string value, out string? formatArg)
+    {
+        formatArg = null;
+        var placeholderIndex = template.IndexOf("{0}", StringComparison.Ordinal);
+        if (placeholderIndex < 0)
+            return false;
+
+        var prefix = template[..placeholderIndex];
+        var suffix = template[(placeholderIndex + 3)..];
+        if (!value.StartsWith(prefix, StringComparison.Ordinal) ||
+            !value.EndsWith(suffix, StringComparison.Ordinal))
+            return false;
+
+        formatArg = value[prefix.Length..^Math.Max(0, suffix.Length)];
+        return true;
+    }
 
     public void ApplyToOpenWindows()
     {
@@ -149,8 +209,15 @@ public sealed class LocalizationService : INotifyPropertyChanged
         LanguageChanged?.Invoke(this, EventArgs.Empty);
 
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        dispatcher?.BeginInvoke(ApplyToOpenWindows, DispatcherPriority.Loaded);
-        dispatcher?.BeginInvoke(ApplyToOpenWindows, DispatcherPriority.ContextIdle);
+        dispatcher?.BeginInvoke(() =>
+        {
+            ApplyToOpenWindows();
+            if (System.Windows.Application.Current == null)
+                return;
+
+            foreach (Window window in System.Windows.Application.Current.Windows)
+                LocalizationLayoutHelper.RefreshLayoutBindings(window);
+        }, DispatcherPriority.Loaded);
     }
 
     private static string NormalizeLanguageSetting(string language)
@@ -211,8 +278,6 @@ public sealed class LocalizationService : INotifyPropertyChanged
             local is System.Windows.FlowDirection.LeftToRight)
             return;
 
-        // Only elements with an explicit RTL local value are updated on language change.
-        // Layout containers should set FlowDirection in XAML; unset children inherit.
         fe.FlowDirection = FlowDirection;
     }
 
@@ -315,7 +380,9 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["تانلکس"] = "TunnelX",
         ["تفکیک ترافیک برنامه ها"] = "Per-app traffic splitting",
         ["جزئیات"] = "Details",
+        ["کوچک کردن"] = "Minimize",
         ["کوچک کردن به System Tray"] = "Minimize to system tray",
+        ["رفتن به System Tray"] = "Send to system tray",
         ["خروج از برنامه"] = "Exit app",
         ["وضعیت اتصال VPN و کنترل اتصال"] = "VPN connection status and controls",
         ["اتصال VPN"] = "VPN Connection",
@@ -611,6 +678,8 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["آیا می‌خواهید از TunnelX خارج شوید؟"] = "Do you want to exit TunnelX?",
         ["TunnelX"] = "TunnelX",
         ["TunnelX در پس‌زمینه فعال است"] = "TunnelX is running in the background",
+        ["TunnelX در System Tray است"] = "TunnelX is in the system tray",
+        ["برنامه بسته نشده است. برای باز کردن، روی آیکن کنار ساعت دوبار کلیک کنید."] = "The app is still running. Double-click the tray icon to open the window.",
         ["برای باز کردن پنجره، روی آیکن کنار ساعت دوبار کلیک کنید."] = "Double-click the tray icon to open the window.",
         ["تونل فعال شد"] = "Tunnel enabled",
         ["تونل خاموش شد"] = "Tunnel disabled",
@@ -790,8 +859,82 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["پورت باید بین 1024 تا 65535 باشد"] = "Port must be between 1024 and 65535",
         ["این پورت رایج/حساس است؛ یک پورت آزاد مثل 1080، 1081 یا 18080 انتخاب کنید"] = "This port is common/sensitive; choose a free port like 1080, 1081, or 18080",
         ["این پورت همین حالا توسط برنامه دیگری استفاده می‌شود"] = "This port is currently used by another app",
-        ["پورت SOCKS5 داخلی آماده است"] = "Internal SOCKS5 port is ready"
-        ,
+        ["پورت SOCKS5 داخلی آماده است"] = "Internal SOCKS5 port is ready",
+        ["چسباندن کانفیگ"] = "Paste config",
+        ["افزودن از کلیپ‌بورد"] = "Add from clipboard",
+        ["پیست کانفیگ"] = "Paste configs",
+        ["در حال افزودن..."] = "Importing...",
+        ["کانفیگ V2Ray/Xray/OpenVPN/WireGuard را از کلیپ‌بورد بخواند و به‌صورت خودکار پروفایل بسازد (Ctrl+V)"] = "Reads V2Ray/Xray/OpenVPN/WireGuard configs from the clipboard and creates profiles automatically (Ctrl+V)",
+        ["Real Delay"] = "Real Delay",
+        ["تست همه"] = "Test all",
+        ["در حال تست همه..."] = "Testing all...",
+        ["تست تأخیر واقعی کانفیگ انتخاب‌شده قبل از اتصال (برای V2Ray از مسیر SOCKS)"] = "Tests real latency for the selected config before connecting (V2Ray uses the SOCKS path)",
+        ["تست Real Delay برای همه پروفایل‌های V2Ray/Xray"] = "Run Real Delay on all V2Ray/Xray profiles",
+        ["کانفیگ را پیست کنید (Ctrl+V) یا Real Delay را قبل از اتصال تست کنید."] = "Paste configs (Ctrl+V) or run Real Delay before connecting.",
+        ["۱ کانفیگ اضافه شد"] = "1 config added",
+        ["{0} کانفیگ اضافه شد"] = "{0} configs added",
+        [" ({0} رد شد)"] = " ({0} skipped)",
+        ["همه کانفیگ‌ها تکراری یا نامعتبر بودند"] = "All configs were duplicates or invalid",
+        ["کلیپ‌بورد خالی است"] = "Clipboard is empty",
+        ["هیچ کانفیگ معتبری در کلیپ‌بورد پیدا نشد"] = "No valid configs were found in the clipboard",
+        ["هیچ کانفیگ معتبری پیدا نشد"] = "No valid configs were found",
+        ["تست Real Delay برای {0} پروفایل انجام شد"] = "Real Delay finished for {0} profiles",
+        ["تست Real Delay متوقف شد"] = "Real Delay test was cancelled",
+        ["پروفایل V2Ray آماده‌ای برای تست وجود ندارد"] = "No ready V2Ray profiles to test",
+        ["تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"] = "Real Delay is not supported for full JSON configs",
+        ["پورت محلی sing-box آماده نشد"] = "Local sing-box port did not become ready",
+        ["فرمت کانفیگ شناخته نشد"] = "Config format was not recognized",
+        ["فرمت JSON شناخته نشد"] = "JSON format was not recognized",
+        ["چند کانفیگ پیدا شد؛ از دکمه «پیست کانفیگ» در تب اتصال استفاده کنید."] = "Multiple configs detected; use Paste configs on the Connection tab.",
+        ["کانفیگ JSON"] = "JSON config",
+        ["WireGuard"] = "WireGuard",
+        ["OpenVPN"] = "OpenVPN",
+        ["متوقف شد"] = "Cancelled",
+        ["تست پشتیبانی نمی‌شود"] = "Test not supported",
+        ["کانفیگ UDP است؛ Real Delay ممکن نیست"] = "UDP config; Real Delay is not available",
+        ["سرور در دسترس نیست"] = "Server unreachable",
+        ["آدرس پراکسی نامعتبر است"] = "Invalid proxy address",
+        ["sing-box probe exited early (code {0})"] = "sing-box probe exited early (code {0})",
+        ["تست پینگ برای همه پروفایل‌های آماده — سریع‌ترین‌ها را پیدا کنید"] = "Ping test for all ready profiles — find the fastest",
+        ["نتیجه تست پینگ / TCP"] = "Ping / TCP test result",
+        ["در حال تست پینگ {0}/{1}: {2}"] = "Testing ping {0}/{1}: {2}",
+        ["تست پینگ متوقف شد"] = "Ping test stopped",
+        ["مهلت تست تمام شد"] = "Test timed out",
+        ["تست پینگ همه"] = "Test all ping",
+        ["در حال تست پینگ همه..."] = "Testing all ping...",
+        ["تست پینگ همین کانفیگ قبل از اتصال"] = "Ping test for this config before connecting",
+        ["پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link"] = "Connection ping: Google (or ping target) through the full config path — sing-box share links only",
+        ["پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — برای همه کانفیگ‌ها"] = "Server ping: reach server IP/port (TCP/TLS/ICMP) — all config types",
+        ["نتیجه پینگ سرور (بدون عبور از تونل)"] = "Server ping result (without going through the tunnel)",
+        ["پینگ سرور «{0}»..."] = "Server ping \"{0}\"...",
+        ["«{0}» سرور: {1} {2} ms"] = "\"{0}\" server: {1} {2} ms",
+        ["«{0}» سرور: {1}"] = "\"{0}\" server: {1}",
+        ["کانفیگ UDP است؛ پینگ TCP سرور ممکن نیست"] = "UDP config; server TCP ping is not available",
+        ["پینگ = اتصال (sing-box share link) یا سرور (OpenVPN و بقیه). دکمه سرور فقط برای کانفیگ‌های دارای پینگ اتصال."] = "Ping = connection (sing-box share link) or server (OpenVPN and others). Server button only appears when connection ping is also available.",
+        ["اتصال:"] = "Conn:",
+        ["سرور:"] = "Srv:",
+        ["تست پینگ اتصال برای این کانفیگ پشتیبانی نمی‌شود"] = "Connection ping is not supported for this config",
+        ["پینگ اتصال برای همه پروفایل‌های آماده — سریع‌ترین مسیر را پیدا کنید"] = "Connection ping for all ready profiles — find the fastest route",
+        ["نتیجه پینگ اتصال از مسیر کانفیگ"] = "Connection ping result through the config path",
+        ["تست پینگ اتصال برای JSON/Xray پشتیبانی نمی‌شود"] = "Connection ping is not supported for JSON/Xray configs",
+        ["در همین تب: Ctrl+V برای چسباندن سریع کانفیگ. پینگ اتصال فقط برای کانفیگ‌های sing-box (لینک share) فعال است."] = "On this tab: Ctrl+V to paste configs quickly. Connection ping is only enabled for sing-box share-link configs.",
+        ["چند کانفیگ پیدا شد؛ از دکمه «چسباندن کانفیگ» در تب اتصال استفاده کنید."] = "Multiple configs detected; use Paste config on the Connection tab.",
+        ["تست تأخیر همه"] = "Test all latency",
+        ["در حال تست تأخیر همه..."] = "Testing all latency...",
+        ["تأخیر"] = "Delay",
+        ["در همین تب: Ctrl+V برای پیست سریع، «تست تأخیر همه» برای بررسی کانفیگ‌ها قبل از اتصال."] = "On this tab: Ctrl+V to paste quickly; Test all latency to check configs before connecting.",
+        ["در حال افزودن کانفیگ‌ها..."] = "Adding configs...",
+        ["در حال تست «{0}»..."] = "Testing \"{0}\"...",
+        ["«{0}»: {1} {2} ms"] = "\"{0}\": {1} {2} ms",
+        ["«{0}»: {1}"] = "\"{0}\": {1}",
+        ["پروفایل آماده‌ای برای تست وجود ندارد"] = "No ready profiles to test",
+        ["در حال تست تأخیر {0}/{1}: {2}"] = "Testing latency {0}/{1}: {2}",
+        ["تست {0}/{1} موفق — سریع‌ترین: «{2}» ({3} {4} ms)"] = "{0}/{1} succeeded — fastest: \"{2}\" ({3} {4} ms)",
+        ["تست {0} پروفایل انجام شد — هیچ کانفیگ پاسخ نداد"] = "Tested {0} profiles — none responded",
+        ["تست تأخیر متوقف شد"] = "Latency test stopped",
+        ["تست Real Delay همین کانفیگ قبل از اتصال"] = "Real Delay test for this config before connecting",
+        ["تست Real Delay برای همه پروفایل‌های آماده — سریع‌ترین‌ها را پیدا کنید"] = "Real Delay for all ready profiles — find the fastest",
+        ["کانفیگ V2Ray/Xray/OpenVPN/WireGuard را از کلیپ‌بورد می‌خواند و پروفایل می‌سازد (Ctrl+V در تب اتصال)"] = "Reads V2Ray/Xray/OpenVPN/WireGuard from clipboard and creates profiles (Ctrl+V on Connection tab)",
         ["خطای اتصال خودکار: {0}"] = "Auto-connect error: {0}",
         ["حمایت از پروژه"] = "Support the project",
         ["تغییر زبان"] = "Change language",
@@ -930,6 +1073,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["این آدرس داخلی را در برنامه‌هایی وارد کنید که تنظیم Proxy جداگانه دارند یا خودکار وارد تونل نمی‌شوند."] = "Use this internal address in apps with separate proxy settings or apps that do not enter the tunnel automatically.",
         ["این آدرس داخلی را در برنامه‌هایی وارد کنید که تنظیم Proxy جداگانه دارند یا خودکار وارد تونل نمی‌شوند. پورت این پراکسی از تب تنظیمات قابل تغییر است."] = "Use this internal address in apps with separate proxy settings or apps that do not enter the tunnel automatically. You can change this proxy port from the Settings tab.",
         ["پینگ"] = "Ping",
+        ["سرور"] = "Server",
         ["🏓 تست مسیر"] = "🏓 Route Test",
         ["یک دامنه یا IP را از داخل تونل تست کنید."] = "Test a domain or IP from inside the tunnel.",
         ["IP یا دامنه مقصد برای تست از داخل تونل"] = "Destination IP or domain to test through the tunnel",
@@ -960,6 +1104,8 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["در حال اجرای OpenVPN در حالت Split..."] = "Running OpenVPN in split mode...",
         ["فقط OpenVPN Connect پیدا شد. برای Split Tunneling باید OpenVPN Community (openvpn.exe) هم نصب باشد."] = "Only OpenVPN Connect was found. Split tunneling requires OpenVPN Community (openvpn.exe).",
         ["OpenVPN Community پیدا نشد. برای Split Tunneling باید openvpn.exe نصب باشد."] = "OpenVPN Community was not found. Split tunneling requires openvpn.exe.",
+        ["اجرای openvpn.exe ناموفق بود: {0}. OpenVPN Community را نصب کنید یا TunnelX را با Administrator اجرا کنید."] = "Failed to start openvpn.exe: {0}. Install OpenVPN Community or run TunnelX as Administrator.",
+        ["TunnelX خودش openvpn.exe را اجرا می‌کند؛ لازم نیست برنامه OpenVPN Connect باز باشد.\n\nبرای Split Tunneling باید OpenVPN Community (openvpn.exe) نصب باشد، نه فقط OpenVPN Connect.\n\nدکمه دانلود را بزنید، نصب Community را کامل کنید، سپس دوباره اتصال را بزنید."] = "TunnelX launches openvpn.exe itself; OpenVPN Connect does not need to be open.\n\nSplit tunneling requires OpenVPN Community (openvpn.exe), not OpenVPN Connect alone.\n\nClick Download, install Community, then connect again.",
         ["کانفیگ OpenVPN (.ovpn) وارد نشده است."] = "OpenVPN (.ovpn) config is missing.",
         ["OpenVPN Community نصب نیست؛ ابتدا از لینک رسمی نصب کنید"] = "OpenVPN Community is not installed; install it from the official link first",
         ["OpenVPN در حال اتصال است؛ مسیرهای پیش‌فرض آن برای Split Tunnel نادیده گرفته می‌شوند..."] = "OpenVPN is connecting; its default routes are ignored for split tunneling...",
@@ -1006,9 +1152,27 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["اتصال VPN به‌طور غیرمنتظره قطع شد"] = "VPN connection dropped unexpectedly",
         ["قطع از سرور — احراز هویت پس از reset کانال"] = "Server drop — auth failed after control resets",
         ["احراز هویت OpenVPN رد شد"] = "OpenVPN authentication rejected",
+        ["احراز هویت ناموفق"] = "Authentication failed",
+        ["اتصال OpenVPN ناموفق"] = "OpenVPN connection failed",
+        ["اتصال L2TP ناموفق"] = "L2TP connection failed",
+        ["اتصال WireGuard ناموفق"] = "WireGuard connection failed",
+        ["اتصال V2Ray ناموفق"] = "V2Ray connection failed",
+        ["اتصال پراکسی ناموفق"] = "Proxy connection failed",
+        ["اتصال Xray ناموفق"] = "Xray connection failed",
+        ["پیش‌نیاز اتصال آماده نیست"] = "Connection prerequisites not met",
+        ["دسترسی Administrator لازم است"] = "Administrator privileges required",
+        ["خطا در کانفیگ"] = "Config error",
+        ["خطا در کانفیگ WireGuard"] = "WireGuard config error",
+        ["آداپتر VPN بالا نیامد"] = "VPN adapter did not come up",
+        ["خطا در اسپلیت‌تانلینگ"] = "Split tunnel failed",
+        ["اتصال بیش از حد طول کشید"] = "Connection timed out",
+        ["OpenVPN نصب نیست"] = "OpenVPN not installed",
+        ["WireGuard نصب نیست"] = "WireGuard not installed",
         ["قطع از سرور — کانال کنترل ناپایدار"] = "Server drop — unstable control channel",
         ["قطع از سرور OpenVPN"] = "OpenVPN server disconnected",
         ["فرآیند OpenVPN بسته شد"] = "OpenVPN process exited",
+        ["TLS OpenVPN کامل نشد"] = "OpenVPN TLS failed",
+        ["آداپتر OpenVPN بالا نیامد"] = "OpenVPN adapter did not come up",
         ["احراز هویت OpenVPN رد شد (AUTH_FAILED). نام کاربری و رمز را با همان حساب OpenVPN GUI یکسان کنید.\n\nاگر تازه قطع شده یا چند بار reconnect شد، ۳۰–۶۰ ثانیه صبر کنید؛ ممکن است session قبلی روی سرور باز مانده یا محدودیت اتصال همزمان باشد."] = "OpenVPN authentication was rejected (AUTH_FAILED). Use the same username and password as in the OpenVPN GUI.\n\nIf you just disconnected or saw several reconnects, wait 30–60 seconds; a previous server session may still be open or concurrent connection limits may apply.",
         ["ارتباط VPN از سمت سرور قطع شد. قبل از بسته شدن، کانال کنترل OpenVPN چند بار قطع شد ({0} بار).\n\nدر پایان سرور احراز هویت را رد کرد (AUTH_FAILED). این معمولاً به معنی اشکال در نام کاربری/رمز نیست، بلکه:\n• همان اکانت همزمان روی دستگاه یا برنامه دیگر وصل است\n• محدودیت تعداد اتصال همزمان از طرف ارائه‌دهنده\n• قطع ناگهانی قبلی — session هنوز روی سرور باز مانده (۳۰–۶۰ ثانیه صبر کنید)\n\nاگر مطمئن هستید فقط یک دستگاه وصل است، نام کاربری و رمز را با OpenVPN GUI مقایسه کنید."] = "The VPN connection was closed by the server. Before it ended, the OpenVPN control channel dropped several times ({0} times).\n\nThe server then rejected authentication (AUTH_FAILED). This usually does not mean wrong username/password, but rather:\n• The same account is connected on another device or app\n• A provider concurrent-session limit\n• A previous abrupt drop — session still open on the server (wait 30–60 seconds)\n\nIf you are sure only one device is connected, compare credentials with the OpenVPN GUI.",
         ["ارتباط از سمت سرور یا شبکه قطع شد. کانال کنترل OpenVPN بارها reset شد ({0} بار).\n\nاحتمال‌ها:\n• بار زیاد یا محدودیت اتصال همزمان روی سرور\n• فیلترینگ یا قطع موقت TCP به سرور\n• مشکل موقت اپراتور اینترنت\n\nچند دقیقه صبر کنید؛ فقط یک برنامه با این اکانت وصل باشد."] = "The connection was dropped by the server or network. The OpenVPN control channel reset many times ({0} times).\n\nPossible causes:\n• Server load or concurrent connection limits\n• Filtering or temporary TCP loss to the server\n• Temporary ISP issues\n\nWait a few minutes; connect with only one app using this account.",

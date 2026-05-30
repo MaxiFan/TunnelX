@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
+using AppTunnel.Helpers;
 using AppTunnel.Models;
 
 namespace AppTunnel.ViewModels;
@@ -26,16 +27,40 @@ public class AppItemViewModel : INotifyPropertyChanged
     public long BytesSent
     {
         get => _app.BytesSent;
-        set { _app.BytesSent = value; OnPropertyChanged(); OnPropertyChanged(nameof(TrafficDisplay)); }
+        set
+        {
+            _app.BytesSent = value;
+            OnPropertyChanged();
+            NotifyTrafficPropertiesChanged();
+        }
     }
 
     public long BytesReceived
     {
         get => _app.BytesReceived;
-        set { _app.BytesReceived = value; OnPropertyChanged(); OnPropertyChanged(nameof(TrafficDisplay)); }
+        set
+        {
+            _app.BytesReceived = value;
+            OnPropertyChanged();
+            NotifyTrafficPropertiesChanged();
+        }
     }
 
+    public long TotalTrafficBytes => BytesSent + BytesReceived;
+
     public string TrafficDisplay => _app.TrafficDisplay;
+
+    public string SentTrafficDisplay => ByteSizeFormatter.Format(BytesSent);
+
+    public string ReceivedTrafficDisplay => ByteSizeFormatter.Format(BytesReceived);
+
+    private void NotifyTrafficPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(TrafficDisplay));
+        OnPropertyChanged(nameof(TotalTrafficBytes));
+        OnPropertyChanged(nameof(SentTrafficDisplay));
+        OnPropertyChanged(nameof(ReceivedTrafficDisplay));
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)

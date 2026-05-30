@@ -61,6 +61,7 @@ public static class TextMarqueeBehavior
             EnsureTransform(textBlock);
             textBlock.Loaded += OnLayoutChanged;
             textBlock.SizeChanged += OnLayoutChanged;
+            textBlock.IsVisibleChanged += OnVisibilityChanged;
             TextDescriptor.AddValueChanged(textBlock, OnTextChanged);
             QueueUpdate(textBlock);
         }
@@ -68,6 +69,7 @@ public static class TextMarqueeBehavior
         {
             textBlock.Loaded -= OnLayoutChanged;
             textBlock.SizeChanged -= OnLayoutChanged;
+            textBlock.IsVisibleChanged -= OnVisibilityChanged;
             TextDescriptor.RemoveValueChanged(textBlock, OnTextChanged);
             Stop(textBlock);
             States.Remove(textBlock);
@@ -75,6 +77,17 @@ public static class TextMarqueeBehavior
     }
 
     private static void OnLayoutChanged(object sender, RoutedEventArgs e) => QueueUpdate((TextBlock)sender);
+
+    private static void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is not TextBlock textBlock)
+            return;
+
+        if (textBlock.IsVisible)
+            QueueUpdate(textBlock);
+        else
+            Stop(textBlock);
+    }
 
     private static void OnTextChanged(object? sender, EventArgs e)
     {
@@ -115,7 +128,7 @@ public static class TextMarqueeBehavior
 
     private static void Update(TextBlock textBlock)
     {
-        if (!GetIsEnabled(textBlock))
+        if (!GetIsEnabled(textBlock) || !textBlock.IsVisible)
             return;
 
         EnsureTransform(textBlock);

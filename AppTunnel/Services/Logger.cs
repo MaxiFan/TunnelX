@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -244,9 +245,12 @@ public static class Logger
         AppendLogEntry(FormatLogEntry(level, message, nowUtc));
     }
 
+    private static readonly CultureInfo LogCulture = CultureInfo.InvariantCulture;
+
     private static string FormatLogEntry(string level, string message, DateTime utcNow)
     {
-        var timestamp = utcNow.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        // Technical logs always use Gregorian dates and Western digits, regardless of UI language.
+        var timestamp = utcNow.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", LogCulture);
         return $"[{timestamp}] [{level}] {message}";
     }
 

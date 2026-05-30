@@ -96,6 +96,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(ConnectedProfileName));
         OnPropertyChanged(nameof(SelectedProfileSummaryText));
         LoadProfileIntoUi(Profiles[0]);
+        NotifyReadyProfilesForLatencyTestChanged();
     }
 
     private void SaveProfiles() => _profileService.SaveProfiles(Profiles);
@@ -286,6 +287,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(ProfileCountText));
         SelectedProfile = profile;
         SaveProfiles();
+        NotifyReadyProfilesForLatencyTestChanged();
     }
 
     private void DuplicateCurrentProfile(object? parameter = null)
@@ -304,6 +306,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(ProfileCountText));
         SelectedProfile = clone;
         SaveProfiles();
+        NotifyReadyProfilesForLatencyTestChanged();
     }
 
     private void EditProfile(object? parameter)
@@ -325,6 +328,7 @@ public partial class MainViewModel
             LoadProfileIntoUi(profile);
         SaveProfiles();
         RaiseProfileCardChanged();
+        NotifyReadyProfilesForLatencyTestChanged();
     }
 
     private void SelectProfile(object? parameter)
@@ -345,6 +349,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(ProfileCountText));
         SelectedProfile = Profiles[Math.Min(idx, Profiles.Count - 1)];
         SaveProfiles();
+        NotifyReadyProfilesForLatencyTestChanged();
     }
 
     private static ConnectionProfile CloneProfile(ConnectionProfile source) => new()

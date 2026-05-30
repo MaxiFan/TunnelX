@@ -133,6 +133,7 @@ public static class SmoothScrollBehavior
             var scrollViewer = state.ScrollViewer;
             if (!scrollViewer.IsVisible)
             {
+                state.TargetOffset = scrollViewer.VerticalOffset;
                 state.IsAnimating = false;
                 continue;
             }

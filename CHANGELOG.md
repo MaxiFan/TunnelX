@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### فارسی
+
+#### قابلیت‌های جدید
+- افزودن سریع کانفیگ از کلیپ‌بورد با Ctrl+V
+- تست تأخیر و پینگ قبل از اتصال برای مقایسه سرورها
+- پنجره راهنما هنگام خطای اتصال با توضیح ساده‌تر
+- پینگ سرور در حالت متصل
+
+#### رفع باگ‌ها
+- اصلاح جهت و چیدمان متن در رابط دوزبانه
+- نمایش درست پنجره برنامه پس از اجرا
+- پیام‌های خطای اتصال واضح‌تر و کوتاه‌تر
+- بهبود پایداری اتصال OpenVPN و V2Ray
+
+#### بهبودها
+- بازطراحی تب اتصال و لیست کانفیگ‌ها
+- نمایش بهتر مصرف ترافیک
+- روانی و سرعت بیشتر رابط کاربری
+- گسترش متن‌های فارسی و انگلیسی
+
+### English
+
+#### Added
+- Quick config import from clipboard with Ctrl+V
+- Latency and ping test before connecting to compare servers
+- Helpful connection error dialog with clearer guidance
+- Server ping while connected
+
+#### Fixed
+- Text direction and layout in the bilingual interface
+- Window visibility on startup
+- Clearer, shorter connection error messages
+- Better OpenVPN and V2Ray connection stability
+
+#### Improved
+- Redesigned connection tab and config list
+- Better traffic usage display
+- Smoother, faster user interface
+- Expanded Persian and English translations
+
 ## 2.1.1 - 2026-05-22
 
 ### فارسی

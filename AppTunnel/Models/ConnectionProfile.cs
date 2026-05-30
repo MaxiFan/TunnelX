@@ -55,6 +55,14 @@ public class ConnectionProfile : INotifyPropertyChanged
     private bool _autoTuneMtu = true;
     private bool _enableDnsOptimization = true;
     private bool _enableGameMode = false;
+    private long? _lastLatencyMs;
+    private string _lastLatencyLabel = "";
+    private string _lastLatencyError = "";
+    private bool _isLatencyTesting;
+    private long? _lastServerLatencyMs;
+    private string _lastServerLatencyLabel = "";
+    private string _lastServerLatencyError = "";
+    private bool _isServerPingTesting;
 
     public ConnectionProfile()
     {
@@ -63,6 +71,13 @@ public class ConnectionProfile : INotifyPropertyChanged
             OnPropertyChanged(nameof(TunnelTypeDisplay));
             OnPropertyChanged(nameof(EndpointDisplay));
             OnPropertyChanged(nameof(ReadinessText));
+            OnPropertyChanged(nameof(PingButtonToolTipText));
+            OnPropertyChanged(nameof(PingResultToolTipText));
+            OnPropertyChanged(nameof(ReadinessColor));
+            OnPropertyChanged(nameof(LatencyDisplayText));
+            OnPropertyChanged(nameof(LatencyColor));
+            OnPropertyChanged(nameof(ServerLatencyDisplayText));
+            OnPropertyChanged(nameof(ServerLatencyColor));
         };
     }
 
@@ -259,12 +274,35 @@ public class ConnectionProfile : INotifyPropertyChanged
     public string EndpointDisplay => TunnelType switch
     {
         TunnelType.L2tpIpsec => string.IsNullOrWhiteSpace(ServerAddress) ? LocalizationService.Instance.T("آدرس سرور وارد نشده") : ServerAddress,
-        TunnelType.V2Ray => string.IsNullOrWhiteSpace(V2RayConfig) ? LocalizationService.Instance.T("کانفیگ وارد نشده") : LocalizationService.Instance.T("کانفیگ آماده"),
+        TunnelType.V2Ray => string.IsNullOrWhiteSpace(V2RayConfig)
+            ? LocalizationService.Instance.T("کانفیگ وارد نشده")
+            : V2RayEndpointHelper.TryExtract(V2RayConfig, out var host, out var port) && !string.IsNullOrWhiteSpace(host)
+                ? $"{host}:{port}"
+                : LocalizationService.Instance.T("کانفیگ آماده"),
         TunnelType.OpenVpn => string.IsNullOrWhiteSpace(OpenVpnConfigPath) ? LocalizationService.Instance.T("فایل .ovpn انتخاب نشده") : Path.GetFileName(OpenVpnConfigPath),
         TunnelType.SocksProxy => string.IsNullOrWhiteSpace(ProxyServerAddress) ? LocalizationService.Instance.T("آدرس پراکسی وارد نشده") : $"{ProxyServerAddress}:{ProxyPort}",
         TunnelType.WireGuard => string.IsNullOrWhiteSpace(WireGuardConfigPath) ? (string.IsNullOrWhiteSpace(WireGuardConfig) ? LocalizationService.Instance.T("کانفیگ WireGuard وارد نشده") : LocalizationService.Instance.T("کانفیگ WireGuard آماده")) : Path.GetFileName(WireGuardConfigPath),
         _ => ""
     };
+
+    [JsonIgnore]
+    public bool SupportsConnectionPing => ConnectionPingSupport.SupportsProfile(this);
+
+    [JsonIgnore]
+    public bool SupportsServerPing => IsReady;
+
+    [JsonIgnore]
+    public bool ShowsServerPingButton => SupportsConnectionPing;
+
+    [JsonIgnore]
+    public string PingButtonToolTipText => SupportsConnectionPing
+        ? LocalizationService.Instance.T("پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link")
+        : LocalizationService.Instance.T("پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP)");
+
+    [JsonIgnore]
+    public string PingResultToolTipText => SupportsConnectionPing
+        ? LocalizationService.Instance.T("نتیجه پینگ اتصال از مسیر کانفیگ")
+        : LocalizationService.Instance.T("نتیجه پینگ سرور (بدون عبور از تونل)");
 
     [JsonIgnore]
     public bool IsReady => TunnelType switch
@@ -283,6 +321,222 @@ public class ConnectionProfile : INotifyPropertyChanged
 
     [JsonIgnore]
     public string ReadinessColor => IsReady ? "#6CCB5F" : "#E0A020";
+
+    [JsonIgnore]
+    public long? LastLatencyMs
+    {
+        get => _lastLatencyMs;
+        set
+        {
+            if (_lastLatencyMs == value) return;
+            _lastLatencyMs = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LatencyDisplayText));
+            OnPropertyChanged(nameof(LatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public string LastLatencyLabel
+    {
+        get => _lastLatencyLabel;
+        set
+        {
+            if (_lastLatencyLabel == value) return;
+            _lastLatencyLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LatencyDisplayText));
+        }
+    }
+
+    [JsonIgnore]
+    public string LastLatencyError
+    {
+        get => _lastLatencyError;
+        set
+        {
+            if (_lastLatencyError == value) return;
+            _lastLatencyError = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LatencyDisplayText));
+            OnPropertyChanged(nameof(LatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsLatencyTesting
+    {
+        get => _isLatencyTesting;
+        set
+        {
+            if (_isLatencyTesting == value) return;
+            _isLatencyTesting = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LatencyDisplayText));
+            OnPropertyChanged(nameof(LatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public string LatencyDisplayText
+    {
+        get
+        {
+            if (IsLatencyTesting)
+                return LocalizationService.Instance.T("در حال تست...");
+
+            if (LastLatencyMs.HasValue)
+            {
+                var tech = string.IsNullOrWhiteSpace(LastLatencyLabel) ? "" : $"{LastLatencyLabel} ";
+                if (SupportsConnectionPing)
+                {
+                    return LocalizationService.Instance.Format(
+                        "{0} {1}{2} ms",
+                        LocalizationService.Instance.T("اتصال:"),
+                        tech,
+                        LastLatencyMs);
+                }
+
+                return $"{tech}{LastLatencyMs} ms".Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(LastLatencyError))
+                return "—";
+
+            return SupportsConnectionPing
+                ? LocalizationService.Instance.Format("{0} {1}", LocalizationService.Instance.T("اتصال:"), LastLatencyError)
+                : LastLatencyError;
+        }
+    }
+
+    [JsonIgnore]
+    public string LatencyColor
+    {
+        get
+        {
+            if (IsLatencyTesting)
+                return "#E0A020";
+            if (!LastLatencyMs.HasValue)
+                return string.IsNullOrWhiteSpace(LastLatencyError) ? "#888888" : "#E05252";
+            return LastLatencyMs.Value switch
+            {
+                < 200 => "#6CCB5F",
+                < 500 => "#E0A020",
+                _ => "#E05252"
+            };
+        }
+    }
+
+    public void ResetLatencyResult()
+    {
+        LastLatencyMs = null;
+        LastLatencyLabel = "";
+        LastLatencyError = "";
+    }
+
+    [JsonIgnore]
+    public long? LastServerLatencyMs
+    {
+        get => _lastServerLatencyMs;
+        set
+        {
+            if (_lastServerLatencyMs == value) return;
+            _lastServerLatencyMs = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ServerLatencyDisplayText));
+            OnPropertyChanged(nameof(ServerLatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public string LastServerLatencyLabel
+    {
+        get => _lastServerLatencyLabel;
+        set
+        {
+            if (_lastServerLatencyLabel == value) return;
+            _lastServerLatencyLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ServerLatencyDisplayText));
+        }
+    }
+
+    [JsonIgnore]
+    public string LastServerLatencyError
+    {
+        get => _lastServerLatencyError;
+        set
+        {
+            if (_lastServerLatencyError == value) return;
+            _lastServerLatencyError = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ServerLatencyDisplayText));
+            OnPropertyChanged(nameof(ServerLatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsServerPingTesting
+    {
+        get => _isServerPingTesting;
+        set
+        {
+            if (_isServerPingTesting == value) return;
+            _isServerPingTesting = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ServerLatencyDisplayText));
+            OnPropertyChanged(nameof(ServerLatencyColor));
+        }
+    }
+
+    [JsonIgnore]
+    public string ServerLatencyDisplayText
+    {
+        get
+        {
+            if (IsServerPingTesting)
+                return LocalizationService.Instance.T("در حال تست...");
+
+            if (LastServerLatencyMs.HasValue)
+            {
+                var tech = string.IsNullOrWhiteSpace(LastServerLatencyLabel) ? "" : $"{LastServerLatencyLabel} ";
+                return LocalizationService.Instance.Format(
+                    "{0} {1}{2} ms",
+                    LocalizationService.Instance.T("سرور:"),
+                    tech,
+                    LastServerLatencyMs);
+            }
+
+            return string.IsNullOrWhiteSpace(LastServerLatencyError)
+                ? "—"
+                : LocalizationService.Instance.Format("{0} {1}", LocalizationService.Instance.T("سرور:"), LastServerLatencyError);
+        }
+    }
+
+    [JsonIgnore]
+    public string ServerLatencyColor
+    {
+        get
+        {
+            if (IsServerPingTesting)
+                return "#E0A020";
+            if (!LastServerLatencyMs.HasValue)
+                return string.IsNullOrWhiteSpace(LastServerLatencyError) ? "#888888" : "#E05252";
+            return LastServerLatencyMs.Value switch
+            {
+                < 200 => "#6CCB5F",
+                < 500 => "#E0A020",
+                _ => "#E05252"
+            };
+        }
+    }
+
+    public void ResetServerPingResult()
+    {
+        LastServerLatencyMs = null;
+        LastServerLatencyLabel = "";
+        LastServerLatencyError = "";
+    }
 
     public ServerConfig ToServerConfig() => new()
     {
@@ -324,7 +578,12 @@ public class ConnectionProfile : INotifyPropertyChanged
         OnPropertyChanged(nameof(TunnelTypeDisplay));
         OnPropertyChanged(nameof(EndpointDisplay));
         OnPropertyChanged(nameof(IsReady));
-        OnPropertyChanged(nameof(ReadinessText));
+            OnPropertyChanged(nameof(SupportsConnectionPing));
+            OnPropertyChanged(nameof(SupportsServerPing));
+            OnPropertyChanged(nameof(ShowsServerPingButton));
+            OnPropertyChanged(nameof(PingButtonToolTipText));
+            OnPropertyChanged(nameof(PingResultToolTipText));
+            OnPropertyChanged(nameof(ReadinessText));
         OnPropertyChanged(nameof(ReadinessColor));
         return true;
     }

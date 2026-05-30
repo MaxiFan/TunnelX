@@ -58,6 +58,21 @@ public partial class MainViewModel : INotifyPropertyChanged
         DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected);
         EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected);
         SelectProfileCommand = new RelayCommand(SelectProfile, _ => !IsConnected);
+        ImportConfigsFromClipboardCommand = new RelayCommand(_ => ImportConfigsFromClipboard(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs);
+        TestSelectedProfileLatencyCommand = new RelayCommand(
+            _ => _ = TestProfileLatencyAsync(SelectedProfile),
+            _ => CanUseConnectionTabQuickActions && !IsTestingProfileLatency && !IsTestingAllProfilesLatency && !IsTestingProfileServerPing
+                 && SelectedProfile is { SupportsServerPing: true });
+        TestProfileLatencyCommand = new RelayCommand(
+            p => _ = TestProfileLatencyAsync(p as ConnectionProfile),
+            p => CanUseConnectionTabQuickActions && !IsTestingProfileLatency && !IsTestingAllProfilesLatency && !IsTestingProfileServerPing
+                 && p is ConnectionProfile profile && profile.SupportsServerPing);
+        TestProfileServerPingCommand = new RelayCommand(
+            p => _ = TestProfileServerPingAsync(p as ConnectionProfile),
+            p => CanUseConnectionTabQuickActions && !IsTestingProfileServerPing && !IsTestingProfileLatency && !IsTestingAllProfilesLatency
+                 && p is ConnectionProfile profile && profile.ShowsServerPingButton);
+        TestAllProfilesLatencyCommand = new RelayCommand(_ => _ = TestAllProfilesLatencyAsync(), _ => CanUseConnectionTabQuickActions && !IsTestingAllProfilesLatency && !IsTestingProfileLatency && HasReadyProfilesForLatencyTest);
+        CancelProfileLatencyTestCommand = new RelayCommand(_ => CancelProfileLatencyTest(), _ => IsTestingProfileLatency || IsTestingAllProfilesLatency);
 
         // History command
         ClearHistoryCommand = new RelayCommand(_ => ClearHistory());
@@ -371,6 +386,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         get => _connectionState;
         set
         {
+            var previous = _connectionState;
             _connectionState = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsConnected));
@@ -380,6 +396,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(IsOpenVpnConnectionPending));
             OnPropertyChanged(nameof(IsConnectionPending));
+            OnPropertyChanged(nameof(CanUseConnectionTabQuickActions));
             OnPropertyChanged(nameof(ConnectingTitleText));
             OnPropertyChanged(nameof(ConnectionTabTitleText));
             OnPropertyChanged(nameof(ConnectingHelpText));
@@ -388,6 +405,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ConnectionErrorDetail));
             RaiseHealthStatusChanged();
             CommandManager.InvalidateRequerySuggested();
+
+            if (value == ConnectionState.Error && previous != ConnectionState.Error)
+                QueueConnectionErrorDialog();
         }
     }
 
@@ -706,10 +726,28 @@ public partial class MainViewModel : INotifyPropertyChanged
     };
 
     private string _statusText = "آماده اتصال";
+    private string? _statusFormatArg;
+
     public string StatusText
     {
-        get => LocalizationService.Instance.T(_statusText);
-        set { _statusText = value; OnPropertyChanged(); }
+        get => string.IsNullOrWhiteSpace(_statusFormatArg)
+            ? LocalizationService.Instance.T(_statusText)
+            : LocalizationService.Instance.Format(_statusText, _statusFormatArg);
+        set
+        {
+            var (key, formatArg) = LocalizationService.Instance.ResolveStatusStorage(value);
+            _statusText = key;
+            _statusFormatArg = formatArg;
+            OnPropertyChanged();
+        }
+    }
+
+    private void NormalizeStatusTextStorage()
+    {
+        var snapshot = StatusText;
+        var (key, formatArg) = LocalizationService.Instance.ResolveStatusStorage(snapshot);
+        _statusText = key;
+        _statusFormatArg = formatArg;
     }
 
     /// <summary>
@@ -1727,6 +1765,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand DuplicateProfileCommand { get; }
     public ICommand EditProfileCommand { get; }
     public ICommand SelectProfileCommand { get; }
+    public ICommand ImportConfigsFromClipboardCommand { get; }
+    public ICommand TestSelectedProfileLatencyCommand { get; }
+    public ICommand TestProfileLatencyCommand { get; }
+    public ICommand TestProfileServerPingCommand { get; }
+    public ICommand TestAllProfilesLatencyCommand { get; }
+    public ICommand CancelProfileLatencyTestCommand { get; }
     public ICommand ClearHistoryCommand { get; }
     public ICommand AddExcludeCommand { get; }
     public ICommand RemoveExcludeCommand { get; }
@@ -2069,10 +2113,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void ShowOpenVpnInstallGuideDialog()
     {
         var openDownload = Helpers.DialogService.Action(
-            "کانفیگ OpenVPN اضافه شد، اما برای اتصال باید OpenVPN Community را نصب کنید.\nدکمه دانلود را بزنید، نصب را کامل کنید، سپس به TunnelX برگردید و اتصال را بزنید.",
-            "راهنمای نصب OpenVPN",
-            "دانلود OpenVPN",
-            "بعداً نصب می‌کنم");
+            LocalizationService.Instance.T(
+                "TunnelX خودش openvpn.exe را اجرا می‌کند؛ لازم نیست برنامه OpenVPN Connect باز باشد.\n\nبرای Split Tunneling باید OpenVPN Community (openvpn.exe) نصب باشد، نه فقط OpenVPN Connect.\n\nدکمه دانلود را بزنید، نصب Community را کامل کنید، سپس دوباره اتصال را بزنید."),
+            LocalizationService.Instance.T("راهنمای نصب OpenVPN"),
+            LocalizationService.Instance.T("دانلود OpenVPN"),
+            LocalizationService.Instance.T("بعداً نصب می‌کنم"));
         if (openDownload)
             OpenExternalLink(OpenVpnCommunityDownloadUrl);
     }
@@ -2502,6 +2547,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AppTextAlignment));
         OnPropertyChanged(nameof(AppStartHorizontalAlignment));
         OnPropertyChanged(nameof(AppEndHorizontalAlignment));
+        NormalizeStatusTextStorage();
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ConfigValidationText));
         OnPropertyChanged(nameof(GameModeStatusText));
@@ -2563,8 +2609,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CancelConnectionToolTipText));
         OnPropertyChanged(nameof(ConnectionStagesHeaderText));
         OnPropertyChanged(nameof(ConnectionErrorHeaderText));
-        OnPropertyChanged(nameof(ConnectionErrorDetail));
-        OnPropertyChanged(nameof(ShowConnectionErrorPanel));
+        OnPropertyChanged(nameof(ConnectionErrorCloseButtonText));
         RefreshConnectionProgressLocalization();
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(MixedProxyPortStatusText));
@@ -2614,6 +2659,28 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(PingTargetToolTipText));
         OnPropertyChanged(nameof(PingTargetButtonToolTipText));
         OnPropertyChanged(nameof(ConnectedServerPingToolTipText));
+        OnPropertyChanged(nameof(ImportConfigsButtonText));
+        OnPropertyChanged(nameof(ImportConfigsToolTipText));
+        OnPropertyChanged(nameof(TestProfileLatencyButtonText));
+        OnPropertyChanged(nameof(TestAllProfilesLatencyButtonText));
+        OnPropertyChanged(nameof(TestProfileLatencyToolTipText));
+        OnPropertyChanged(nameof(TestProfileServerPingToolTipText));
+        OnPropertyChanged(nameof(SingleProfileServerPingButtonText));
+        OnPropertyChanged(nameof(TestProfileServerPingButtonText));
+        OnPropertyChanged(nameof(ProfileServerPingResultToolTipText));
+        OnPropertyChanged(nameof(TestAllProfilesLatencyToolTipText));
+        OnPropertyChanged(nameof(ProfileLatencyResultToolTipText));
+        OnPropertyChanged(nameof(ProfileQuickActionsHintText));
+        OnPropertyChanged(nameof(ProfileQuickActionsStatusText));
+        OnPropertyChanged(nameof(HasProfileQuickActionsStatusText));
+        OnPropertyChanged(nameof(AddProfileManuallyButtonText));
+        OnPropertyChanged(nameof(ProfilesSectionTitleText));
+        OnPropertyChanged(nameof(ProfileEditButtonText));
+        OnPropertyChanged(nameof(ProfileDeleteButtonText));
+        OnPropertyChanged(nameof(SingleProfileLatencyButtonText));
+        OnPropertyChanged(nameof(CancelProfileLatencyTestButtonText));
+        OnPropertyChanged(nameof(CanUseConnectionTabQuickActions));
+        OnPropertyChanged(nameof(IsConnectionTabSelected));
         OnPropertyChanged(nameof(ProfileCountText));
         OnPropertyChanged(nameof(RoutingRulesTabToolTipText));
         OnPropertyChanged(nameof(RoutingRulesTitleText));
