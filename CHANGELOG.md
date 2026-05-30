@@ -11,6 +11,8 @@
 - تست تأخیر و پینگ قبل از اتصال برای مقایسه سرورها
 - پنجره راهنما هنگام خطای اتصال با توضیح ساده‌تر
 - پینگ سرور در حالت متصل
+- نمایش مصرف ترافیک هر برنامه هنگام اتصال (ارسال و دریافت)
+- مرتب‌سازی خودکار برنامه‌ها بر اساس بیشترین مصرف
 
 #### رفع باگ‌ها
 - اصلاح جهت و چیدمان متن در رابط دوزبانه
@@ -20,7 +22,8 @@
 
 #### بهبودها
 - بازطراحی تب اتصال و لیست کانفیگ‌ها
-- نمایش بهتر مصرف ترافیک
+- نمایش خواناتر حجم ترافیک (KB، MB، GB)
+- نمایش مجموع مصرف برنامه‌های تونل و سایر ترافیک تونل
 - روانی و سرعت بیشتر رابط کاربری
 - گسترش متن‌های فارسی و انگلیسی
 
@@ -31,6 +34,8 @@
 - Latency and ping test before connecting to compare servers
 - Helpful connection error dialog with clearer guidance
 - Server ping while connected
+- Per-app tunnel traffic while connected (upload and download)
+- Apps automatically sorted by highest usage
 
 #### Fixed
 - Text direction and layout in the bilingual interface
@@ -40,7 +45,8 @@
 
 #### Improved
 - Redesigned connection tab and config list
-- Better traffic usage display
+- Clearer traffic size display (KB, MB, GB)
+- Separate totals for tunnel apps and other tunnel traffic
 - Smoother, faster user interface
 - Expanded Persian and English translations
 
