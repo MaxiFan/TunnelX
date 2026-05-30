@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.1.2 - 2026-05-30
+
 ### فارسی
 
 #### قابلیت‌های جدید
@@ -250,6 +252,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
