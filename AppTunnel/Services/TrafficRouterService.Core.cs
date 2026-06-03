@@ -140,6 +140,8 @@ public partial class TrafficRouterService : IDisposable
     private long _directBytesSent;
     private long _directBytesReceived;
     private long _diagTick;
+    private int _statsReportTick;
+    private string _lastStatsHealthSignature = "";
     private System.Threading.Timer? _statsTimer;
     private Task? _vpnSniffTask;
     private Task? _physSniffTask;
@@ -669,14 +671,23 @@ public partial class TrafficRouterService : IDisposable
         string mode = _fullRouteEnabled ? "full-route" : "split";
         string leakState = leakConfirmed > 0 ? "LEAK-DETECTED" :
             (leakBlocked > 0 ? "PROTECTED" : "OK");
-        Logger.Info(
-            $"[STATS] mode={mode} health={leakState} " +
-            $"flows={flowEst}/{flowDel} targetHit={flowHit} excluded={flowExcl} ipv6Drop={ipv6Blocked} " +
-            $"routes={Interlocked.Read(ref _statRoutesAdded)}({Interlocked.Read(ref _statRoutesFailed)}fail)/{_addedRoutes.Count}active " +
-            $"rewriteOut={netOutRw} wgSeen={wgOutSeen} wgRewrite={wgOutRw} wgDns={wgDnsRedirect} wgQuicDrop={wgQuicDropped} rewriteIn={netInRw} rewriteFail={netOutFail} " +
-            $"vpnOut={vpnOut}/{vpnOutOurIp} vpnIn={vpnIn}/{vpnInOurIp} nat={_natTable.Count} " +
-            $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
-            $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count}");
+        var statsTick = Interlocked.Increment(ref _statsReportTick);
+        var healthSignature = $"{mode}|{leakState}";
+        var logStats = leakState != "OK" ||
+                       !string.Equals(_lastStatsHealthSignature, healthSignature, StringComparison.Ordinal) ||
+                       statsTick % 6 == 0;
+        if (logStats)
+        {
+            _lastStatsHealthSignature = healthSignature;
+            Logger.Info(
+                $"[STATS] mode={mode} health={leakState} " +
+                $"flows={flowEst}/{flowDel} targetHit={flowHit} excluded={flowExcl} ipv6Drop={ipv6Blocked} " +
+                $"routes={Interlocked.Read(ref _statRoutesAdded)}({Interlocked.Read(ref _statRoutesFailed)}fail)/{_addedRoutes.Count}active " +
+                $"rewriteOut={netOutRw} wgSeen={wgOutSeen} wgRewrite={wgOutRw} wgDns={wgDnsRedirect} wgQuicDrop={wgQuicDropped} rewriteIn={netInRw} rewriteFail={netOutFail} " +
+                $"vpnOut={vpnOut}/{vpnOutOurIp} vpnIn={vpnIn}/{vpnInOurIp} nat={_natTable.Count} " +
+                $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
+                $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count}");
+        }
         if (_vpnServerIsUdpOnly)
         {
             var wgTicks = Interlocked.Increment(ref _diagTick);
@@ -1173,6 +1184,8 @@ public partial class TrafficRouterService : IDisposable
         Interlocked.Exchange(ref _statFlowExcluded, 0);
         Interlocked.Exchange(ref _statFlowIPv6Blocked, 0);
         Interlocked.Exchange(ref _diagTick, 0);
+        Interlocked.Exchange(ref _statsReportTick, 0);
+        _lastStatsHealthSignature = "";
         _fullRouteEnabled = false;
         _inboundRewriteCount = 0;
         _redirectCount = 0;

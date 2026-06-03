@@ -16,6 +16,7 @@ public class XrayTunnelProvider : ITunnelProvider
     private const int DefaultTunMtu = 1500;
     private const int DefaultMixedProxyPort = 2080;
     private const int DefaultXraySocksPort = 2081;
+    private const int DefaultXrayLoopbackBridgePort = 2082;
     private const int TunInterfaceWaitSeconds = 20;
 
     private readonly string _workDir;
@@ -85,20 +86,36 @@ public class XrayTunnelProvider : ITunnelProvider
             }
 
             using var xraySocksPortReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultXraySocksPort);
+            using var loopbackBridgePortReservation = LocalPortReservation.ReservePreferredOrRandom(
+                DefaultXrayLoopbackBridgePort,
+                xraySocksPortReservation.Port);
             using var mixedProxyPortReservation = LocalPortReservation.ReservePreferredOrRandom(
                 DefaultMixedProxyPort,
-                xraySocksPortReservation.Port);
+                xraySocksPortReservation.Port,
+                loopbackBridgePortReservation.Port);
             var xraySocksPort = xraySocksPortReservation.Port;
+            var loopbackBridgePort = loopbackBridgePortReservation.Port;
             var mixedProxyPort = mixedProxyPortReservation.Port;
-            Logger.Info($"[PORT] Xray SOCKS=127.0.0.1:{xraySocksPort}, mixed proxy=127.0.0.1:{mixedProxyPort}");
+            var resolvedServerIp = ExtractOutboundServerAddress(outbound);
+            var tlsServerName = ExtractOutboundTlsServerName(outbound);
+            Logger.Info(
+                $"[PORT] Xray SOCKS=127.0.0.1:{xraySocksPort}, HTTP bridge=127.0.0.1:{loopbackBridgePort}, mixed proxy=127.0.0.1:{mixedProxyPort}");
 
-            var xrayJson = BuildXraySocksConfig(outbound, xraySocksPort);
-            var singBoxJson = BuildTunBridgeConfig(tunMtu, mixedProxyPort, xraySocksPort);
+            var xrayJson = BuildXrayBridgeConfig(outbound, xraySocksPort, loopbackBridgePort);
+            var singBoxJson = BuildTunBridgeConfig(
+                tunMtu,
+                mixedProxyPort,
+                xraySocksPort,
+                loopbackBridgePort,
+                resolvedServerIp,
+                tlsServerName,
+                serverHost);
 
             await File.WriteAllTextAsync(_xrayConfigPath, xrayJson, new UTF8Encoding(false), ct);
             await File.WriteAllTextAsync(_singBoxConfigPath, singBoxJson, new UTF8Encoding(false), ct);
 
             xraySocksPortReservation.Dispose();
+            loopbackBridgePortReservation.Dispose();
             mixedProxyPortReservation.Dispose();
 
             _xrayProcess = StartProcess(
@@ -409,7 +426,7 @@ public class XrayTunnelProvider : ITunnelProvider
         return tlsSettings;
     }
 
-    private static string BuildXraySocksConfig(JsonObject outbound, int xraySocksPort)
+    private static string BuildXrayBridgeConfig(JsonObject outbound, int xraySocksPort, int loopbackBridgePort)
     {
         var doc = new JsonObject
         {
@@ -421,7 +438,7 @@ public class XrayTunnelProvider : ITunnelProvider
                     ["0"] = new JsonObject
                     {
                         ["handshake"] = 12,
-                        ["connIdle"] = 300
+                        ["connIdle"] = 600
                     }
                 }
             },
@@ -429,6 +446,7 @@ public class XrayTunnelProvider : ITunnelProvider
             {
                 new JsonObject
                 {
+                    ["tag"] = "socks-in",
                     ["listen"] = "127.0.0.1",
                     ["port"] = xraySocksPort,
                     ["protocol"] = "socks",
@@ -437,12 +455,55 @@ public class XrayTunnelProvider : ITunnelProvider
                         ["udp"] = true,
                         ["auth"] = "noauth"
                     }
+                },
+                new JsonObject
+                {
+                    ["tag"] = "http-bridge",
+                    ["listen"] = "127.0.0.1",
+                    ["port"] = loopbackBridgePort,
+                    ["protocol"] = "http",
+                    ["settings"] = new JsonObject
+                    {
+                        ["timeout"] = 600,
+                        ["allowTransparent"] = false
+                    },
+                    ["sniffing"] = new JsonObject
+                    {
+                        ["enabled"] = true,
+                        ["destOverride"] = new JsonArray { "http", "tls", "quic" }
+                    }
                 }
             },
             ["outbounds"] = new JsonArray { outbound }
         };
 
         return JsonString(doc);
+    }
+
+    private static string? ExtractOutboundServerAddress(JsonObject outbound)
+        => outbound["settings"]?["vnext"]?[0]?["address"]?.GetValue<string>();
+
+    private static string? ExtractOutboundTlsServerName(JsonObject outbound)
+    {
+        var tlsSni = outbound["streamSettings"]?["tlsSettings"]?["serverName"]?.GetValue<string>();
+        if (!string.IsNullOrWhiteSpace(tlsSni))
+            return tlsSni;
+
+        return outbound["streamSettings"]?["xhttpSettings"]?["host"]?.GetValue<string>();
+    }
+
+    private static IEnumerable<string> CollectVpnServerBypassDomains(string serverHost, string? tlsServerName)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in new[] { serverHost, tlsServerName })
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+                continue;
+            if (System.Net.IPAddress.TryParse(candidate, out _))
+                continue;
+            if (seen.Add(candidate))
+                yield return candidate;
+        }
     }
 
     private static void ApplyDnsOptimizationToOutbound(JsonObject outbound)
@@ -470,8 +531,68 @@ public class XrayTunnelProvider : ITunnelProvider
         }
     }
 
-    private static string BuildTunBridgeConfig(int tunMtu, int mixedProxyPort, int xraySocksPort)
+    private static string BuildTunBridgeConfig(
+        int tunMtu,
+        int mixedProxyPort,
+        int xraySocksPort,
+        int loopbackBridgePort,
+        string? resolvedServerIp,
+        string? tlsServerName,
+        string serverHost)
     {
+        var routeRules = new JsonArray
+        {
+            new JsonObject
+            {
+                ["ip_cidr"] = new JsonArray { "127.0.0.0/8" },
+                ["outbound"] = "direct"
+            }
+        };
+
+        if (!string.IsNullOrWhiteSpace(resolvedServerIp) &&
+            System.Net.IPAddress.TryParse(resolvedServerIp, out _))
+        {
+            routeRules.Add(new JsonObject
+            {
+                ["ip_cidr"] = new JsonArray { $"{resolvedServerIp}/32" },
+                ["outbound"] = "direct"
+            });
+        }
+
+        foreach (var domain in CollectVpnServerBypassDomains(serverHost, tlsServerName))
+        {
+            routeRules.Add(new JsonObject
+            {
+                ["domain"] = new JsonArray { domain },
+                ["outbound"] = "direct"
+            });
+        }
+
+        // HTTP bridge handles TUN TCP only; SOCKS carries TUN UDP (DNS/QUIC) to Xray.
+        routeRules.Add(new JsonObject
+        {
+            ["inbound"] = new JsonArray { "tun-in" },
+            ["ip_is_private"] = true,
+            ["outbound"] = "direct"
+        });
+        routeRules.Add(new JsonObject
+        {
+            ["inbound"] = new JsonArray { "tun-in" },
+            ["network"] = new JsonArray { "udp" },
+            ["outbound"] = "xray-socks"
+        });
+        routeRules.Add(new JsonObject
+        {
+            ["inbound"] = new JsonArray { "tun-in" },
+            ["network"] = new JsonArray { "tcp" },
+            ["outbound"] = "xray-http-bridge"
+        });
+        routeRules.Add(new JsonObject
+        {
+            ["inbound"] = new JsonArray { "mixed-in" },
+            ["outbound"] = "xray-socks"
+        });
+
         var doc = new JsonObject
         {
             ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = false },
@@ -486,7 +607,8 @@ public class XrayTunnelProvider : ITunnelProvider
                     ["mtu"] = TunnelPerformanceTuner.ClampTunMtu(tunMtu),
                     ["auto_route"] = false,
                     ["strict_route"] = false,
-                    ["stack"] = "gvisor"
+                    ["stack"] = "gvisor",
+                    ["sniff"] = true
                 },
                 new JsonObject
                 {
@@ -500,6 +622,13 @@ public class XrayTunnelProvider : ITunnelProvider
             {
                 new JsonObject
                 {
+                    ["type"] = "http",
+                    ["tag"] = "xray-http-bridge",
+                    ["server"] = "127.0.0.1",
+                    ["server_port"] = loopbackBridgePort
+                },
+                new JsonObject
+                {
                     ["type"] = "socks",
                     ["tag"] = "xray-socks",
                     ["server"] = "127.0.0.1",
@@ -511,19 +640,7 @@ public class XrayTunnelProvider : ITunnelProvider
             ["route"] = new JsonObject
             {
                 ["auto_detect_interface"] = true,
-                ["rules"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["inbound"] = new JsonArray { "tun-in" },
-                        ["outbound"] = "xray-socks"
-                    },
-                    new JsonObject
-                    {
-                        ["inbound"] = new JsonArray { "mixed-in" },
-                        ["outbound"] = "xray-socks"
-                    }
-                }
+                ["rules"] = routeRules
             }
         };
 
@@ -548,7 +665,8 @@ public class XrayTunnelProvider : ITunnelProvider
                 transport["path"]?.GetValue<string>() ?? "/",
                 ReadSingBoxHost(transport, tls?["server_name"]?.GetValue<string>() ?? server),
                 transport["mode"]?.GetValue<string>(),
-                transport["headers"]?.DeepClone())
+                transport["headers"]?.DeepClone(),
+                transport["extra"]?.DeepClone())
         };
 
         if (tls != null)
@@ -587,7 +705,8 @@ public class XrayTunnelProvider : ITunnelProvider
                 query.GetValueOrDefault("path", "/"),
                 host,
                 GetQueryValue(query, "mode"),
-                null)
+                null,
+                query: query)
         };
 
         if (security.Equals("tls", StringComparison.OrdinalIgnoreCase))
@@ -653,7 +772,13 @@ public class XrayTunnelProvider : ITunnelProvider
         };
     }
 
-    private static JsonObject BuildXhttpSettings(string path, string host, string? mode, JsonNode? headers)
+    private static JsonObject BuildXhttpSettings(
+        string path,
+        string host,
+        string? mode,
+        JsonNode? headers,
+        JsonNode? transportExtra = null,
+        IReadOnlyDictionary<string, string>? query = null)
     {
         var settings = new JsonObject
         {
@@ -666,8 +791,41 @@ public class XrayTunnelProvider : ITunnelProvider
         if (headers != null)
             settings["headers"] = headers;
 
+        var extra = transportExtra?.DeepClone() ?? BuildXhttpExtraFromQuery(query);
+        if (extra != null)
+            settings["extra"] = extra;
+
         return settings;
     }
+
+    private static JsonNode? BuildXhttpExtraFromQuery(IReadOnlyDictionary<string, string>? query)
+    {
+        if (query == null)
+            return null;
+
+        var padding = TryGetQueryValue(query, "x_padding_bytes");
+        if (string.IsNullOrWhiteSpace(padding))
+            padding = TryGetQueryValue(query, "xPaddingBytes");
+
+        if (!string.IsNullOrWhiteSpace(padding))
+            return new JsonObject { ["xPaddingBytes"] = padding };
+
+        var extraRaw = TryGetQueryValue(query, "extra");
+        if (string.IsNullOrWhiteSpace(extraRaw))
+            return null;
+
+        try
+        {
+            return JsonNode.Parse(Uri.UnescapeDataString(extraRaw))?.DeepClone();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryGetQueryValue(IReadOnlyDictionary<string, string> query, string key)
+        => query.TryGetValue(key, out var value) ? value : null;
 
     private static string ReadSingBoxHost(JsonObject transport, string fallback)
     {
