@@ -425,6 +425,8 @@
     <!-- Toggle Switch Style (using CheckBox) -->
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
         <Setter Property="Cursor" Value="Hand"/>
+        <!-- Keep thumb Left/Right mapping stable under RTL parents. -->
+        <Setter Property="FlowDirection" Value="LeftToRight"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">

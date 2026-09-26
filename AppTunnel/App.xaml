@@ -54,8 +54,11 @@
             <Style TargetType="{x:Type ComboBox}">
                 <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
             </Style>
+            <!-- Keep the check glyph LTR so RTL (fa) does not mirror/invert the tick.
+                 Labels stay outside the CheckBox or use a separate TextBlock with AppFlowDirection. -->
             <Style TargetType="{x:Type CheckBox}">
                 <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+                <Setter Property="FlowDirection" Value="LeftToRight"/>
             </Style>
             <Style TargetType="{x:Type ListBox}">
                 <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>

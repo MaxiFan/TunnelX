@@ -460,10 +460,12 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
+                                <!-- FlowDirection LTR: default CheckBox checkmark mirrors under RTL (fa). -->
                                 <CheckBox Grid.Column="0"
                                           VerticalAlignment="Center"
                                           Cursor="Hand"
                                           Focusable="False"
+                                          FlowDirection="LeftToRight"
                                           IsChecked="{Binding IsSelectedForDeletion, Mode=TwoWay}"
                                           IsEnabled="{Binding DataContext.CanBulkSelectProfiles, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                           ToolTip="{Binding DataContext.ProfileBulkSelectToolTipText, RelativeSource={RelativeSource AncestorType=ListBox}}"
