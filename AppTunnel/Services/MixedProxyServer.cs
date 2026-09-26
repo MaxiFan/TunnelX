@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using TunnelX.ProxyLifecycle;
 
 namespace AppTunnel.Services;
 
@@ -21,6 +22,7 @@ internal sealed class MixedProxyServer
     private long _connCount;
     private long _connActive;
     private Action<IPAddress>? _ensureRoute;
+    private readonly ProxyClientSessionTable _sessions = new();
 
     public MixedProxyServer(int listenPort = 1080)
     {
@@ -42,27 +44,40 @@ internal sealed class MixedProxyServer
         _bindEndpoint = new IPEndPoint(bindIp, 0);
         _ensureRoute = ensureRoute;
 
+        var announced = false;
         try
         {
             _listener = new TcpListener(IPAddress.Loopback, _listenPort);
             _listener.Start();
             _cts = new CancellationTokenSource();
             Logger.Info($"[MIXED] Listening on 127.0.0.1:{_listenPort}, outbound bind={vpnLocalIp}");
+            LocalProxyAnnouncements.Connected(_listenPort);
+            announced = true;
             _ = Task.Run(() => AcceptLoop(_cts.Token));
         }
         catch (Exception ex)
         {
             Logger.Error($"[MIXED] Failed to start listener on port {_listenPort}: {ex.Message}");
+            try { _listener?.Stop(); } catch { }
             _listener = null;
+            _cts = null;
+            if (announced)
+                LocalProxyAnnouncements.Disconnected(_listenPort);
         }
     }
 
     public void Stop()
     {
+        var wasRunning = _listener != null;
         try { _cts?.Cancel(); } catch { }
+        // Reset accepted clients before dropping the listener so proxies such as
+        // Telethon observe the disconnect (run_until_disconnected) immediately.
+        _sessions.AbortAll();
         try { _listener?.Stop(); } catch { }
         _listener = null;
         _cts = null;
+        if (wasRunning)
+            LocalProxyAnnouncements.Disconnected(_listenPort);
     }
 
     private async Task AcceptLoop(CancellationToken ct)
@@ -90,6 +105,7 @@ internal sealed class MixedProxyServer
     {
         long connId = Interlocked.Increment(ref _connCount);
         Interlocked.Increment(ref _connActive);
+        _sessions.Track(connId, client);
         try
         {
             client.NoDelay = true;
@@ -123,6 +139,7 @@ internal sealed class MixedProxyServer
         }
         finally
         {
+            _sessions.Untrack(connId);
             try { client.Dispose(); } catch { }
             Interlocked.Decrement(ref _connActive);
         }

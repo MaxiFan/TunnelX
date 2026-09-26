@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TunnelX.ProxyLifecycle</RootNamespace>
+    <Description>Local proxy disconnect and reconnect announcements for TunnelX.</Description>
+  </PropertyGroup>
+</Project>

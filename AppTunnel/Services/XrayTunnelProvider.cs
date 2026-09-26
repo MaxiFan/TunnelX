@@ -28,8 +28,10 @@ public class XrayTunnelProvider : ITunnelProvider
     private Process? _xrayProcess;
     private Process? _singBoxProcess;
     private int _vpnInterfaceIndex = -1;
+    private int _tunnelFailedFired;
 
     public ConnectionStatus Status { get; } = new();
+    public Action? OnTunnelFailed { get; set; }
 
     public XrayTunnelProvider()
     {
@@ -135,6 +137,8 @@ public class XrayTunnelProvider : ITunnelProvider
                 "[sing-box bridge stderr]");
 
             Logger.Info($"sing-box TUN bridge started (PID {_singBoxProcess.Id})");
+            WatchProcessExit(_xrayProcess, "xray");
+            WatchProcessExit(_singBoxProcess, "sing-box bridge");
             ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Complete, "راه‌اندازی پل TUN (sing-box)");
 
             ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
@@ -168,6 +172,7 @@ public class XrayTunnelProvider : ITunnelProvider
             Status.VpnInterfaceIndex = interfaceIndex;
             Status.SingBoxMixedPort = mixedProxyPort;
             Status.XraySocksInboundPort = xraySocksPort;
+            LocalProxyAnnouncements.Connected(mixedProxyPort, xraySocksPort);
             Status.Message = "Xray connected";
 
             Logger.Info($"Xray tunnel up via sing-box TUN bridge — interface index {interfaceIndex}, server={Status.VpnServerIp}");
@@ -194,8 +199,12 @@ public class XrayTunnelProvider : ITunnelProvider
     {
         Status.State = ConnectionState.Disconnecting;
         Status.Message = LocalizationService.Instance.T("در حال قطع اتصال Xray...");
+        _tunnelFailedFired = 1;
+        var mixedPort = Status.SingBoxMixedPort;
+        var socksPort = Status.XraySocksInboundPort;
 
         await KillProcessAsync();
+        LocalProxyAnnouncements.Disconnected(mixedPort, socksPort);
 
         TryDelete(_xrayConfigPath);
         TryDelete(_singBoxConfigPath);
@@ -982,6 +991,25 @@ public class XrayTunnelProvider : ITunnelProvider
         }
 
         return -1;
+    }
+
+    private void WatchProcessExit(Process process, string name)
+    {
+        process.Exited += (_, _) =>
+        {
+            if (Status.State != ConnectionState.Connected)
+                return;
+            Logger.Warning($"[WATCHDOG] {name} process exited — triggering tunnel failure");
+            TriggerTunnelFailed();
+        };
+    }
+
+    private void TriggerTunnelFailed()
+    {
+        if (Interlocked.Exchange(ref _tunnelFailedFired, 1) != 0)
+            return;
+        Logger.Warning("[WATCHDOG] Invoking OnTunnelFailed callback");
+        Task.Run(() => OnTunnelFailed?.Invoke());
     }
 
     private static Process StartProcess(string fileName, string arguments, string stdoutPrefix, string stderrPrefix)

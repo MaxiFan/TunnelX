@@ -87,6 +87,8 @@
 
 اگر از پراکسی آماده استفاده می‌کنید، نوع پروفایل <span dir="ltr">SOCKS5/HTTP Proxy</span> را انتخاب کنید و سرور، پورت و در صورت نیاز نام کاربری و رمز عبور را وارد کنید. این حالت برای عبور برنامه‌های انتخاب‌شده از یک پراکسی خارجی مناسب است و با پراکسی محلی <span dir="ltr">`127.0.0.1`</span> تفاوت دارد.
 
+وقتی پراکسی محلی (و ورودی‌های <span dir="ltr">SOCKS/mixed</span> موتور) قطع یا دوباره وصل می‌شود، <span dir="ltr">TunnelX</span> نشست‌های فعال را می‌بندد و <span dir="ltr">`127.0.0.1:port`</span> را اعلام می‌کند. نحوه مشاهده برای کلاینت‌هایی مثل <span dir="ltr">Telethon</span> در <span dir="ltr">`docs/PROXY_LIFECYCLE.md`</span> آمده است.
+
 ### <span dir="ltr">WireGuard</span>
 
 یک فایل استاندارد <span dir="ltr">`.conf`</span> وایرگارد را انتخاب کنید یا متن آن را داخل پروفایل پیست کنید. <span dir="ltr">TunnelX</span> کانفیگ <span dir="ltr">WireGuard</span> را از طریق <span dir="ltr">sing-box</span> اجرا می‌کند و مدیریت مسیرهای ویندوز را خودش انجام می‌دهد؛ بنابراین <span dir="ltr">Split tunneling</span> برنامه‌ها، قوانین <span dir="ltr">Include/Exclude</span>، تغییر مسیر <span dir="ltr">DNS</span>، محافظ <span dir="ltr">IPv6</span> و حالت <span dir="ltr">Full-route</span> با همان موتور مسیر فعلی کار می‌کنند.

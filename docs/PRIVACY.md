@@ -4,7 +4,11 @@ TunnelX is designed as a local desktop app.
 
 ## Data Stored Locally
 
+<<<<<<< HEAD
 The app may store profiles, selected apps, include/exclude destinations, connection history, subscription URLs, and logs on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature. Subscription URLs are stored in `subscriptions.json` and can contain access tokens.
+=======
+The app may store profiles, selected apps, include/exclude destinations, connection history, and logs (including `proxy-lifecycle.log`) on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature.
+>>>>>>> origin/cursor/proxy-disconnect-announcements-1a9d
 
 ## Network Data
 

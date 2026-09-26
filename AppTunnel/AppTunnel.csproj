@@ -26,6 +26,9 @@
     <FileVersion>2.1.2.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\TunnelX.ProxyLifecycle\TunnelX.ProxyLifecycle.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />

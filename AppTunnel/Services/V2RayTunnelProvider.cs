@@ -169,7 +169,17 @@ public class V2RayTunnelProvider : ITunnelProvider
             //   * "missing default interface" is also transient — it can fire
             //     during a brief Wi-Fi roam or routing-table flux. We require it
             //     to be reported repeatedly within a short window before acting.
-            //   * Process exit is the only definitive failure (handled elsewhere).
+            //   * Process exit is a definitive failure and closes the local mixed
+            //     inbound. That must surface as a tunnel drop so clients on the
+            //     built-in proxy are reset and the endpoint is announced down.
+            _process.Exited += (_, _) =>
+            {
+                if (Status.State == ConnectionState.Connected)
+                {
+                    Logger.Warning("[WATCHDOG] sing-box process exited — triggering tunnel failure");
+                    TriggerTunnelFailed();
+                }
+            };
             _process.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data == null) return;
@@ -281,6 +291,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             Status.VpnServerPort     = statusServerPort;
             Status.VpnInterfaceIndex = interfaceIndex;
             Status.SingBoxMixedPort  = mixedProxyPort;
+            LocalProxyAnnouncements.Connected(mixedProxyPort);
             Status.Message           = config.TunnelType == TunnelType.SocksProxy ? "Proxy connected" : "V2Ray connected";
             Logger.Info($"{(config.TunnelType == TunnelType.SocksProxy ? "Proxy" : "V2Ray")} tunnel up — interface index {interfaceIndex}, server={Status.VpnServerIp}:{Status.VpnServerPort}");
 
@@ -314,8 +325,10 @@ public class V2RayTunnelProvider : ITunnelProvider
 
         // Stop watchdog from firing during/after deliberate disconnect.
         _tunnelFailedFired = 1;
+        var mixedPort = Status.SingBoxMixedPort;
 
         await KillProcessAsync();
+        LocalProxyAnnouncements.Disconnected(mixedPort);
 
         try { if (File.Exists(_configPath)) File.Delete(_configPath); }
         catch { /* best effort */ }
