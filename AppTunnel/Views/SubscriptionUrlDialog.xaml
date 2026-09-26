@@ -1,0 +1,89 @@
+<Window x:Class="AppTunnel.Views.SubscriptionUrlDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="clr-namespace:AppTunnel.Services"
+        Title="افزودن لینک اشتراک"
+        Width="460"
+        MinWidth="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FlowDirection="{Binding Source={x:Static services:LocalizationService.Instance}, Path=FlowDirection}"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize">
+
+    <Border Background="{StaticResource BackgroundBrush}"
+            CornerRadius="16"
+            BorderBrush="{StaticResource PrimaryBrush}"
+            BorderThickness="1.5">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="30" Opacity="0.7" ShadowDepth="0"/>
+        </Border.Effect>
+
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="TitleText"
+                       Grid.Row="0"
+                       Text="افزودن لینک اشتراک"
+                       FontSize="15"
+                       FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       HorizontalAlignment="Stretch"
+                       TextAlignment="{Binding Source={x:Static services:LocalizationService.Instance}, Path=TextAlignment}"
+                       Margin="0,0,0,8"/>
+
+            <TextBlock x:Name="HintText"
+                       Grid.Row="1"
+                       Text="لینک http یا https که لیست کانفیگ برمی‌گرداند. پشتیبانی: لیست base64 لینک‌های v2ray، لینک خام، و sing-box JSON."
+                       FontSize="12"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Stretch"
+                       TextAlignment="{Binding Source={x:Static services:LocalizationService.Instance}, Path=TextAlignment}"
+                       Margin="0,0,0,12"
+                       LineHeight="20"/>
+
+            <TextBox x:Name="UrlBox"
+                     Grid.Row="2"
+                     Style="{StaticResource ModernTextBox}"
+                     FlowDirection="LeftToRight"
+                     TextAlignment="Left"
+                     FontFamily="Consolas, Segoe UI"
+                     MinHeight="36"
+                     Margin="0,0,0,16"
+                     Tag="https://example.com/sub/..."/>
+
+            <StackPanel Grid.Row="3"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        FlowDirection="{Binding Source={x:Static services:LocalizationService.Instance}, Path=FlowDirection}">
+                <Button x:Name="PrimaryButton"
+                        Content="افزودن"
+                        Style="{StaticResource PrimaryButton}"
+                        MinWidth="96"
+                        Margin="0,0,6,0"
+                        FontSize="13"
+                        Padding="16,8"
+                        IsDefault="True"
+                        Click="OnAddClick"/>
+                <Button x:Name="SecondaryButton"
+                        Content="لغو"
+                        Style="{StaticResource SecondaryButton}"
+                        MinWidth="96"
+                        FontSize="13"
+                        Padding="16,8"
+                        IsCancel="True"
+                        Click="OnCancelClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

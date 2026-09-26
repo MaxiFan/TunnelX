@@ -308,6 +308,8 @@ public partial class MainViewModel
 
         var clone = CloneProfile(source);
         clone.Name = LocalizationService.Instance.Format("{0} (کپی)", source.Name);
+        clone.SubscriptionId = "";
+        clone.SubscriptionNodeKey = "";
 
         if (ProfileEditorDialog.Show(clone, "کپی پروفایل", System.Windows.Application.Current.MainWindow) != true)
             return;
@@ -572,7 +574,9 @@ public partial class MainViewModel
         MixedProxyPort = source.MixedProxyPort,
         AutoTuneMtu = source.AutoTuneMtu,
         EnableDnsOptimization = source.EnableDnsOptimization,
-        EnableGameMode = source.EnableGameMode
+        EnableGameMode = source.EnableGameMode,
+        SubscriptionId = source.SubscriptionId,
+        SubscriptionNodeKey = source.SubscriptionNodeKey
     };
 
     private static void ApplyProfileValues(ConnectionProfile target, ConnectionProfile source)
@@ -600,6 +604,8 @@ public partial class MainViewModel
         target.AutoTuneMtu = source.AutoTuneMtu;
         target.EnableDnsOptimization = source.EnableDnsOptimization;
         target.EnableGameMode = source.EnableGameMode;
+        target.SubscriptionId = source.SubscriptionId;
+        target.SubscriptionNodeKey = source.SubscriptionNodeKey;
     }
 
     private void RaiseProfileCardChanged()
