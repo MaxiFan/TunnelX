@@ -110,7 +110,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             _ => _ = CheckForUpdatesAsync(silent: false),
             _ => !IsCheckingForUpdates && IsConnected);
         OpenLatestReleaseCommand = new RelayCommand(_ => OpenExternalLink(LatestReleaseUrl), _ => !string.IsNullOrWhiteSpace(LatestReleaseUrl));
-        ToggleLanguageCommand = new RelayCommand(_ => ToggleLanguage());
 
         CancelConnectionCommand = new RelayCommand(
             _ => _ = CancelConnectingAsync(),
@@ -489,8 +488,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             _profileService.SaveAppSettings(_appSettings);
         }
     }
-
-    public string LanguageToggleText => LocalizationService.Instance.ToggleLanguageText;
 
     public string UiLanguageSetting
     {
@@ -2103,7 +2100,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand CopyHelpCryptoAddressCommand { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand OpenLatestReleaseCommand { get; }
-    public ICommand ToggleLanguageCommand { get; }
 
     #endregion
 
@@ -2842,7 +2838,6 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasGitHubInstallCount));
         OnPropertyChanged(nameof(GitHubInstallCountText));
         OnPropertyChanged(nameof(AdAudienceText));
-        OnPropertyChanged(nameof(LanguageToggleText));
         OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppFlowDirection));
@@ -2872,16 +2867,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void ToggleLanguage()
-    {
-        LocalizationService.Instance.ToggleLanguage();
-        _appSettings.Language = LocalizationService.Instance.EffectiveLanguage;
-        _profileService.SaveAppSettings(_appSettings);
-    }
-
     private void OnLanguageChanged()
     {
-        OnPropertyChanged(nameof(LanguageToggleText));
         OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppTitleText));

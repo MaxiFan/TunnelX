@@ -57,27 +57,9 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
     public System.Windows.TextAlignment TextAlignment => System.Windows.TextAlignment.Left;
     public System.Windows.HorizontalAlignment StartHorizontalAlignment => System.Windows.HorizontalAlignment.Left;
     public System.Windows.HorizontalAlignment EndHorizontalAlignment => System.Windows.HorizontalAlignment.Right;
-    public string ToggleLanguageText => _effectiveLanguage switch
-    {
-        PersianLanguage => "English",
-        EnglishLanguage => "Русский",
-        _ => "فارسی"
-    };
-
     public void Initialize(string? savedLanguage)
     {
         SetLanguageInternal(string.IsNullOrWhiteSpace(savedLanguage) ? AutoLanguage : savedLanguage!, raiseChanged: false);
-    }
-
-    public void ToggleLanguage()
-    {
-        var next = _effectiveLanguage switch
-        {
-            PersianLanguage => EnglishLanguage,
-            EnglishLanguage => RussianLanguage,
-            _ => PersianLanguage
-        };
-        SetLanguage(next);
     }
 
     public void SetLanguage(string language)
@@ -266,7 +248,6 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         OnPropertyChanged(nameof(TextAlignment));
         OnPropertyChanged(nameof(StartHorizontalAlignment));
         OnPropertyChanged(nameof(EndHorizontalAlignment));
-        OnPropertyChanged(nameof(ToggleLanguageText));
 
         if (!raiseChanged) return;
 

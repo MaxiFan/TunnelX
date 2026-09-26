@@ -898,15 +898,20 @@
                                 HorizontalAlignment="{Binding AppEndHorizontalAlignment}"
                                 VerticalAlignment="Center"
                                 FlowDirection="{Binding AppFlowDirection}">
-                        <Button Content="{Binding LanguageToggleText}"
-                                Command="{Binding ToggleLanguageCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                Padding="9,4"
-                                FontSize="10"
-                                Margin="0,0,0,0"
-                                VerticalAlignment="Center"
-                                FlowDirection="LeftToRight"
-                                ToolTip="تغییر زبان"/>
+                        <ComboBox Style="{StaticResource DarkComboBox}"
+                                  SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
+                                  SelectedValuePath="Tag"
+                                  Width="118"
+                                  FontSize="10"
+                                  Padding="8,4"
+                                  VerticalAlignment="Center"
+                                  FlowDirection="LeftToRight"
+                                  ToolTip="تغییر زبان">
+                            <ComboBoxItem Content="خودکار" Tag="auto"/>
+                            <ComboBoxItem Content="فارسی" Tag="fa-IR"/>
+                            <ComboBoxItem Content="English" Tag="en-US"/>
+                            <ComboBoxItem Content="Русский" Tag="ru-RU"/>
+                        </ComboBox>
                         <Button Content="{Binding FooterTelegramButtonText}"
                                 Command="{Binding OpenTelegramChannelCommand}"
                                 Style="{StaticResource SecondaryButton}"

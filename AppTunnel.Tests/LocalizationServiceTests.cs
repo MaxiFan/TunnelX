@@ -142,6 +142,22 @@ public class LocalizationServiceTests : IDisposable
     }
 
     [Fact]
+    public void SetLanguage_persists_setting_codes_for_all_options()
+    {
+        foreach (var code in new[]
+                 {
+                     LocalizationService.AutoLanguage,
+                     LocalizationService.PersianLanguage,
+                     LocalizationService.EnglishLanguage,
+                     LocalizationService.RussianLanguage
+                 })
+        {
+            _loc.SetLanguage(code);
+            Assert.Equal(code, _loc.LanguageSetting);
+        }
+    }
+
+    [Fact]
     public void Known_ui_keys_resolve_in_english_and_russian()
     {
         const string key = "پروفایل جدید";

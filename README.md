@@ -54,7 +54,7 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 - **Connection health check** before the connected screen: end-to-end TCP probes through the tunnel SOCKS path, with live per-host latency during the verify step. Defaults are `google.com` and `cloudflare.com`. Settings can add custom URLs, hostnames, or IPs and can turn the public defaults off
 - Connected dashboard: **exit IP** with country name and flag image (geo and flag PNG fetched through the tunnel, not direct from the local network)
 - Windows tray notifications with clearer error guidance, optional release-notes action on update cards, and scheduled update check after connect
-- Persian, English, and Russian desktop UI with automatic language detection, manual language switching in Settings, and correct RTL/LTR layout behavior
+- Persian, English, and Russian desktop UI with automatic language detection, a language dropdown in Settings (and the footer), and correct RTL/LTR layout behavior
 - Dynamic local port selection for V2Ray/Xray internals to reduce `2080/2081` binding conflicts
 
 ## Quick Start
