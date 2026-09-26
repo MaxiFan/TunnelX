@@ -10,6 +10,24 @@ public partial class TrafficRouterService
     private const string IntranetCheckHost = "isna.ir";
     private const string InternationalCheckHost = "google.com";
 
+    // When public health endpoints are disabled, CONN-CHECK follows the first custom target
+    // instead of treating google.com as the international reachability signal.
+    private bool _usePublicInternationalCheck = true;
+    private string? _customHealthCheckHost;
+    private int _customHealthCheckPort = 443;
+
+    /// <summary>
+    /// Aligns split/full-route diagnostics with the connection health-check settings.
+    /// Public defaults keep the historical google.com checks. A custom-only plan probes that
+    /// host through the tunnel and does not install a host route for private addresses.
+    /// </summary>
+    public void ConfigureHealthConnectivity(bool usePublicInternationalCheck, string? customHost, int customPort)
+    {
+        _customHealthCheckHost = string.IsNullOrWhiteSpace(customHost) ? null : customHost.Trim();
+        _customHealthCheckPort = customPort is > 0 and <= 65535 ? customPort : 443;
+        _usePublicInternationalCheck = usePublicInternationalCheck || _customHealthCheckHost == null;
+    }
+
     private async Task RunConnectivityChecks()
     {
         try
@@ -90,10 +108,23 @@ public partial class TrafficRouterService
             // 3. Resolve an international hostname and ping it via the default
             //    route. This is diagnostic only: on some networks this can
             //    legitimately succeed without indicating full-route VPN mode.
+            //    Custom-only health checks skip this google.com observation and
+            //    use the configured target for the tunnel TCP probe instead.
+            var intlHost = InternationalCheckHost;
+            var intlPort = 443;
+            var skipDefaultRoutePing = false;
+            if (!_usePublicInternationalCheck && !string.IsNullOrWhiteSpace(_customHealthCheckHost))
+            {
+                intlHost = _customHealthCheckHost ?? InternationalCheckHost;
+                intlPort = _customHealthCheckPort;
+                skipDefaultRoutePing = true;
+                Logger.Info($"[CONN-CHECK] Public health endpoints disabled — tunnel reachability target is {intlHost}:{intlPort}");
+            }
+
             IPAddress? intlIp = null;
             try
             {
-                intlIp = await DnsResolverCache.ResolveFirstIpv4Async(InternationalCheckHost, CancellationToken.None);
+                intlIp = await DnsResolverCache.ResolveFirstIpv4Async(intlHost, CancellationToken.None);
             }
             catch { }
 
@@ -107,30 +138,39 @@ public partial class TrafficRouterService
                 //    SKIP when a /32 host route for this IP is already installed (e.g.
                 //    chrome started connecting before this check ran) — that route would
                 //    win over the default route and give a false "Success, 0ms" result.
-                if (!routeAlreadyPresent)
+                if (!skipDefaultRoutePing)
                 {
-                    try
+                    if (!routeAlreadyPresent)
                     {
-                        var reply = ping.Send(intlIp, 3000);
-                        if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
-                            Logger.Info($"[CONN-CHECK] Ping {InternationalCheckHost} ({intlIp}, default route): {reply.Status}, {reply.RoundtripTime}ms — direct route is reachable; not a leak by itself");
-                        else
-                            Logger.Info($"[CONN-CHECK] Ping {InternationalCheckHost} ({intlIp}, default route): {reply.Status} — OK, international not reachable via default route (split-tunnel working)");
+                        try
+                        {
+                            var reply = ping.Send(intlIp, 3000);
+                            if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
+                                Logger.Info($"[CONN-CHECK] Ping {intlHost} ({intlIp}, default route): {reply.Status}, {reply.RoundtripTime}ms — direct route is reachable; not a leak by itself");
+                            else
+                                Logger.Info($"[CONN-CHECK] Ping {intlHost} ({intlIp}, default route): {reply.Status} — OK, international not reachable via default route (split-tunnel working)");
+                        }
+                        catch (Exception ex) { Logger.Warning($"[CONN-CHECK] Ping international (default route) failed: {ex.Message}"); }
                     }
-                    catch (Exception ex) { Logger.Warning($"[CONN-CHECK] Ping international (default route) failed: {ex.Message}"); }
-                }
-                else
-                {
-                    Logger.Info($"[CONN-CHECK] Ping {InternationalCheckHost} default-route check skipped — host route already present (app traffic in flight)");
+                    else
+                    {
+                        Logger.Info($"[CONN-CHECK] Ping {intlHost} default-route check skipped — host route already present (app traffic in flight)");
+                    }
                 }
 
-                // 4. End-to-end international reachability through the tunnel.
+                // 4. End-to-end reachability through the tunnel.
                 //    Raw TcpClient.Connect to an IP via the TUN NIC is NOT reliable for
                 //    V2Ray/Xray (gvisor completes the local handshake in 1–3 ms before
                 //    the remote path is ready). Use CONN-VERIFY (SOCKS + TLS RTT) instead.
+                //    Private custom targets stay on the SOCKS probe so a /32 is not
+                //    installed over a LAN address.
                 if (_vpnServerSkipBareTcpProbe)
                 {
-                    Logger.Info($"[CONN-CHECK] TCP {InternationalCheckHost} via VPN: skipped (TUN local handshake is misleading for WebSocket proxies — see CONN-VERIFY RTT)");
+                    Logger.Info($"[CONN-CHECK] TCP {intlHost} via VPN: skipped (TUN local handshake is misleading for WebSocket proxies — see CONN-VERIFY RTT)");
+                }
+                else if (skipDefaultRoutePing && HealthCheckTargets.IsPrivateOrLinkLocal(intlIp))
+                {
+                    Logger.Info($"[CONN-CHECK] TCP {intlHost} via VPN skipped — {intlIp} is private; the SOCKS health check covers it without installing a host route");
                 }
                 else
                 {
@@ -139,7 +179,7 @@ public partial class TrafficRouterService
                         if (_vpnServerIsUdpOnly &&
                             !await WaitForVpnIngressAsync(TimeSpan.FromSeconds(10)))
                         {
-                            Logger.Info($"[CONN-CHECK] TCP {InternationalCheckHost} via VPN delayed — WireGuard has not observed inbound tunnel traffic yet");
+                            Logger.Info($"[CONN-CHECK] TCP {intlHost} via VPN delayed — WireGuard has not observed inbound tunnel traffic yet");
                             WireGuardHandshakeDiagnostics.LogStatus();
                             return;
                         }
@@ -154,19 +194,19 @@ public partial class TrafficRouterService
                         var sw = System.Diagnostics.Stopwatch.StartNew();
                         using var tcp = new System.Net.Sockets.TcpClient();
                         using var tcpCts = new System.Threading.CancellationTokenSource(3000);
-                        await tcp.ConnectAsync(intlIp, 443, tcpCts.Token);
+                        await tcp.ConnectAsync(intlIp, intlPort, tcpCts.Token);
                         sw.Stop();
-                        Logger.Info($"[CONN-CHECK] TCP {InternationalCheckHost} ({intlIp}:443, via VPN tunnel): {sw.ElapsedMilliseconds}ms (raw TCP — may be lower than SOCKS/TLS probes)");
+                        Logger.Info($"[CONN-CHECK] TCP {intlHost} ({intlIp}:{intlPort}, via VPN tunnel): {sw.ElapsedMilliseconds}ms (raw TCP — may be lower than SOCKS/TLS probes)");
 
                         if (routeAdded && !_ipToProcess.ContainsKey(intlNbo))
                             ScheduleDelayedRouteRemoval(intlNbo);
                     }
-                    catch (OperationCanceledException) { Logger.Warning($"[CONN-CHECK] TCP {InternationalCheckHost} via VPN: timeout (3000ms)"); }
-                    catch (Exception ex) { Logger.Warning($"[CONN-CHECK] TCP {InternationalCheckHost} via VPN failed: {ex.Message}"); }
+                    catch (OperationCanceledException) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN: timeout (3000ms)"); }
+                    catch (Exception ex) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN failed: {ex.Message}"); }
                 }
             }
             else
-                Logger.Warning($"[CONN-CHECK] Could not resolve {InternationalCheckHost} — skipping international checks");
+                Logger.Warning($"[CONN-CHECK] Could not resolve {intlHost} — skipping international checks");
         }
         catch { }
     }

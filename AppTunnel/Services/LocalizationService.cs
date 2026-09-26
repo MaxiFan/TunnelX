@@ -11,17 +11,19 @@ using AppTunnel.Helpers;
 
 namespace AppTunnel.Services;
 
-public sealed class LocalizationService : INotifyPropertyChanged
+public sealed partial class LocalizationService : INotifyPropertyChanged
 {
     public const string AutoLanguage = "auto";
     public const string PersianLanguage = "fa-IR";
     public const string EnglishLanguage = "en-US";
+    public const string RussianLanguage = "ru-RU";
 
     public static LocalizationService Instance { get; } = new();
 
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new(StringComparer.Ordinal)
     {
-        [EnglishLanguage] = EnglishTranslations()
+        [EnglishLanguage] = EnglishTranslations(),
+        [RussianLanguage] = RussianTranslations()
     };
 
     private string _languageSetting = AutoLanguage;
@@ -29,11 +31,16 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     private LocalizationService()
     {
-        EventManager.RegisterClassHandler(
-            typeof(FrameworkElement),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnFrameworkElementLoaded),
-            handledEventsToo: true);
+        // WPF class handlers must be registered on an STA thread. The app always
+        // touches this service from the UI thread; unit tests may not.
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            EventManager.RegisterClassHandler(
+                typeof(FrameworkElement),
+                FrameworkElement.LoadedEvent,
+                new RoutedEventHandler(OnFrameworkElementLoaded),
+                handledEventsToo: true);
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -50,16 +57,9 @@ public sealed class LocalizationService : INotifyPropertyChanged
     public System.Windows.TextAlignment TextAlignment => System.Windows.TextAlignment.Left;
     public System.Windows.HorizontalAlignment StartHorizontalAlignment => System.Windows.HorizontalAlignment.Left;
     public System.Windows.HorizontalAlignment EndHorizontalAlignment => System.Windows.HorizontalAlignment.Right;
-    public string ToggleLanguageText => IsRightToLeft ? "English" : "فارسی";
-
     public void Initialize(string? savedLanguage)
     {
         SetLanguageInternal(string.IsNullOrWhiteSpace(savedLanguage) ? AutoLanguage : savedLanguage!, raiseChanged: false);
-    }
-
-    public void ToggleLanguage()
-    {
-        SetLanguage(IsRightToLeft ? EnglishLanguage : PersianLanguage);
     }
 
     public void SetLanguage(string language)
@@ -67,19 +67,62 @@ public sealed class LocalizationService : INotifyPropertyChanged
         SetLanguageInternal(language, raiseChanged: true);
     }
 
-    public string T(string source)
+    /// <summary>
+    /// Resolves a Persian source key for the effective UI language.
+    /// Missing or empty translations never throw: try the active language, then
+    /// English, then Persian (the source key), then the key name as a last-resort placeholder.
+    /// </summary>
+    public string T(string? source)
     {
-        if (string.IsNullOrEmpty(source) || IsRightToLeft)
+        if (string.IsNullOrEmpty(source))
+            return source ?? string.Empty;
+
+        // Persian UI displays source keys as-is (they are already fa).
+        if (IsRightToLeft)
             return source;
 
-        return _translations.TryGetValue(_effectiveLanguage, out var table) &&
-               table.TryGetValue(source, out var translated)
-            ? translated
-            : source;
+        if (TryResolveTranslation(_effectiveLanguage, source, out var translated))
+            return translated;
+
+        // Fallback chain: English → Persian (source key) → key-name placeholder.
+        if (!string.Equals(_effectiveLanguage, EnglishLanguage, StringComparison.Ordinal) &&
+            TryResolveTranslation(EnglishLanguage, source, out translated))
+            return translated;
+
+        // Persian keys are the canonical source strings; the key name is the final placeholder.
+        return source;
     }
 
-    public string Format(string sourceFormat, params object?[] args)
-        => string.Format(CultureInfo.CurrentCulture, T(sourceFormat), args);
+    public string Format(string? sourceFormat, params object?[] args)
+    {
+        var template = T(sourceFormat);
+        if (args is null || args.Length == 0)
+            return template;
+
+        try
+        {
+            return string.Format(CultureInfo.CurrentCulture, template, args);
+        }
+        catch (FormatException)
+        {
+            // Never crash the UI on a bad format string / argument mismatch.
+            return template;
+        }
+    }
+
+    private bool TryResolveTranslation(string language, string source, out string translated)
+    {
+        translated = string.Empty;
+        if (!_translations.TryGetValue(language, out var table))
+            return false;
+        if (!table.TryGetValue(source, out var value))
+            return false;
+        // Empty entries are treated as missing so English/Persian fallbacks can run.
+        if (string.IsNullOrEmpty(value))
+            return false;
+        translated = value;
+        return true;
+    }
 
     /// <summary>
     /// Normalizes a display string (Persian key, English translation, or formatted message)
@@ -105,9 +148,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
             if (TryMatchFormatTemplate(key, message, out var arg))
                 return (key, arg);
 
-            if (table.TryGetValue(key, out var englishTemplate) &&
-                TryMatchFormatTemplate(englishTemplate, message, out arg))
-                return (key, arg);
+            foreach (var langTable in _translations.Values)
+            {
+                if (langTable.TryGetValue(key, out var template) &&
+                    TryMatchFormatTemplate(template, message, out arg))
+                    return (key, arg);
+            }
         }
 
         return (message, null);
@@ -202,7 +248,6 @@ public sealed class LocalizationService : INotifyPropertyChanged
         OnPropertyChanged(nameof(TextAlignment));
         OnPropertyChanged(nameof(StartHorizontalAlignment));
         OnPropertyChanged(nameof(EndHorizontalAlignment));
-        OnPropertyChanged(nameof(ToggleLanguageText));
 
         if (!raiseChanged) return;
 
@@ -222,11 +267,15 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     private static string NormalizeLanguageSetting(string language)
     {
-        if (string.Equals(language, EnglishLanguage, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(language, EnglishLanguage, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(language, "en", StringComparison.OrdinalIgnoreCase))
             return EnglishLanguage;
         if (string.Equals(language, PersianLanguage, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(language, "fa", StringComparison.OrdinalIgnoreCase))
             return PersianLanguage;
+        if (string.Equals(language, RussianLanguage, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(language, "ru", StringComparison.OrdinalIgnoreCase))
+            return RussianLanguage;
         return AutoLanguage;
     }
 
@@ -235,10 +284,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
         if (setting != AutoLanguage)
             return setting;
 
-        var ui = CultureInfo.CurrentUICulture;
-        return ui.TwoLetterISOLanguageName.Equals("fa", StringComparison.OrdinalIgnoreCase)
-            ? PersianLanguage
-            : EnglishLanguage;
+        var two = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        if (two.Equals("fa", StringComparison.OrdinalIgnoreCase))
+            return PersianLanguage;
+        if (two.Equals("ru", StringComparison.OrdinalIgnoreCase))
+            return RussianLanguage;
+        return EnglishLanguage;
     }
 
     private static bool HasBinding(DependencyObject element, DependencyProperty property)
@@ -480,6 +531,11 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["🧦 پروکسی محلی"] = "🧦 Local Proxy",
         ["پورت پروکسی محلی (SOCKS5/HTTP)"] = "Local proxy port (SOCKS5/HTTP)",
         ["پورت داخلی 127.0.0.1 برای پروکسی SOCKS5 و HTTP"] = "Internal 127.0.0.1 port for SOCKS5 and HTTP proxy",
+        ["نام کاربری پیش‌فرض پروکسی محلی"] = "Default local proxy username",
+        ["رمز عبور پیش‌فرض پروکسی محلی"] = "Default local proxy password",
+        ["نام کاربری اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"] = "Optional username for clients that authenticate to the local proxy",
+        ["رمز عبور اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"] = "Optional password for clients that authenticate to the local proxy",
+        ["اگر نام کاربری خالی باشد، پروکسی محلی بدون احراز هویت کار می‌کند. وقتی روی پروفایل نام کاربری جداگانه‌ای تنظیم نشده باشد، همین پیش‌فرض‌ها هنگام گوش‌دادن اعمال می‌شوند."] = "If the username is empty, the local proxy runs without authentication. When a profile has no separate username, these defaults are applied while listening.",
         ["پورت‌های زیر 1024 و چند پورت رایج مثل 2080، 3000، 3389، 8080 و 9090 مجاز نیستند تا با سرویس‌های سیستم یا ابزارهای توسعه تداخل نداشته باشند."] = "Ports below 1024 and common ports like 2080, 3000, 3389, 8080, and 9090 are blocked to avoid conflicts with system services or developer tools.",
         ["🚀 بهینه‌سازی تونل"] = "🚀 Tunnel Optimization",
         ["MTU خودکار"] = "Automatic MTU",
@@ -508,6 +564,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["شروع سریع"] = "Quick Start",
         ["۱. پروفایل"] = "1. Profile",
         ["کانفیگ را بسازید و نوع اتصال را انتخاب کنید."] = "Create a config and select its connection type.",
+        ["کانفیگ بسازید، از لینک اشتراک بگیرید، یا از کلیپ‌بورد پیست کنید."] = "Create a config, import a subscription link, or paste from the clipboard.",
         ["۲. برنامه‌ها"] = "2. Apps",
         ["برنامه‌های داخل تونل را انتخاب یا دستی اضافه کنید."] = "Select tunneled apps or add them manually.",
         ["۳. قوانین"] = "3. Rules",
@@ -518,6 +575,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["فقط فیلدهای مربوط به نوع انتخاب‌شده را پر کنید. هر پروفایل برنامه‌ها و قوانین مسیر خودش را نگه می‌دارد."] = "Only fill the fields for the selected type. Each profile keeps its own apps and routing rules.",
         ["بخش‌های اپ"] = "App Areas",
         ["پروفایل فعال، تست سرور، اتصال/قطع اتصال، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."] = "Active profile, server test, connect/disconnect, exit IP, ping, usage, and manual proxy guidance are here.",
+        ["پروفایل فعال، اشتراک (sub)، تست تأخیر قبل از اتصال، اتصال/قطع، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."] = "Active profile, subscription (sub), pre-connect latency test, connect/disconnect, exit IP, ping, usage, and manual proxy guidance are here.",
         ["نکات مهم"] = "Essentials",
         ["حالت عادی: فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی وارد تونل می‌شوند."] = "Normal mode: only selected apps and included destinations use the tunnel.",
         ["Full Route: کل سیستم وارد تونل می‌شود؛ استثناها می‌توانند مستقیم بمانند."] = "Full Route: the whole system uses the tunnel; exclusions can stay direct.",
@@ -634,6 +692,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["کانفیگ WireGuard باید یک بخش [Peer] داشته باشد"] = "WireGuard config must contain one [Peer] section",
         ["در این نسخه فقط کانفیگ WireGuard تک-peer پشتیبانی می‌شود"] = "This version supports single-peer WireGuard configs only",
         ["کلید خصوصی WireGuard وارد نشده است"] = "WireGuard private key is missing",
+        ["کانفیگ WireGuard باید یک Address IPv4 داشته باشد"] = "WireGuard config must include an IPv4 Address",
         ["آدرس Interface در کانفیگ WireGuard وارد نشده است"] = "WireGuard interface address is missing",
         ["کلید عمومی Peer در کانفیگ WireGuard وارد نشده است"] = "WireGuard peer public key is missing",
         ["Endpoint در کانفیگ WireGuard وارد نشده است"] = "WireGuard endpoint is missing",
@@ -751,6 +810,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["سلامت اتصال با هشدار — {0}"] = "Connection health warning — {0}",
         ["آداپتر VPN فعال"] = "VPN adapter up",
         ["آداپتر VPN شناسایی نشد"] = "VPN adapter not detected",
+        ["آداپتر VPN برای اسپلیت‌تانلینگ آماده نیست (ifIdx={0})."] = "VPN adapter is not ready for split tunneling (ifIdx={0}).",
         ["اسپلیت‌تانلینگ فعال"] = "Split tunneling active",
         ["اسپلیت‌تانلینگ غیرفعال"] = "Split tunneling inactive",
         ["بدون نشت ترافیک"] = "No traffic leaks",
@@ -861,6 +921,39 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["این پورت همین حالا توسط برنامه دیگری استفاده می‌شود"] = "This port is currently used by another app",
         ["پورت SOCKS5 داخلی آماده است"] = "Internal SOCKS5 port is ready",
         ["چسباندن کانفیگ"] = "Paste config",
+        ["افزودن اشتراک"] = "Add subscription",
+        ["در حال دریافت اشتراک..."] = "Fetching subscription...",
+        ["لینک اشتراک (sub) را دریافت می‌کند و کانفیگ‌های آن را به پروفایل تبدیل می‌کند"] = "Fetches a subscription (sub) link and turns its configs into profiles",
+        ["به‌روزرسانی"] = "Refresh",
+        ["به‌روزرسانی این اشتراک"] = "Refresh this subscription",
+        ["حذف این اشتراک و کانفیگ‌های آن"] = "Remove this subscription and its configs",
+        ["افزودن لینک اشتراک"] = "Add subscription link",
+        ["لینک http یا https که لیست کانفیگ برمی‌گرداند. پشتیبانی: لیست base64 لینک‌های v2ray، لینک خام، و sing-box JSON."] = "An http or https link that returns configs. Supported: base64 v2ray link lists, raw links, and sing-box JSON.",
+        ["آدرس اشتراک"] = "Subscription URL",
+        ["آدرس اشتراک را وارد کنید"] = "Enter a subscription URL",
+        ["آدرس اشتراک معتبر نیست"] = "Subscription URL is not valid",
+        ["آدرس اشتراک باید با http:// یا https:// شروع شود"] = "Subscription URL must start with http:// or https://",
+        ["دریافت اشتراک در حال انجام است"] = "A subscription fetch is already running",
+        ["پاسخ اشتراک خالی است"] = "Subscription response was empty",
+        ["پاسخ اشتراک خیلی بزرگ است"] = "Subscription response is too large",
+        ["پاسخ سرور صفحه وب بود، نه لیست کانفیگ"] = "Server returned a web page, not a config list",
+        ["فرمت Clash پشتیبانی نمی‌شود. از اشتراک v2ray (base64) یا sing-box JSON استفاده کنید"] = "Clash format is not supported. Use a v2ray (base64) or sing-box JSON subscription",
+        ["هیچ کانفیگ معتبری در اشتراک پیدا نشد"] = "No valid configs were found in the subscription",
+        ["دریافت اشتراک ناموفق بود (HTTP {0})"] = "Subscription fetch failed (HTTP {0})",
+        ["دریافت اشتراک ناموفق بود: {0}"] = "Subscription fetch failed: {0}",
+        ["مهلت دریافت اشتراک تمام شد"] = "Subscription fetch timed out",
+        ["اشتراک به‌روز شد: {0} جدید، {1} به‌روز، {2} حذف"] = "Subscription updated: {0} added, {1} updated, {2} removed",
+        ["اشتراک «{0}» حذف شود؟ کانفیگ‌های دریافت‌شده از این لینک هم حذف می‌شوند."] = "Remove subscription \"{0}\"? Configs fetched from this link will be removed too.",
+        ["حذف اشتراک"] = "Remove subscription",
+        ["اشتراک حذف شد"] = "Subscription removed",
+        ["هنوز دریافت نشده"] = "Not fetched yet",
+        ["{0} کانفیگ · {1}"] = "{0} configs · {1}",
+        ["همین الان"] = "Just now",
+        ["{0} دقیقه پیش"] = "{0} min ago",
+        ["{0} ساعت پیش"] = "{0} h ago",
+        ["مصرف {0}"] = "Usage {0}",
+        ["مصرف {0} · تا {1}"] = "Usage {0} · until {1}",
+        ["اشتراک"] = "Subscription",
         ["افزودن از کلیپ‌بورد"] = "Add from clipboard",
         ["پیست کانفیگ"] = "Paste configs",
         ["در حال افزودن..."] = "Importing...",
@@ -903,21 +996,29 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["تست پینگ همه"] = "Test all ping",
         ["در حال تست پینگ همه..."] = "Testing all ping...",
         ["تست پینگ همین کانفیگ قبل از اتصال"] = "Ping test for this config before connecting",
-        ["پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link"] = "Connection ping: Google (or ping target) through the full config path — sing-box share links only",
-        ["پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — برای همه کانفیگ‌ها"] = "Server ping: reach server IP/port (TCP/TLS/ICMP) — all config types",
+        ["پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray). اگر نتیجه بیاید کانفیگ کار می‌کند"] = "Connection ping: real delay to the ping target through the config (V2Ray/Xray). A result means the config works",
+        ["پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray/Hysteria). اگر نتیجه بیاید کانفیگ کار می‌کند"] = "Connection ping: real delay to the ping target through the config (V2Ray/Xray/Hysteria). A result means the config works",
+        ["پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد"] = "Server ping: server IP/port reachability only (TCP/TLS/ICMP). This does not mean the config works",
         ["نتیجه پینگ سرور (بدون عبور از تونل)"] = "Server ping result (without going through the tunnel)",
         ["پینگ سرور «{0}»..."] = "Server ping \"{0}\"...",
         ["«{0}» سرور: {1} {2} ms"] = "\"{0}\" server: {1} {2} ms",
         ["«{0}» سرور: {1}"] = "\"{0}\" server: {1}",
         ["کانفیگ UDP است؛ پینگ TCP سرور ممکن نیست"] = "UDP config; server TCP ping is not available",
-        ["پینگ = اتصال (sing-box share link) یا سرور (OpenVPN و بقیه). دکمه سرور فقط برای کانفیگ‌های دارای پینگ اتصال."] = "Ping = connection (sing-box share link) or server (OpenVPN and others). Server button only appears when connection ping is also available.",
+        ["پینگ = تأخیر واقعی V2Ray/Xray، یا رسیدن به سرور برای بقیه. دکمه سرور فقط IP/پورت است و سالم بودن کانفیگ را نشان نمی‌دهد."] = "Ping = real delay for V2Ray/Xray, or server reachability otherwise. The server button only checks IP/port and does not mean the config works.",
+        ["پینگ = تأخیر واقعی V2Ray/Xray/Hysteria، یا رسیدن به سرور برای بقیه. دکمه سرور فقط IP/پورت است و سالم بودن کانفیگ را نشان نمی‌دهد."] = "Ping = real delay for V2Ray/Xray/Hysteria, or server reachability otherwise. The server button only checks IP/port and does not mean the config works.",
+        ["برای Xray باید outbound با transport.type=xhttp یا JSON خروجی Xray وارد شود"] = "For Xray, enter an outbound with transport.type=xhttp or Xray JSON output",
+        ["برای Xray باید vmess://، vless:// با type=ws یا xhttp، یا JSON خروجی Xray وارد شود"] = "For Xray, enter vmess://, vless:// with type=ws or xhttp, or Xray JSON output",
+        ["Reserved WireGuard باید سه عدد بین 0 تا 255 باشد"] = "WireGuard Reserved must be three numbers between 0 and 255",
         ["اتصال:"] = "Conn:",
         ["سرور:"] = "Srv:",
         ["تست پینگ اتصال برای این کانفیگ پشتیبانی نمی‌شود"] = "Connection ping is not supported for this config",
-        ["پینگ اتصال برای همه پروفایل‌های آماده — سریع‌ترین مسیر را پیدا کنید"] = "Connection ping for all ready profiles — find the fastest route",
-        ["نتیجه پینگ اتصال از مسیر کانفیگ"] = "Connection ping result through the config path",
+        ["تأخیر واقعی V2Ray/Xray برای پروفایل‌های آماده — سریع‌ترین کانفیگ سالم را پیدا کنید"] = "Real delay for ready V2Ray/Xray profiles — find the fastest working config",
+        ["نتیجه تأخیر واقعی از مسیر کانفیگ"] = "Real delay result through the config path",
+        ["«{0}»: {1} ms"] = "\"{0}\": {1} ms",
+        ["پاسخی از مقصد پینگ نیامد"] = "Ping target did not respond",
+        ["پورت محلی xray آماده نشد"] = "Local xray port did not become ready",
         ["تست پینگ اتصال برای JSON/Xray پشتیبانی نمی‌شود"] = "Connection ping is not supported for JSON/Xray configs",
-        ["در همین تب: Ctrl+V برای چسباندن سریع کانفیگ. پینگ اتصال فقط برای کانفیگ‌های sing-box (لینک share) فعال است."] = "On this tab: Ctrl+V to paste configs quickly. Connection ping is only enabled for sing-box share-link configs.",
+        ["در همین تب: Ctrl+V برای چسباندن سریع کانفیگ. پینگ V2Ray/Xray تأخیر واقعی از مسیر کانفیگ است."] = "On this tab: Ctrl+V to paste configs quickly. V2Ray/Xray ping is real delay through the config.",
         ["چند کانفیگ پیدا شد؛ از دکمه «چسباندن کانفیگ» در تب اتصال استفاده کنید."] = "Multiple configs detected; use Paste config on the Connection tab.",
         ["تست تأخیر همه"] = "Test all latency",
         ["در حال تست تأخیر همه..."] = "Testing all latency...",
@@ -1037,11 +1138,21 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["تغییرات این پروفایل به‌صورت خودکار ذخیره می‌شود"] = "Profile changes are saved automatically",
         ["در حال ذخیره..."] = "Saving...",
         ["پیش‌فرض"] = "Default",
+        ["پروفایل جدید"] = "New profile",
         ["پروفایل {0}"] = "Profile {0}",
         ["{0} (کپی)"] = "{0} (copy)",
         ["کپی پروفایل"] = "Copy Profile",
         ["پروفایل «{0}» حذف شود؟"] = "Delete profile \"{0}\"?",
         ["حذف پروفایل"] = "Delete Profile",
+        ["انتخاب همه"] = "Select all",
+        ["لغو انتخاب"] = "Clear selection",
+        ["حذف انتخاب‌شده‌ها ({0})"] = "Delete selected ({0})",
+        ["انتخاب برای حذف دسته‌جمعی"] = "Select for bulk delete",
+        ["همه کانفیگ‌ها را برای حذف انتخاب می‌کند. اگر همه انتخاب شده باشند، انتخاب را برمی‌دارد."] = "Selects every config for deletion. Clears the selection when every config is already selected.",
+        ["کانفیگ‌های انتخاب‌شده با یک تأیید حذف می‌شوند. حداقل یک کانفیگ باقی می‌ماند."] = "Deletes the selected configs after one confirmation. At least one config remains.",
+        ["{0} کانفیگ حذف می‌شود و پروفایل «{1}» باقی می‌ماند."] = "{0} configs will be deleted and profile \"{1}\" will be kept.",
+        ["{0} کانفیگ حذف شود؟"] = "Delete {0} configs?",
+        ["{0} کانفیگ حذف شود؟ پروفایل «{1}» باقی می‌ماند."] = "Delete {0} configs? Profile \"{1}\" will be kept.",
         ["اجرای خودکار ویندوز فعال شد. اگر فایل TunnelX را جابه‌جا کردید، این گزینه را یک بار خاموش و روشن کنید."] = "Windows startup is enabled. If you move the TunnelX file, turn this option off and on again.",
         ["TunnelX — استارت‌آپ"] = "TunnelX - Startup",
         ["تغییر تنظیم اجرای خودکار ویندوز ناموفق بود"] = "Failed to change the Windows startup setting",
@@ -1130,21 +1241,58 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["انتخاب برنامه"] = "Select App",
         ["لایسنس: {0}"] = "License: {0}",
         ["برای اتصال VPN ویندوز. آدرس سرور، نام کاربری، رمز عبور و Pre-Shared Key لازم است. اگر وصل نشد، PSK، فایروال و تنظیمات VPN ویندوز را بررسی کنید."] = "For Windows VPN connection. Server address, username, password, and Pre-Shared Key are required. If it does not connect, check the PSK, firewall, and Windows VPN settings.",
-        ["لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. TunnelX معمولاً sing-box را اجرا می‌کند و برای قابلیت‌هایی مثل xhttp از Xray-core استفاده می‌کند."] = "Enter a config link or JSON, or paste it from the clipboard. TunnelX usually runs sing-box and uses Xray-core for features such as xhttp.",
+        ["لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. vmess، vless، trojan، shadowsocks و Hysteria (hysteria:// و hysteria2:// و hy2://) با sing-box اجرا می‌شوند. برای xhttp از Xray-core استفاده می‌شود."] = "Enter a config link or JSON, or paste it from the clipboard. vmess, vless, trojan, shadowsocks, and Hysteria (hysteria://, hysteria2://, and hy2://) run on sing-box. xhttp uses Xray-core.",
+        ["Hysteria 1 و 2 پشتیبانی می‌شود: hysteria:// ، hysteria2:// ، hy2:// یا JSON سینگ‌باکس."] = "Hysteria 1 and 2 are supported: hysteria://, hysteria2://, hy2://, or sing-box JSON.",
+        ["هیستوریا روی UDP است؛ بررسی سلامت از مسیر تونل انجام می‌شود"] = "Hysteria uses UDP; health check runs through the tunnel.",
+        ["کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// باشد"] = "Config must be sing-box JSON ({…}) or a vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// URI.",
+        ["لینک Hysteria نامعتبر است"] = "Invalid Hysteria link",
+        ["پروتکل Hysteria غیر از UDP در sing-box پشتیبانی نمی‌شود"] = "sing-box only supports Hysteria over UDP",
+        ["obfs هیستوریا ۲ فقط salamander است"] = "Hysteria 2 obfs only supports salamander",
+        ["رمز obfs هیستوریا ۲ وارد نشده است"] = "Hysteria 2 obfs password is missing",
+        ["رمز obfs هیستوریا ۱ وارد نشده است"] = "Hysteria 1 obfs password is missing",
         ["برای پراکسی خارجی آماده. نوع پراکسی، آدرس، پورت و در صورت نیاز نام کاربری/رمز را وارد کنید. این با پراکسی داخلی 127.0.0.1 فرق دارد."] = "For an external ready proxy. Enter protocol, address, port, and credentials if needed. This is different from the internal 127.0.0.1 proxy.",
-        ["فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید."] = "Choose the ovpn file. OpenVPN Community must be installed separately; OpenVPN Connect is not suitable for split tunneling. If the server requires credentials, enter them in TunnelX.",
+        ["فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید. برای عبور اتصال از پراکسی، در همان پروفایل نوع پراکسی بالادستی را HTTP یا SOCKS5 بگذارید و آدرس و پورت را وارد کنید. این حالت فقط با کانفیگ TCP کار می‌کند."] = "Choose the ovpn file. OpenVPN Community must be installed separately; OpenVPN Connect is not suitable for split tunneling. If the server requires credentials, enter them in TunnelX. To connect through a proxy, set the upstream proxy on the same profile to HTTP or SOCKS5 and enter its address and port. This works only with TCP configs.",
+        ["اگر سرور OpenVPN مستقیم در دسترس نیست، نوع پراکسی را HTTP یا SOCKS5 بگذارید. فقط کانفیگ TCP (proto tcp) از پراکسی عبور می‌کند. نام کاربری و رمز پراکسی اختیاری است."] = "If the OpenVPN server is not reachable directly, set the proxy type to HTTP or SOCKS5. Only a TCP config (proto tcp) can connect through the proxy. Proxy username and password are optional.",
+        ["پراکسی بالادستی"] = "Upstream proxy",
+        ["بدون پراکسی"] = "No proxy",
+        ["آدرس پراکسی"] = "Proxy address",
+        ["نام کاربری پراکسی (اختیاری)"] = "Proxy username (optional)",
+        ["رمز پراکسی (اختیاری)"] = "Proxy password (optional)",
+        ["آدرس پراکسی بالادستی OpenVPN را وارد کنید"] = "Enter the OpenVPN upstream proxy address",
+        ["آدرس پراکسی بالادستی OpenVPN نامعتبر است"] = "The OpenVPN upstream proxy address is invalid",
+        ["پورت پراکسی بالادستی باید بین 1 تا 65535 باشد"] = "Upstream proxy port must be between 1 and 65535",
+        ["پورت پراکسی بالادستی باید عدد باشد"] = "Upstream proxy port must be a number",
+        ["نام کاربری پراکسی را وارد کنید"] = "Enter the proxy username",
+        ["نام کاربری یا رمز پراکسی نباید خط جدید داشته باشد"] = "Proxy username or password cannot contain a new line",
+        ["پراکسی بالادستی OpenVPN فقط با TCP کار می‌کند. در فایل .ovpn پروتکل را tcp یا tcp-client کنید."] = "OpenVPN upstream proxy only works with TCP. Set the .ovpn protocol to tcp or tcp-client.",
+        ["این فایل .ovpn برای پراکسی فایل احراز هویت جدا دارد؛ نام کاربری و رمز پراکسی را در TunnelX وارد کنید."] = "This .ovpn uses a separate proxy auth file; enter the proxy username and password in TunnelX.",
         ["از لیست برنامه‌های پیدا شده انتخاب کنید یا فایل exe را دستی اضافه کنید. برای Store/MSIX/WebView2 برنامه را باز نگه دارید و بروزرسانی لیست را بزنید."] = "Select from discovered apps or manually add an exe file. For Store/MSIX/WebView2 apps, keep the app open and refresh the list.",
         ["«مستقیم بماند» یعنی مقصد از تونل عبور نکند. «از تونل عبور کند» یعنی مقصد حتی بدون انتخاب برنامه وارد تونل شود. دامنه‌ها زیردامنه‌ها را هم پوشش می‌دهند."] = "\"Stay Direct\" means the destination bypasses the tunnel. \"Use Tunnel\" means the destination enters the tunnel even without selecting an app. Domains also cover subdomains.",
-        ["پورت پراکسی محلی، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست."] = "Local proxy port, automatic MTU, DNS Optimization, Game Mode, status notifications, Windows startup, and auto-connect are here.",
+        ["پورت پراکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست."] = "Local proxy port, connection health-check targets, automatic MTU, DNS Optimization, Game Mode, status notifications, Windows startup, and auto-connect are here.",
+        ["پورت پراکسی محلی، نام کاربری/رمز پیش‌فرض پروکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست."] = "Local proxy port, default local proxy username/password, connection health-check targets, automatic MTU, DNS Optimization, Game Mode, status notifications, Windows startup, and auto-connect are here.",
+        ["نام کاربری/رمز پیش‌فرض را در تنظیمات بگذارید؛ خالی یعنی بدون احراز هویت."] = "Set the default username/password in Settings; leave empty for no authentication.",
+        ["🩺 بررسی سلامت اتصال"] = "🩺 Connection Health Check",
+        ["مقصدهای سفارشی"] = "Custom targets",
+        ["هر خط یک آدرس (URL، دامنه یا IP). اگر خالی بماند، google.com و cloudflare.com بررسی می‌شوند."] = "One address per line (URL, hostname, or IP). Leave this empty to keep checking google.com and cloudflare.com.",
+        ["مقصدهای عمومی پیش‌فرض"] = "Default public targets",
+        ["google.com و cloudflare.com هم بررسی می‌شوند. با خاموش کردن این گزینه، فقط مقصدهای سفارشی معتبر استفاده می‌شوند."] = "google.com and cloudflare.com are checked too. Turn this off to use only valid custom targets.",
+        ["مقصد سفارشی معتبری نیست؛ بررسی سلامت با google.com و cloudflare.com ادامه پیدا می‌کند."] = "No valid custom target; health checks keep using google.com and cloudflare.com.",
+        ["پیش‌فرض: google.com:443 و cloudflare.com:443"] = "Defaults: google.com:443 and cloudflare.com:443",
+        ["مقصدهای فعال: {0}"] = "Active targets: {0}",
+        ["این خطوط نادیده گرفته شد: {0}"] = "Ignored lines: {0}",
+        ["بیش از {0} مقصد سفارشی نادیده گرفته شد."] = "More than {0} custom targets were ignored.",
+        ["تونل روی سیستم بالا آمد، اما هیچ‌کدام از مقصدهای بررسی سلامت پاسخ ندادند. آدرس‌های تنظیم‌شده را بررسی کنید."] = "The tunnel is up locally, but none of the health-check targets responded. Check the addresses you configured.",
         ["مدت اتصال، IP، مصرف تونل، مصرف خارج تونل، سلامت Split Tunnel، مصرف برنامه‌ها و تاریخچه اتصال‌ها را نشان می‌دهد."] = "Shows duration, IP, tunnel usage, direct usage, split tunnel health, app usage, and connection history.",
         ["جزئیات و لاگ‌ها"] = "Details and Logs",
         ["از دکمه جزئیات، لاگ‌ها را با فیلتر خطا، هشدار، DNS یا Route ببینید. قبل از ارسال عمومی لاگ، رمزها، کلیدها، UUID و endpoint خصوصی را حذف کنید."] = "Use Details to view logs filtered by error, warning, DNS, or route. Before sharing logs publicly, remove passwords, keys, UUIDs, and private endpoints.",
         ["اتصال برقرار نمی‌شود"] = "Connection Does Not Start",
         ["برنامه را با Administrator اجرا کنید. فایروال، آنتی‌ویروس، آدرس سرور، پورت، رمزها، PSK، نصب OpenVPN Community و اعتبار کانفیگ را بررسی کنید."] = "Run the app as Administrator. Check firewall, antivirus, server address, port, credentials, PSK, OpenVPN Community installation, and config validity.",
+        ["برنامه را با Administrator اجرا کنید. فایروال، آنتی‌ویروس، آدرس سرور، پورت، رمزها، PSK، نصب OpenVPN Community یا WireGuard رسمی ویندوز، و اعتبار کانفیگ را بررسی کنید."] = "Run the app as Administrator. Check firewall, antivirus, server address, port, credentials, PSK, OpenVPN Community or official WireGuard for Windows installation, and config validity.",
         ["ترافیک برنامه از تونل عبور نمی‌کند"] = "App Traffic Does Not Use Tunnel",
         ["برنامه را در تب برنامه‌ها فعال کنید. اگر چندپردازشی است، برنامه را باز نگه دارید و لیست برنامه‌ها را دوباره بارگذاری کنید."] = "Enable the app in the Apps tab. If it is multi-process, keep it open and reload the app list.",
         ["پراکسی کار نمی‌کند"] = "Proxy Does Not Work",
         ["برای پروفایل پراکسی، آدرس، پورت، نوع و اطلاعات ورود را بررسی کنید. برای ابزارهای محلی، آدرس 127.0.0.1 و پورت تنظیمات را وارد کنید."] = "For proxy profiles, check address, port, protocol, and credentials. For local tools, enter 127.0.0.1 and the configured port.",
+        ["برای پروفایل پراکسی خارجی، آدرس، پورت، نوع و اطلاعات ورود را بررسی کنید. برای ابزارهای محلی، آدرس 127.0.0.1 و پورت تنظیمات را وارد کنید؛ اگر در تنظیمات نام کاربری پیش‌فرض گذاشته‌اید، همان را در کلاینت هم بزنید."] = "For external proxy profiles, check address, port, protocol, and credentials. For local tools, enter 127.0.0.1 and the Settings port; if you set a default username in Settings, use the same credentials in the client.",
         ["DNS، IPv6 یا Leak غیرعادی است"] = "DNS, IPv6, or Leak Looks Wrong",
         ["یک بار قطع و وصل کنید تا مسیرها و قوانین DNS دوباره ساخته شوند. اگر مشکل ماند، لاگ‌های DNS و Route را بررسی کنید."] = "Disconnect and reconnect once so routes and DNS rules are rebuilt. If it persists, check DNS and Route logs.",
         ["قطع اتصال VPN"] = "VPN Disconnected",
@@ -1178,6 +1326,11 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["ارتباط از سمت سرور یا شبکه قطع شد. کانال کنترل OpenVPN بارها reset شد ({0} بار).\n\nاحتمال‌ها:\n• بار زیاد یا محدودیت اتصال همزمان روی سرور\n• فیلترینگ یا قطع موقت TCP به سرور\n• مشکل موقت اپراتور اینترنت\n\nچند دقیقه صبر کنید؛ فقط یک برنامه با این اکانت وصل باشد."] = "The connection was dropped by the server or network. The OpenVPN control channel reset many times ({0} times).\n\nPossible causes:\n• Server load or concurrent connection limits\n• Filtering or temporary TCP loss to the server\n• Temporary ISP issues\n\nWait a few minutes; connect with only one app using this account.",
         ["ارتباط VPN از سمت سرور قطع شد. کانال کنترل OpenVPN یک‌بار یا چند بار reset شد ({0} بار).\n\nممکن است سرور session را بسته باشد، محدودیت اتصال همزمان باشد، یا شبکه بین شما و سرور ناپایدار باشد. ۳۰–۶۰ ثانیه بعد دوباره Connect بزنید."] = "The VPN connection was closed by the server. The OpenVPN control channel reset once or several times ({0} times).\n\nThe server may have closed the session, enforced concurrent limits, or the network was unstable. Connect again after 30–60 seconds.",
         ["فرآیند OpenVPN بسته شد و اتصال VPN قطع شد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای [OpenVPN-DROP] بررسی کنید."] = "The OpenVPN process exited and the VPN disconnected.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP].",
-        ["اتصال VPN به‌طور ناگهانی قطع شد. آداپتور OpenVPN یا فرآیند تونل از کار افتاد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای خطوط [OpenVPN-DROP] بررسی کنید."] = "The VPN connection dropped suddenly. The OpenVPN adapter or tunnel process stopped.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP] lines."
+        ["اتصال VPN به‌طور ناگهانی قطع شد. آداپتور OpenVPN یا فرآیند تونل از کار افتاد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای خطوط [OpenVPN-DROP] بررسی کنید."] = "The VPN connection dropped suddenly. The OpenVPN adapter or tunnel process stopped.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP] lines.",
+
+        ["🌐 زبان"] = "🌐 Language",
+        ["زبان رابط کاربری"] = "Interface language",
+        ["در حالت خودکار TunnelX زبان ویندوز را دنبال می‌کند. می‌توانید فارسی، انگلیسی یا روسی را دستی انتخاب کنید."] = "In Auto mode, TunnelX follows the Windows language. You can also choose Persian, English, or Russian manually.",
+        ["خودکار"] = "Auto"
     };
 }

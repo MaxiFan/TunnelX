@@ -25,6 +25,7 @@ public class ProfileService
         Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
 
     private static readonly string ProfileFile = Path.Combine(ProfileDir, "profiles.json");
+    private static readonly string SubscriptionsFile = Path.Combine(ProfileDir, "subscriptions.json");
     private static readonly string ExcludesFile = Path.Combine(ProfileDir, "excludes.json");
     private static readonly string IncludesFile = Path.Combine(ProfileDir, "includes.json");
     private static readonly string TunnelAppsFile = Path.Combine(ProfileDir, "tunnelapps.json");
@@ -39,6 +40,7 @@ public class ProfileService
     static ProfileService()
     {
         MigrateIfNeeded(Path.Combine(LegacyDir, "profiles.json"), ProfileFile);
+        MigrateIfNeeded(Path.Combine(LegacyDir, "subscriptions.json"), SubscriptionsFile);
         MigrateIfNeeded(Path.Combine(LegacyDir, "excludes.json"), ExcludesFile);
         MigrateIfNeeded(Path.Combine(LegacyDir, "includes.json"), IncludesFile);
         MigrateIfNeeded(Path.Combine(LegacyDir, "tunnelapps.json"), TunnelAppsFile);
@@ -64,7 +66,9 @@ public class ProfileService
         try
         {
             var json = File.ReadAllText(AppSettingsFile, Encoding.UTF8);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            settings.LocalProxyPassword = DecryptString(settings.EncryptedLocalProxyPassword);
+            return settings;
         }
         catch
         {
@@ -78,6 +82,7 @@ public class ProfileService
     public void SaveAppSettings(AppSettings settings)
     {
         Directory.CreateDirectory(ProfileDir);
+        settings.EncryptedLocalProxyPassword = EncryptString(settings.LocalProxyPassword ?? "");
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         File.WriteAllText(AppSettingsFile, json, Encoding.UTF8);
     }
@@ -94,6 +99,31 @@ public class ProfileService
         public long? GitHubAppDownloadCount { get; set; } = null;
         /// <summary>Tray toasts for connection/app status (not updates or Telegram promos).</summary>
         public bool EnableInformationalNotifications { get; set; } = true;
+
+        /// <summary>
+        /// Custom connection health-check targets, one URL, hostname, or IP per line.
+        /// Empty keeps the built-in google.com and cloudflare.com probes.
+        /// </summary>
+        public string HealthCheckEndpoints { get; set; } = "";
+
+        /// <summary>
+        /// When false, google.com and cloudflare.com are not probed.
+        /// Ignored when no valid custom target is configured, so health checks still have a destination.
+        /// </summary>
+        public bool IncludeDefaultHealthCheckEndpoints { get; set; } = true;
+
+        /// <summary>
+        /// Default username for the local mixed SOCKS5/HTTP listener when a profile
+        /// does not set its own MixedProxyUsername.
+        /// </summary>
+        public string LocalProxyUsername { get; set; } = "";
+
+        /// <summary>DPAPI ciphertext for <see cref="LocalProxyPassword"/> (persisted).</summary>
+        public string EncryptedLocalProxyPassword { get; set; } = "";
+
+        /// <summary>Plaintext local-proxy password; not written to JSON.</summary>
+        [JsonIgnore]
+        public string LocalProxyPassword { get; set; } = "";
     }
 
     /// <summary>
@@ -129,6 +159,11 @@ public class ProfileService
                 OpenVpnUsername = s.OpenVpnUsername,
                 OpenVpnPassword = DecryptString(s.EncryptedOpenVpnPassword),
                 OpenVpnPrivateKeyPassword = DecryptString(s.EncryptedOpenVpnPrivateKeyPassword),
+                OpenVpnUpstreamProxyKind = s.OpenVpnUpstreamProxyKind,
+                OpenVpnUpstreamProxyHost = s.OpenVpnUpstreamProxyHost,
+                OpenVpnUpstreamProxyPort = s.OpenVpnUpstreamProxyPort,
+                OpenVpnUpstreamProxyUsername = s.OpenVpnUpstreamProxyUsername,
+                OpenVpnUpstreamProxyPassword = DecryptString(s.EncryptedOpenVpnUpstreamProxyPassword),
                 WireGuardConfig = s.WireGuardConfig,
                 WireGuardConfigPath = s.WireGuardConfigPath,
                 ProxyProtocol = s.ProxyProtocol,
@@ -137,9 +172,13 @@ public class ProfileService
                 ProxyUsername = s.ProxyUsername,
                 ProxyPassword = DecryptString(s.EncryptedProxyPassword),
                 MixedProxyPort = s.Socks5Port > 0 ? s.Socks5Port : 1080,
+                MixedProxyUsername = s.MixedProxyUsername ?? "",
+                MixedProxyPassword = DecryptString(s.EncryptedMixedProxyPassword),
                 AutoTuneMtu = s.AutoTuneMtu,
                 EnableDnsOptimization = s.EnableDnsOptimization,
-                EnableGameMode = s.EnableGameMode
+                EnableGameMode = s.EnableGameMode,
+                SubscriptionId = s.SubscriptionId,
+                SubscriptionNodeKey = s.SubscriptionNodeKey
             }).ToList();
         }
         catch (Exception ex)
@@ -173,6 +212,11 @@ public class ProfileService
             OpenVpnUsername = p.OpenVpnUsername,
             EncryptedOpenVpnPassword = EncryptString(p.OpenVpnPassword),
             EncryptedOpenVpnPrivateKeyPassword = EncryptString(p.OpenVpnPrivateKeyPassword),
+            OpenVpnUpstreamProxyKind = p.OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost = p.OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort = p.OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername = p.OpenVpnUpstreamProxyUsername,
+            EncryptedOpenVpnUpstreamProxyPassword = EncryptString(p.OpenVpnUpstreamProxyPassword),
             WireGuardConfig = p.WireGuardConfig,
             WireGuardConfigPath = p.WireGuardConfigPath,
             ProxyProtocol = p.ProxyProtocol,
@@ -181,9 +225,13 @@ public class ProfileService
             ProxyUsername = p.ProxyUsername,
             EncryptedProxyPassword = EncryptString(p.ProxyPassword),
             Socks5Port = p.MixedProxyPort,
+            MixedProxyUsername = p.MixedProxyUsername,
+            EncryptedMixedProxyPassword = EncryptString(p.MixedProxyPassword),
             AutoTuneMtu = p.AutoTuneMtu,
             EnableDnsOptimization = p.EnableDnsOptimization,
-            EnableGameMode = p.EnableGameMode
+            EnableGameMode = p.EnableGameMode,
+            SubscriptionId = p.SubscriptionId,
+            SubscriptionNodeKey = p.SubscriptionNodeKey
         }).ToList();
 
         var json = JsonSerializer.Serialize(stored, JsonOptions);
@@ -244,6 +292,11 @@ public class ProfileService
         public string OpenVpnUsername { get; set; } = "";
         public string EncryptedOpenVpnPassword { get; set; } = "";
         public string EncryptedOpenVpnPrivateKeyPassword { get; set; } = "";
+        public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind { get; set; } = OpenVpnUpstreamProxyKind.None;
+        public string OpenVpnUpstreamProxyHost { get; set; } = "";
+        public int OpenVpnUpstreamProxyPort { get; set; }
+        public string OpenVpnUpstreamProxyUsername { get; set; } = "";
+        public string EncryptedOpenVpnUpstreamProxyPassword { get; set; } = "";
         public string WireGuardConfig { get; set; } = "";
         public string WireGuardConfigPath { get; set; } = "";
         public ProxyProtocol ProxyProtocol { get; set; } = ProxyProtocol.Socks5;
@@ -253,9 +306,37 @@ public class ProfileService
         public string EncryptedProxyPassword { get; set; } = "";
         [JsonPropertyName("socks5Port")]
         public int Socks5Port { get; set; } = 1080;
+        public string MixedProxyUsername { get; set; } = "";
+        public string EncryptedMixedProxyPassword { get; set; } = "";
         public bool AutoTuneMtu { get; set; } = true;
         public bool EnableDnsOptimization { get; set; } = true;
         public bool EnableGameMode { get; set; } = false;
+        public string SubscriptionId { get; set; } = "";
+        public string SubscriptionNodeKey { get; set; } = "";
+    }
+
+    public List<SubscriptionLink> LoadSubscriptions()
+    {
+        if (!File.Exists(SubscriptionsFile))
+            return new List<SubscriptionLink>();
+
+        try
+        {
+            var json = File.ReadAllText(SubscriptionsFile, Encoding.UTF8);
+            return JsonSerializer.Deserialize<List<SubscriptionLink>>(json, JsonOptions) ?? new List<SubscriptionLink>();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[SUB] Failed to load subscriptions: {ex.Message}");
+            return new List<SubscriptionLink>();
+        }
+    }
+
+    public void SaveSubscriptions(IEnumerable<SubscriptionLink> subscriptions)
+    {
+        Directory.CreateDirectory(ProfileDir);
+        var json = JsonSerializer.Serialize(subscriptions.ToList(), JsonOptions);
+        File.WriteAllText(SubscriptionsFile, json, Encoding.UTF8);
     }
 
     /// <summary>

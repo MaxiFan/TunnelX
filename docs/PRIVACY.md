@@ -4,7 +4,7 @@ TunnelX is designed as a local desktop app.
 
 ## Data Stored Locally
 
-The app may store profiles, selected apps, include/exclude destinations, connection history, and logs on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature.
+The app may store profiles, selected apps, include/exclude destinations, connection history, subscription URLs, and logs (including `proxy-lifecycle.log`) on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature. Subscription URLs are stored in `subscriptions.json` and can contain access tokens.
 
 ## Network Data
 
@@ -21,6 +21,10 @@ When the connected dashboard shows your public exit IP, optional country name, o
 | Flag image (PNG) | `flagcdn.com` | Path pattern `/h20/{country-code}.png` |
 
 These services receive requests that appear to come from your tunnel exit IP. They are not used for maintainer-side tracking. If you disconnect, these lookups stop for that session.
+
+## Subscription links
+
+When you add or refresh a subscription, TunnelX sends an HTTP GET directly to the URL you entered. That host receives the request, including any token embedded in the URL. The response is parsed locally into connection profiles. TunnelX does not relay subscription contents to the maintainer.
 
 ## Update Checks
 

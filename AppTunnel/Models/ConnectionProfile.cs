@@ -44,6 +44,11 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _openVpnUsername = "";
     private string _openVpnPassword = "";
     private string _openVpnPrivateKeyPassword = "";
+    private OpenVpnUpstreamProxyKind _openVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind.None;
+    private string _openVpnUpstreamProxyHost = "";
+    private int _openVpnUpstreamProxyPort;
+    private string _openVpnUpstreamProxyUsername = "";
+    private string _openVpnUpstreamProxyPassword = "";
     private string _wireGuardConfig = "";
     private string _wireGuardConfigPath = "";
     private ProxyProtocol _proxyProtocol = ProxyProtocol.Socks5;
@@ -52,6 +57,8 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _proxyUsername = "";
     private string _proxyPassword = "";
     private int _mixedProxyPort = 1080;
+    private string _mixedProxyUsername = "";
+    private string _mixedProxyPassword = "";
     private bool _autoTuneMtu = true;
     private bool _enableDnsOptimization = true;
     private bool _enableGameMode = false;
@@ -59,10 +66,13 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _lastLatencyLabel = "";
     private string _lastLatencyError = "";
     private bool _isLatencyTesting;
+    private bool _isSelectedForDeletion;
     private long? _lastServerLatencyMs;
     private string _lastServerLatencyLabel = "";
     private string _lastServerLatencyError = "";
     private bool _isServerPingTesting;
+    private string _subscriptionId = "";
+    private string _subscriptionNodeKey = "";
 
     public ConnectionProfile()
     {
@@ -78,6 +88,7 @@ public class ConnectionProfile : INotifyPropertyChanged
             OnPropertyChanged(nameof(LatencyColor));
             OnPropertyChanged(nameof(ServerLatencyDisplayText));
             OnPropertyChanged(nameof(ServerLatencyColor));
+            OnPropertyChanged(nameof(SubscriptionBadgeText));
         };
     }
 
@@ -189,6 +200,66 @@ public class ConnectionProfile : INotifyPropertyChanged
         set => SetField(ref _openVpnPrivateKeyPassword, value);
     }
 
+    public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind
+    {
+        get => _openVpnUpstreamProxyKind;
+        set
+        {
+            if (!SetField(ref _openVpnUpstreamProxyKind, value))
+                return;
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+        }
+    }
+
+    public string OpenVpnUpstreamProxyHost
+    {
+        get => _openVpnUpstreamProxyHost;
+        set => SetField(ref _openVpnUpstreamProxyHost, value);
+    }
+
+    public int OpenVpnUpstreamProxyPort
+    {
+        get => _openVpnUpstreamProxyPort;
+        set => SetField(ref _openVpnUpstreamProxyPort, value);
+    }
+
+    public string OpenVpnUpstreamProxyUsername
+    {
+        get => _openVpnUpstreamProxyUsername;
+        set => SetField(ref _openVpnUpstreamProxyUsername, value);
+    }
+
+    public string OpenVpnUpstreamProxyPassword
+    {
+        get => _openVpnUpstreamProxyPassword;
+        set => SetField(ref _openVpnUpstreamProxyPassword, value);
+    }
+
+    [JsonIgnore]
+    public bool IsOpenVpnUpstreamProxyEnabled =>
+        OpenVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None;
+
+    public void ApplyParsedUpstreamProxy(OpenVpnParsedUpstreamProxy parsed)
+    {
+        OpenVpnUpstreamProxyHost = parsed.Host;
+        OpenVpnUpstreamProxyPort = parsed.Port;
+        if (parsed.HasInlineCredentials)
+        {
+            OpenVpnUpstreamProxyUsername = parsed.Username;
+            OpenVpnUpstreamProxyPassword = parsed.Password;
+        }
+
+        OpenVpnUpstreamProxyKind = parsed.Kind;
+    }
+
+    public OpenVpnUpstreamProxySettings ToUpstreamProxySettings() =>
+        OpenVpnUpstreamProxySettings.From(
+            OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword);
+
     public string WireGuardConfig
     {
         get => _wireGuardConfig;
@@ -238,6 +309,26 @@ public class ConnectionProfile : INotifyPropertyChanged
         set => SetField(ref _mixedProxyPort, value);
     }
 
+    /// <summary>
+    /// Optional per-profile local mixed-proxy auth username.
+    /// When empty, Settings defaults (<c>LocalProxyUsername</c>) are used.
+    /// </summary>
+    public string MixedProxyUsername
+    {
+        get => _mixedProxyUsername;
+        set => SetField(ref _mixedProxyUsername, value);
+    }
+
+    /// <summary>
+    /// Optional per-profile local mixed-proxy auth password (DPAPI at rest).
+    /// Used only when <see cref="MixedProxyUsername"/> is set.
+    /// </summary>
+    public string MixedProxyPassword
+    {
+        get => _mixedProxyPassword;
+        set => SetField(ref _mixedProxyPassword, value);
+    }
+
     public bool AutoTuneMtu
     {
         get => _autoTuneMtu;
@@ -255,6 +346,46 @@ public class ConnectionProfile : INotifyPropertyChanged
         get => _enableGameMode;
         set => SetField(ref _enableGameMode, value);
     }
+
+    /// <summary>
+    /// Transient multi-select flag for bulk deletion. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSelectedForDeletion
+    {
+        get => _isSelectedForDeletion;
+        set
+        {
+            if (_isSelectedForDeletion == value) return;
+            _isSelectedForDeletion = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Owning subscription id, empty for manually added profiles.</summary>
+    public string SubscriptionId
+    {
+        get => _subscriptionId;
+        set
+        {
+            if (!SetField(ref _subscriptionId, value ?? ""))
+                return;
+            OnPropertyChanged(nameof(IsFromSubscription));
+        }
+    }
+
+    /// <summary>Stable identity of this node inside its subscription, used to update it on refresh.</summary>
+    public string SubscriptionNodeKey
+    {
+        get => _subscriptionNodeKey;
+        set => SetField(ref _subscriptionNodeKey, value ?? "");
+    }
+
+    [JsonIgnore]
+    public bool IsFromSubscription => !string.IsNullOrWhiteSpace(SubscriptionId);
+
+    [JsonIgnore]
+    public string SubscriptionBadgeText => LocalizationService.Instance.T("اشتراک");
 
     [JsonIgnore]
     public string ConnectionName => $"TunnelX-{Id}";
@@ -292,16 +423,16 @@ public class ConnectionProfile : INotifyPropertyChanged
     public bool SupportsServerPing => IsReady;
 
     [JsonIgnore]
-    public bool ShowsServerPingButton => SupportsConnectionPing;
+    public bool ShowsServerPingButton => TunnelType == TunnelType.V2Ray && IsReady;
 
     [JsonIgnore]
-    public string PingButtonToolTipText => SupportsConnectionPing
-        ? LocalizationService.Instance.T("پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link")
-        : LocalizationService.Instance.T("پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP)");
+    public string PingButtonToolTipText => TunnelType == TunnelType.V2Ray
+        ? LocalizationService.Instance.T("پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray/Hysteria). اگر نتیجه بیاید کانفیگ کار می‌کند")
+        : LocalizationService.Instance.T("پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
 
     [JsonIgnore]
-    public string PingResultToolTipText => SupportsConnectionPing
-        ? LocalizationService.Instance.T("نتیجه پینگ اتصال از مسیر کانفیگ")
+    public string PingResultToolTipText => TunnelType == TunnelType.V2Ray
+        ? LocalizationService.Instance.T("نتیجه تأخیر واقعی از مسیر کانفیگ")
         : LocalizationService.Instance.T("نتیجه پینگ سرور (بدون عبور از تونل)");
 
     [JsonIgnore]
@@ -551,6 +682,11 @@ public class ConnectionProfile : INotifyPropertyChanged
         OpenVpnUsername = OpenVpnUsername,
         OpenVpnPassword = OpenVpnPassword,
         OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword,
+        OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind,
+        OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost,
+        OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort,
+        OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername,
+        OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword,
         WireGuardConfig = WireGuardConfig,
         WireGuardConfigPath = WireGuardConfigPath,
         ProxyProtocol = ProxyProtocol,

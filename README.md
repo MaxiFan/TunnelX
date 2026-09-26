@@ -6,7 +6,7 @@
 
 ## فارسی
 
-<span dir="ltr">**TunnelX**</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص یا کل سیستم را از تونل عبور می‌دهد و مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ می‌کند. رابط دو‌زبانه فارسی/انگلیسی با تشخیص خودکار زبان و چینش <span dir="ltr">RTL/LTR</span> دارد.
+<span dir="ltr">**TunnelX**</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص یا کل سیستم را از تونل عبور می‌دهد و مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ می‌کند. رابط فارسی، انگلیسی و روسی با تشخیص خودکار زبان و چینش <span dir="ltr">RTL/LTR</span> دارد.
 
 **[مستند کامل فارسی ←](README.fa.md)**
 
@@ -14,19 +14,19 @@
 
 ## English
 
-**TunnelX** is a free and open-source Windows split-tunneling client built by **MaxFan**. It routes selected apps, selected destinations, or the whole system through supported tunnel cores while keeping local and excluded destinations on the normal network path. The app supports Persian and English UI modes with automatic system-language detection and correct RTL/LTR layout handling.
+**TunnelX** is a free and open-source Windows split-tunneling client built by **MaxFan**. It routes selected apps, selected destinations, or the whole system through supported tunnel cores while keeping local and excluded destinations on the normal network path. The app supports Persian, English, and Russian UI modes with automatic system-language detection and correct RTL/LTR layout handling.
 
 *Full English documentation continues below.*
 
 ## Русский
 
-**TunnelX** — бесплатный клиент с открытым исходным кодом для Windows (split tunneling) от **MaxFan**. Он направляет через VPN, V2Ray/Xray, OpenVPN или SOCKS5/HTTP Proxy только выбранные приложения, домены/IP или весь системный трафик, сохраняя обычный маршрут для локальных и исключённых назначений. Интерфейс поддерживает персидский и английский языки с автоматическим выбором языка системы и корректным RTL/LTR.
+**TunnelX** — бесплатный клиент с открытым исходным кодом для Windows (split tunneling) от **MaxFan**. Он направляет через VPN, V2Ray/Xray, OpenVPN или SOCKS5/HTTP Proxy только выбранные приложения, домены/IP или весь системный трафик, сохраняя обычный маршрут для локальных и исключённых назначений. Интерфейс поддерживает персидский, английский и русский языки с автоматическим выбором языка системы и корректным RTL/LTR.
 
 **[Полная документация на русском →](README.ru.md)**
 
 ## 简体中文
 
-**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语和英语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
+**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语、英语和俄语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
 
 **[完整中文文档 →](README.zh.md)**
 
@@ -50,10 +50,11 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 - Local SOCKS5 proxy for tools that need `127.0.0.1`
 - DNS redirect, IPv6 blocking, leak guard, route diagnostics, and traffic history
 - Multiple profiles, duplicate/edit flows, server tests, public exit IP detection, and release update checks
-- **Connection health check** before the connected screen: end-to-end TCP probes to `google.com` and `cloudflare.com` through the tunnel SOCKS path, with live per-host latency during the verify step
+- Subscription (sub) links: fetch an `http`/`https` URL and import its configs as profiles, then refresh later
+- **Connection health check** before the connected screen: end-to-end TCP probes through the tunnel SOCKS path, with live per-host latency during the verify step. Defaults are `google.com` and `cloudflare.com`. Settings can add custom URLs, hostnames, or IPs and can turn the public defaults off
 - Connected dashboard: **exit IP** with country name and flag image (geo and flag PNG fetched through the tunnel, not direct from the local network)
 - Windows tray notifications with clearer error guidance, optional release-notes action on update cards, and scheduled update check after connect
-- Persian and English desktop UI with automatic language detection, manual language switching, and correct RTL/LTR layout behavior
+- Persian, English, and Russian desktop UI with automatic language detection, a language dropdown in Settings (and the footer), and correct RTL/LTR layout behavior
 - Dynamic local port selection for V2Ray/Xray internals to reduce `2080/2081` binding conflicts
 
 ## Quick Start
@@ -66,6 +67,29 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 6. Add include or exclude destinations when needed, connect, and check the traffic health cards for DNS, IPv6, leaks, and route status.
 
 After you connect, TunnelX runs a short **health verify** step (adapter/route checks plus real tunnel probes). The connected dashboard appears only when at least one end-to-end probe succeeds. Expired or quota-exhausted proxy configs should fail here instead of showing a false “connected” state.
+
+### Health-check targets
+
+Open **Settings** and use **Connection Health Check**. Leave the list empty to keep probing `google.com:443` and `cloudflare.com:443`. Add one target per line when the tunnel should be judged by a private network instead of the public internet, for example:
+
+```
+https://intranet.company.com
+internal-api.company.local
+10.0.0.1
+```
+
+`https://` uses port 443, `http://` uses port 80, and `host:port` sets an explicit port. Custom targets are tried first. With **Default public targets** left on, `google.com` and `cloudflare.com` are still used as fallback. Turn that switch off to probe only the custom list. If the switch is off and nothing valid is entered, the public defaults stay in use.
+
+The same list is stored in `%LOCALAPPDATA%\TunnelX\appsettings.json`:
+
+```json
+{
+  "healthCheckEndpoints": "https://intranet.company.com\ninternal-api.company.local\n10.0.0.1",
+  "includeDefaultHealthCheckEndpoints": false
+}
+```
+
+The connected ping field follows the first custom target until you edit it. Split and full routing still send these probes through the tunnel SOCKS path. Private addresses are not given a temporary VPN host route.
 
 ## Exit IP and Country Flag
 
@@ -87,9 +111,35 @@ Enter the server address, username, password, and pre-shared key. TunnelX create
 
 Paste a V2Ray/Xray link or JSON config into the profile. TunnelX uses sing-box for regular configs and switches to Xray-core for configs that require Xray-specific behavior such as `xhttp`.
 
+Hysteria uses the bundled sing-box 1.12 core (Xray has no Hysteria outbound):
+
+- **Hysteria 2:** `hysteria2://` and `hy2://`. Auth can be the URI userinfo or the `auth` / `password` query. Optional `sni`, `insecure`, `obfs=salamander` with `obfs-password`, `mport` port hopping (`20000-50000`), and `upmbps` / `downmbps` when Brutal bandwidth is set.
+- **Hysteria 1:** `hysteria://` over UDP (`auth`, `peer` or `sni`, `insecure`, `obfsParam`, `upmbps` / `downmbps`). `faketcp` and `wechat-video` are not supported. Missing bandwidth defaults to 100/100 Mbps.
+- **sing-box JSON:** a full config that already has inbounds is used as-is. A bare outbound, or a document whose only proxy outbound is `hysteria` / `hysteria2` and which has no inbounds, is wrapped with the TunnelX TUN and mixed inbound. See `examples/singbox-hysteria2.example.json`.
+
+`pinSHA256` is ignored on this sing-box build (no certificate-pin field). Connection ping goes through sing-box. The server button uses ICMP because Hysteria is QUIC/UDP.
+
+### Subscription links
+
+On the Connection tab, **Add subscription** takes an `http://` or `https://` URL that returns a list of configs. TunnelX fetches it directly from that host (the URL is stored locally and may include access tokens), imports each config as a profile, and can refresh the same link later. A refresh adds new nodes, updates existing ones, and removes nodes that disappeared from the list. Failed or empty fetches leave the previous subscription profiles in place.
+
+Pasting the subscription URL itself into the Connection tab (`Ctrl+V`) starts the same fetch. A bare `http://host:port` endpoint is still imported as an HTTP proxy profile.
+
+Supported bodies:
+
+- base64 lists of `vmess://`, `vless://`, `trojan://`, `ss://`, `socks://`, and `http://` share links (including multi-line and double-wrapped base64)
+- the same share links as plain text, or a JSON array of strings
+- sing-box / V2Ray JSON that contains `outbounds`
+- OpenVPN and WireGuard text if present in the response
+
+Not supported: Clash YAML/JSON (`proxies` key), SIP008, and share schemes the importer does not already understand. Optional `profile-title` and `subscription-userinfo` response headers set the subscription name and usage line.
+
+
 ### SOCKS5/HTTP Proxy
 
 Use a SOCKS5/HTTP Proxy profile when you already have an external proxy endpoint. Enter the proxy server, port, and optional credentials. This is different from the local `127.0.0.1` SOCKS5 proxy, which is exposed after connection for tools that need a local proxy address.
+
+When that local listener (and the engine SOCKS/mixed inbounds) drops or comes back, TunnelX resets active proxy sessions and announces `127.0.0.1:port`. Clients such as Telethon can use the socket reset for `run_until_disconnected()`, and the lifecycle log to see the endpoint return. See `docs/PROXY_LIFECYCLE.md`.
 
 ### WireGuard
 
@@ -105,6 +155,8 @@ OpenVPN is not bundled with TunnelX. Install OpenVPN Community separately, selec
 
 For split-tunnel compatibility, TunnelX prepares the OpenVPN config by controlling pushed route and DNS behavior. Recent builds improve stability for multi-`<connection>` profiles: stable remote port ordering (443/80 before 21/53), preserved `tcp-client` blocks, skipping unresolvable remote hostnames, and clearer disconnect insight when the control channel resets. If OpenVPN reconnects and changes the tunnel IP, gateway, interface, or remote endpoint, TunnelX restarts its packet routing with the new values.
 
+To reach the OpenVPN server through another proxy, open the OpenVPN profile and set **Upstream proxy** to HTTP or SOCKS5, then enter the proxy address, port, and username/password if the proxy requires them. TunnelX saves those fields with the profile and writes OpenVPN `http-proxy` / `socks-proxy` (and `http-proxy-retry` / `socks-proxy-retry`) into the prepared config. Leave the type as **No proxy** to connect directly. OpenVPN can use this only when the `.ovpn` profile is TCP (`proto tcp` or `tcp-client`); a UDP-only profile shows an error instead of connecting. If the `.ovpn` already contains `http-proxy` or `socks-proxy`, choose the file again and TunnelX copies the host and port into the profile. A separate auth file path is not read automatically — enter the proxy username and password in TunnelX. Credentials are stored with the profile using the same Windows DPAPI protection as other passwords.
+
 ## Routing Notes
 
 Destination include/exclude rules match both the entered domain and its subdomains. For example, adding `githubusercontent.com` also covers `raw.githubusercontent.com` after DNS resolves it. Some HTTPS clients may still fail during certificate revocation checks if their OCSP/CRL hosts are not reachable through the selected route; add the downloader app or the relevant revocation domains to the include list when that happens.
@@ -116,7 +168,7 @@ Destination include/exclude rules match both the entered domain and its subdomai
 
 ## Local Data and Logs
 
-Profiles, selected apps, include/exclude destinations, connection history, and logs are stored on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or next to the app depending on the feature. TunnelX does not intentionally send analytics or telemetry to the maintainer. Optional exit-IP and country lookups use third-party HTTPS endpoints **through the tunnel**; see `docs/PRIVACY.md`.
+Profiles, selected apps, include/exclude destinations, connection history, logs, and the local-proxy lifecycle log (`proxy-lifecycle.log`) are stored on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or next to the app depending on the feature. TunnelX does not intentionally send analytics or telemetry to the maintainer. Optional exit-IP and country lookups use third-party HTTPS endpoints **through the tunnel**; see `docs/PRIVACY.md`.
 
 Logs can contain process names, hostnames, IP addresses, ports, and connection state. Before posting logs publicly, remove server credentials, UUIDs, private keys, private endpoints, and other sensitive data.
 

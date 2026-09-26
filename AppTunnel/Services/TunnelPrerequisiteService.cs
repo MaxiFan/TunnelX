@@ -81,7 +81,7 @@ public static class TunnelPrerequisiteService
         {
             Logger.Error("[PREREQ] V2Ray config format not recognized");
             return Fail(
-                loc.T("کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد"),
+                loc.T("کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// باشد"),
                 PrerequisiteFailureKind.Generic);
         }
 
@@ -174,6 +174,7 @@ public static class TunnelPrerequisiteService
         ReadOnlySpan<string> schemes =
         [
             "vmess://", "vless://", "trojan://", "ss://",
+            "hysteria2://", "hy2://", "hysteria://",
             "socks5://", "socks://", "http://"
         ];
 

@@ -4,7 +4,7 @@
 
 فارسی | <span dir="ltr">[English](README.md#english)</span> | <span dir="ltr">[Русский](README.ru.md)</span> | <span dir="ltr">[简体中文](README.zh.md)</span>
 
-<span dir="ltr">TunnelX</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. این برنامه می‌تواند ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص، یا کل سیستم را از تونل عبور دهد و هم‌زمان مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ کند. رابط برنامه دو‌زبانه است، زبان سیستم را تشخیص می‌دهد و چینش راست‌به‌چپ/چپ‌به‌راست را برای فارسی و انگلیسی رعایت می‌کند.
+<span dir="ltr">TunnelX</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. این برنامه می‌تواند ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص، یا کل سیستم را از تونل عبور دهد و هم‌زمان مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ کند. رابط برنامه فارسی، انگلیسی و روسی است، زبان سیستم را تشخیص می‌دهد و چینش راست‌به‌چپ/چپ‌به‌راست را رعایت می‌کند.
 
 ## اطلاع‌رسانی در تلگرام
 
@@ -30,10 +30,11 @@
 - پروکسی <span dir="ltr">SOCKS5</span> محلی روی <span dir="ltr">`127.0.0.1`</span> برای ابزارهایی که تنظیم پروکسی داخلی دارند
 - تغییر مسیر <span dir="ltr">DNS</span>، مسدودسازی <span dir="ltr">IPv6</span>، محافظ نشت، عیب‌یابی <span dir="ltr">route</span> و تاریخچه مصرف تونل
 - مدیریت چند پروفایل، کپی/ویرایش کانفیگ‌ها، تست سرور، تشخیص <span dir="ltr">IP</span> خروجی و اعلان بروزرسانی
-- **بررسی سلامت اتصال** قبل از صفحه متصل: پینگ <span dir="ltr">TCP</span> واقعی به <span dir="ltr">`google.com`</span> و <span dir="ltr">`cloudflare.com`</span> از مسیر <span dir="ltr">SOCKS</span> تونل، با نمایش تأخیر هر مقصد در مرحله بررسی
+- لینک اشتراک (<span dir="ltr">sub</span>): دریافت یک آدرس <span dir="ltr">http/https</span>، ساخت پروفایل از کانفیگ‌های آن، و به‌روزرسانی بعدی
+- **بررسی سلامت اتصال** قبل از صفحه متصل: پینگ <span dir="ltr">TCP</span> واقعی از مسیر <span dir="ltr">SOCKS</span> تونل، با نمایش تأخیر هر مقصد در مرحله بررسی. پیش‌فرض <span dir="ltr">`google.com`</span> و <span dir="ltr">`cloudflare.com`</span> است و از تنظیمات می‌توان مقصد سفارشی گذاشت یا مقصدهای عمومی را خاموش کرد
 - داشبورد متصل: <span dir="ltr">IP</span> خروجی همراه نام کشور و تصویر پرچم (دریافت geo و پرچم از داخل تونل، نه مستقیم از شبکه محلی)
 - اعلان‌های <span dir="ltr">tray</span> ویندوز با راهنمای بهتر برای خطا، دکمه یادداشت انتشار روی کارت بروزرسانی، و بررسی بروزرسانی زمان‌بندی‌شده پس از اتصال
-- رابط کاربری فارسی و انگلیسی با تشخیص خودکار زبان، دکمه تغییر زبان و رعایت کامل راست‌به‌چپ/چپ‌به‌راست
+- رابط کاربری فارسی، انگلیسی و روسی با تشخیص خودکار زبان، انتخاب زبان از لیست بازشو در تنظیمات (و فوتر) و رعایت کامل راست‌به‌چپ/چپ‌به‌راست
 - انتخاب پورت داخلی آزاد برای <span dir="ltr">V2Ray/Xray</span> تا خطاهای اشغال بودن پورت‌های <span dir="ltr">`2080/2081`</span> کمتر شود
 
 ## شروع سریع
@@ -67,9 +68,35 @@
 
 لینک یا کانفیگ <span dir="ltr">V2Ray/Xray</span> را در پروفایل وارد کنید. برنامه برای کانفیگ‌های معمول از <span dir="ltr">sing-box</span> استفاده می‌کند و برای کانفیگ‌هایی که به قابلیت‌های خاص <span dir="ltr">Xray</span> مثل <span dir="ltr">xhttp</span> نیاز دارند، <span dir="ltr">Xray-core</span> را انتخاب می‌کند.
 
+<span dir="ltr">Hysteria</span> با هسته <span dir="ltr">sing-box 1.12</span> همراه برنامه اجرا می‌شود (<span dir="ltr">Xray</span> خروجی <span dir="ltr">Hysteria</span> ندارد):
+
+- **هیستوریا ۲:** <span dir="ltr">`hysteria2://`</span> و <span dir="ltr">`hy2://`</span>. رمز در بخش userinfo یا پارامتر <span dir="ltr">`auth`</span> / <span dir="ltr">`password`</span>. پارامترهای اختیاری: <span dir="ltr">`sni`</span>، <span dir="ltr">`insecure`</span>، <span dir="ltr">`obfs=salamander`</span> با <span dir="ltr">`obfs-password`</span>، پرش پورت <span dir="ltr">`mport`</span>، و <span dir="ltr">`upmbps`</span> / <span dir="ltr">`downmbps`</span> فقط وقتی پهنای باند Brutal تنظیم شده باشد.
+- **هیستوریا ۱:** <span dir="ltr">`hysteria://`</span> فقط روی <span dir="ltr">UDP</span> (<span dir="ltr">`auth`</span>، <span dir="ltr">`peer`</span> یا <span dir="ltr">`sni`</span>، <span dir="ltr">`insecure`</span>، <span dir="ltr">`obfsParam`</span>، <span dir="ltr">`upmbps`</span> / <span dir="ltr">`downmbps`</span>). <span dir="ltr">`faketcp`</span> و <span dir="ltr">`wechat-video`</span> پشتیبانی نمی‌شوند. اگر پهنای باند نباشد، پیش‌فرض ۱۰۰/۱۰۰ مگابیت است.
+- **JSON سینگ‌باکس:** اگر کانفیگ از قبل <span dir="ltr">inbounds</span> داشته باشد همان‌طور استفاده می‌شود. outbound تنها، یا سندی که inbound ندارد و خروجی‌اش <span dir="ltr">`hysteria`</span> / <span dir="ltr">`hysteria2`</span> است، با <span dir="ltr">TUN</span> و ورودی mixed برنامه پیچیده می‌شود. نمونه: <span dir="ltr">`examples/singbox-hysteria2.example.json`</span>.
+
+<span dir="ltr">`pinSHA256`</span> در این نسخه <span dir="ltr">sing-box</span> اعمال نمی‌شود. پینگ اتصال از مسیر <span dir="ltr">sing-box</span> است و دکمه سرور به خاطر <span dir="ltr">QUIC/UDP</span> بودن پروتکل، <span dir="ltr">ICMP</span> می‌زند.
+
+### لینک اشتراک
+
+در تب اتصال، **افزودن اشتراک** یک آدرس <span dir="ltr">http://</span> یا <span dir="ltr">https://</span> می‌گیرد که لیست کانفیگ برمی‌گرداند. برنامه همان را مستقیم از همان سرور دریافت می‌کند (آدرس روی دستگاه ذخیره می‌شود و ممکن است توکن دسترسی داشته باشد)، هر کانفیگ را به یک پروفایل تبدیل می‌کند و بعداً می‌توان همان لینک را به‌روز کرد. به‌روزرسانی، کانفیگ تازه را اضافه، کانفیگ موجود را عوض، و کانفیگی که از لیست حذف شده را برمی‌دارد. اگر دریافت خطا بدهد یا خالی باشد، پروفایل‌های قبلی آن اشتراک پاک نمی‌شوند.
+
+چسباندن خودِ آدرس اشتراک در تب اتصال (<span dir="ltr">Ctrl+V</span>) همان دریافت را شروع می‌کند. آدرس ساده <span dir="ltr">http://host:port</span> همچنان به‌عنوان پراکسی <span dir="ltr">HTTP</span> وارد می‌شود.
+
+بدنه‌های پشتیبانی‌شده:
+
+- لیست <span dir="ltr">base64</span> از لینک‌های <span dir="ltr">vmess://</span>، <span dir="ltr">vless://</span>، <span dir="ltr">trojan://</span>، <span dir="ltr">ss://</span>، <span dir="ltr">socks://</span> و <span dir="ltr">http://</span> (حتی چندخطی یا دو بار <span dir="ltr">base64</span>)
+- همان لینک‌ها به‌صورت متن ساده، یا آرایه <span dir="ltr">JSON</span> از رشته‌ها
+- <span dir="ltr">JSON</span> مربوط به <span dir="ltr">sing-box / V2Ray</span> که <span dir="ltr">outbounds</span> دارد
+- متن <span dir="ltr">OpenVPN</span> و <span dir="ltr">WireGuard</span> اگر داخل پاسخ باشد
+
+پشتیبانی نمی‌شود: <span dir="ltr">Clash YAML/JSON</span> (کلید <span dir="ltr">proxies</span>)، <span dir="ltr">SIP008</span>، و لینک‌هایی که واردکننده از قبل نمی‌شناسد. هدرهای اختیاری <span dir="ltr">profile-title</span> و <span dir="ltr">subscription-userinfo</span> نام اشتراک و خط مصرف را تنظیم می‌کنند.
+
+
 ### <span dir="ltr">SOCKS5/HTTP Proxy</span>
 
 اگر از پراکسی آماده استفاده می‌کنید، نوع پروفایل <span dir="ltr">SOCKS5/HTTP Proxy</span> را انتخاب کنید و سرور، پورت و در صورت نیاز نام کاربری و رمز عبور را وارد کنید. این حالت برای عبور برنامه‌های انتخاب‌شده از یک پراکسی خارجی مناسب است و با پراکسی محلی <span dir="ltr">`127.0.0.1`</span> تفاوت دارد.
+
+وقتی پراکسی محلی (و ورودی‌های <span dir="ltr">SOCKS/mixed</span> موتور) قطع یا دوباره وصل می‌شود، <span dir="ltr">TunnelX</span> نشست‌های فعال را می‌بندد و <span dir="ltr">`127.0.0.1:port`</span> را اعلام می‌کند. نحوه مشاهده برای کلاینت‌هایی مثل <span dir="ltr">Telethon</span> در <span dir="ltr">`docs/PROXY_LIFECYCLE.md`</span> آمده است.
 
 ### <span dir="ltr">WireGuard</span>
 
@@ -84,6 +111,8 @@
 <span dir="ltr">OpenVPN</span> همراه <span dir="ltr">TunnelX</span> توزیع نمی‌شود. برای این حالت باید <span dir="ltr">OpenVPN Community</span> را جداگانه نصب کنید، فایل <span dir="ltr">`.ovpn`</span> را در <span dir="ltr">TunnelX</span> انتخاب کنید و در صورت نیاز نام کاربری و رمز عبور <span dir="ltr">OpenVPN</span> را داخل برنامه وارد کنید. نصب بودن <span dir="ltr">OpenVPN Connect</span> به‌تنهایی برای این حالت کافی نیست، چون آن برنامه مسیرها و <span dir="ltr">DNS</span> را با کلاینت خودش مدیریت می‌کند.
 
 <span dir="ltr">TunnelX</span> برای سازگاری با <span dir="ltr">Split tunneling</span>، تنظیمات مسیر و <span dir="ltr">DNS</span> تحمیلی فایل <span dir="ltr">`.ovpn`</span> را کنترل می‌کند. نسخه‌های اخیر برای پروفایل‌های چند <span dir="ltr">`<connection>`</span> پایدارترند: اولویت پورت ۴۴۳/۸۰، حفظ بلوک <span dir="ltr">`tcp-client`</span>، رد hostnameهای غیرقابل resolve، و پیام واضح‌تر هنگام قطع کانال کنترل. در صورت تغییر <span dir="ltr">IP</span> تونل، <span dir="ltr">gateway</span>، <span dir="ltr">interface</span> یا مقصد ریموت هنگام <span dir="ltr">reconnect</span>، مسیر‌دهی داخلی دوباره راه‌اندازی می‌شود.
+
+اگر سرور <span dir="ltr">OpenVPN</span> مستقیم در دسترس نیست، در همان پروفایل بخش «پراکسی بالادستی» را روی <span dir="ltr">HTTP</span> یا <span dir="ltr">SOCKS5</span> بگذارید و آدرس، پورت و در صورت نیاز نام کاربری/رمز پراکسی را وارد کنید. <span dir="ltr">TunnelX</span> این مقادیر را با پروفایل ذخیره می‌کند و هنگام اتصال دستورهای <span dir="ltr">`http-proxy`</span> یا <span dir="ltr">`socks-proxy`</span> را در کانفیگ آماده‌شده می‌نویسد. «بدون پراکسی» یعنی اتصال مستقیم. این قابلیت فقط برای کانفیگ <span dir="ltr">TCP</span> (<span dir="ltr">`proto tcp`</span> یا <span dir="ltr">`tcp-client`</span>) است. اگر خود فایل <span dir="ltr">`.ovpn`</span> از قبل <span dir="ltr">`http-proxy`</span> یا <span dir="ltr">`socks-proxy`</span> دارد، فایل را دوباره انتخاب کنید تا آدرس و پورت به پروفایل منتقل شود. مسیر فایل احراز هویت جدا خوانده نمی‌شود؛ نام کاربری و رمز پراکسی را در <span dir="ltr">TunnelX</span> وارد کنید.
 
 ## نکته‌های مسیر و دامنه
 

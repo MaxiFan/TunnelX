@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using TunnelX.ProxyLifecycle;
 
 namespace AppTunnel.Services;
 
@@ -15,21 +16,27 @@ namespace AppTunnel.Services;
 internal sealed class MixedProxyServer
 {
     private readonly int _listenPort;
+    private readonly LocalProxyAuth.Credentials _auth;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private IPEndPoint? _bindEndpoint;
     private long _connCount;
     private long _connActive;
     private Action<IPAddress>? _ensureRoute;
+    private readonly ProxyClientSessionTable _sessions = new();
 
-    public MixedProxyServer(int listenPort = 1080)
+    public MixedProxyServer(int listenPort = 1080, string? username = null, string? password = null)
     {
         _listenPort = listenPort;
+        _auth = new LocalProxyAuth.Credentials(
+            (username ?? "").Trim(),
+            password ?? "");
     }
 
     public bool IsRunning => _listener != null;
     public long TotalConnections => Interlocked.Read(ref _connCount);
     public long ActiveConnections => Interlocked.Read(ref _connActive);
+    internal bool AuthEnabled => _auth.IsEnabled;
 
     public void Start(string vpnLocalIp, Action<IPAddress>? ensureRoute = null)
     {
@@ -42,27 +49,43 @@ internal sealed class MixedProxyServer
         _bindEndpoint = new IPEndPoint(bindIp, 0);
         _ensureRoute = ensureRoute;
 
+        var announced = false;
         try
         {
             _listener = new TcpListener(IPAddress.Loopback, _listenPort);
             _listener.Start();
             _cts = new CancellationTokenSource();
-            Logger.Info($"[MIXED] Listening on 127.0.0.1:{_listenPort}, outbound bind={vpnLocalIp}");
+            Logger.Info(
+                _auth.IsEnabled
+                    ? $"[MIXED] Listening on 127.0.0.1:{_listenPort}, outbound bind={vpnLocalIp}, auth=on"
+                    : $"[MIXED] Listening on 127.0.0.1:{_listenPort}, outbound bind={vpnLocalIp}, auth=off");
+            LocalProxyAnnouncements.Connected(_listenPort);
+            announced = true;
             _ = Task.Run(() => AcceptLoop(_cts.Token));
         }
         catch (Exception ex)
         {
             Logger.Error($"[MIXED] Failed to start listener on port {_listenPort}: {ex.Message}");
+            try { _listener?.Stop(); } catch { }
             _listener = null;
+            _cts = null;
+            if (announced)
+                LocalProxyAnnouncements.Disconnected(_listenPort);
         }
     }
 
     public void Stop()
     {
+        var wasRunning = _listener != null;
         try { _cts?.Cancel(); } catch { }
+        // Reset accepted clients before dropping the listener so proxies such as
+        // Telethon observe the disconnect (run_until_disconnected) immediately.
+        _sessions.AbortAll();
         try { _listener?.Stop(); } catch { }
         _listener = null;
         _cts = null;
+        if (wasRunning)
+            LocalProxyAnnouncements.Disconnected(_listenPort);
     }
 
     private async Task AcceptLoop(CancellationToken ct)
@@ -90,6 +113,7 @@ internal sealed class MixedProxyServer
     {
         long connId = Interlocked.Increment(ref _connCount);
         Interlocked.Increment(ref _connActive);
+        _sessions.Track(connId, client);
         try
         {
             client.NoDelay = true;
@@ -123,6 +147,7 @@ internal sealed class MixedProxyServer
         }
         finally
         {
+            _sessions.Untrack(connId);
             try { client.Dispose(); } catch { }
             Interlocked.Decrement(ref _connActive);
         }
@@ -144,13 +169,27 @@ internal sealed class MixedProxyServer
             var methods = new byte[nMethods];
             if (!await ReadExactAsync(stream, methods, 0, nMethods, ct)) return;
 
-            // No-auth only
-            if (!methods.Contains((byte)0x00))
+            if (_auth.IsEnabled)
             {
-                await stream.WriteAsync(new byte[] { 0x05, 0xFF }, ct);
-                return;
+                if (!methods.Contains((byte)0x02))
+                {
+                    await stream.WriteAsync(new byte[] { 0x05, 0xFF }, ct);
+                    return;
+                }
+                await stream.WriteAsync(new byte[] { 0x05, 0x02 }, ct);
+                if (!await AuthenticateSocks5UserPassAsync(stream, connId, ct))
+                    return;
             }
-            await stream.WriteAsync(new byte[] { 0x05, 0x00 }, ct);
+            else
+            {
+                // No-auth only
+                if (!methods.Contains((byte)0x00))
+                {
+                    await stream.WriteAsync(new byte[] { 0x05, 0xFF }, ct);
+                    return;
+                }
+                await stream.WriteAsync(new byte[] { 0x05, 0x00 }, ct);
+            }
 
             // Request
             var req = new byte[4];
@@ -318,6 +357,20 @@ internal sealed class MixedProxyServer
                 }
             }
 
+            if (_auth.IsEnabled)
+            {
+                if (!TryValidateHttpProxyAuth(headers))
+                {
+                    Logger.Warning($"[HTTP #{connId}] Proxy authentication failed");
+                    await WriteHttpErrorAsync(
+                        stream,
+                        "407 Proxy Authentication Required",
+                        ct,
+                        "Proxy-Authenticate: Basic realm=\"TunnelX\"\r\n");
+                    return;
+                }
+            }
+
             // Parse target host:port
             string host;
             int port;
@@ -379,6 +432,69 @@ internal sealed class MixedProxyServer
     // ─────────────────────────────────────────────────────────────────────────
     // Shared helpers
     // ─────────────────────────────────────────────────────────────────────────
+    private async Task<bool> AuthenticateSocks5UserPassAsync(NetworkStream stream, long connId, CancellationToken ct)
+    {
+        // RFC 1929: VER ULEN UNAME PLEN PASSWD
+        var ver = new byte[1];
+        if (!await ReadExactAsync(stream, ver, 0, 1, ct)) return false;
+        if (ver[0] != 0x01)
+        {
+            await stream.WriteAsync(new byte[] { 0x01, 0x01 }, ct);
+            return false;
+        }
+
+        var ulenBuf = new byte[1];
+        if (!await ReadExactAsync(stream, ulenBuf, 0, 1, ct)) return false;
+        int ulen = ulenBuf[0];
+        if (ulen <= 0 || ulen > 255) return false;
+        var uname = new byte[ulen];
+        if (!await ReadExactAsync(stream, uname, 0, ulen, ct)) return false;
+
+        var plenBuf = new byte[1];
+        if (!await ReadExactAsync(stream, plenBuf, 0, 1, ct)) return false;
+        int plen = plenBuf[0];
+        if (plen < 0 || plen > 255) return false;
+        var passwd = plen > 0 ? new byte[plen] : Array.Empty<byte>();
+        if (plen > 0 && !await ReadExactAsync(stream, passwd, 0, plen, ct)) return false;
+
+        var username = Encoding.UTF8.GetString(uname);
+        var password = Encoding.UTF8.GetString(passwd);
+        if (!LocalProxyAuth.Matches(_auth, username, password))
+        {
+            Logger.Warning($"[SOCKS5 #{connId}] Authentication failed");
+            await stream.WriteAsync(new byte[] { 0x01, 0x01 }, ct);
+            return false;
+        }
+
+        await stream.WriteAsync(new byte[] { 0x01, 0x00 }, ct);
+        return true;
+    }
+
+    private bool TryValidateHttpProxyAuth(Dictionary<string, string> headers)
+    {
+        if (!headers.TryGetValue("Proxy-Authorization", out var header) ||
+            string.IsNullOrWhiteSpace(header))
+            return false;
+
+        const string prefix = "Basic ";
+        if (!header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        try
+        {
+            var token = header[prefix.Length..].Trim();
+            var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(token));
+            var colon = decoded.IndexOf(':');
+            if (colon < 0)
+                return LocalProxyAuth.Matches(_auth, decoded, "");
+            return LocalProxyAuth.Matches(_auth, decoded[..colon], decoded[(colon + 1)..]);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private async Task<TcpClient?> DialUpstreamAsync(IPAddress remoteIp, int port, long connId, CancellationToken ct)
     {
         const int maxAttempts = 2;

@@ -53,12 +53,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         RefreshAppsCommand = new RelayCommand(_ => LoadInstalledApps(), _ => !IsBusy);
 
         // Profile commands
-        NewProfileCommand = new RelayCommand(_ => CreateNewProfile(), _ => !IsConnected);
-        DeleteProfileCommand = new RelayCommand(DeleteCurrentProfile, _ => !IsConnected && Profiles.Count > 1);
-        DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected);
-        EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected);
+        NewProfileCommand = new RelayCommand(_ => CreateNewProfile(), _ => !IsConnected && !IsSubscriptionBusy);
+        DeleteProfileCommand = new RelayCommand(DeleteCurrentProfile, _ => !IsConnected && !IsSubscriptionBusy && Profiles.Count > 1);
+        ToggleSelectAllProfilesCommand = new RelayCommand(_ => ToggleSelectAllProfilesForDeletion(), _ => Profiles.Count > 1);
+        DeleteSelectedProfilesCommand = new RelayCommand(_ => DeleteSelectedProfiles(), _ => !IsConnected && !IsSubscriptionBusy && PlanBulkDelete().ToRemove.Count > 0);
+        DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected && !IsSubscriptionBusy);
+        EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected && !IsSubscriptionBusy);
         SelectProfileCommand = new RelayCommand(SelectProfile, _ => !IsConnected);
-        ImportConfigsFromClipboardCommand = new RelayCommand(_ => ImportConfigsFromClipboard(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs);
+        ImportConfigsFromClipboardCommand = new RelayCommand(_ => ImportConfigsFromClipboard(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        AddSubscriptionCommand = new RelayCommand(_ => PromptAddSubscription(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        RefreshSubscriptionCommand = new RelayCommand(RefreshSubscription, _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        DeleteSubscriptionCommand = new RelayCommand(DeleteSubscription, _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
         TestSelectedProfileLatencyCommand = new RelayCommand(
             _ => _ = TestProfileLatencyAsync(SelectedProfile),
             _ => CanUseConnectionTabQuickActions && !IsTestingProfileLatency && !IsTestingAllProfilesLatency && !IsTestingProfileServerPing
@@ -105,7 +110,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             _ => _ = CheckForUpdatesAsync(silent: false),
             _ => !IsCheckingForUpdates && IsConnected);
         OpenLatestReleaseCommand = new RelayCommand(_ => OpenExternalLink(LatestReleaseUrl), _ => !string.IsNullOrWhiteSpace(LatestReleaseUrl));
-        ToggleLanguageCommand = new RelayCommand(_ => ToggleLanguage());
 
         CancelConnectionCommand = new RelayCommand(
             _ => _ = CancelConnectingAsync(),
@@ -133,6 +137,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // Load saved profiles, global tunnel apps, global excludes, global includes, and history on startup
         LoadProfiles();
+        LoadSubscriptions();
+        Subscriptions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubscriptions));
         LoadTunnelApps();
         LoadExcludes();
         LoadIncludes();
@@ -225,6 +231,52 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         get => LocalizationService.Instance.T(_mixedProxyPortStatusText);
         set { _mixedProxyPortStatusText = value; OnPropertyChanged(); }
+    }
+
+    private string _localProxyUsername = "";
+    public string LocalProxyUsername
+    {
+        get => _localProxyUsername;
+        set
+        {
+            var normalized = value ?? "";
+            if (_localProxyUsername == normalized) return;
+            _localProxyUsername = normalized;
+            _appSettings.LocalProxyUsername = normalized;
+            _profileService.SaveAppSettings(_appSettings);
+            OnPropertyChanged();
+            ApplyLocalProxyAuthToRouter();
+        }
+    }
+
+    private string _localProxyPassword = "";
+    public string LocalProxyPassword
+    {
+        get => _localProxyPassword;
+        set
+        {
+            var normalized = value ?? "";
+            if (_localProxyPassword == normalized) return;
+            _localProxyPassword = normalized;
+            _appSettings.LocalProxyPassword = normalized;
+            _profileService.SaveAppSettings(_appSettings);
+            OnPropertyChanged();
+            ApplyLocalProxyAuthToRouter();
+        }
+    }
+
+    /// <summary>Notifies Settings PasswordBox when defaults are loaded.</summary>
+    public event Action<string>? LocalProxyPasswordChanged;
+
+    private void ApplyLocalProxyAuthToRouter()
+    {
+        var creds = LocalProxyAuth.Resolve(
+            _selectedProfile?.MixedProxyUsername,
+            _selectedProfile?.MixedProxyPassword,
+            LocalProxyUsername,
+            LocalProxyPassword);
+        _trafficRouter.MixedProxyUsername = creds.Username;
+        _trafficRouter.MixedProxyPassword = creds.Password;
     }
 
     private bool _autoTuneMtu = true;
@@ -341,7 +393,136 @@ public partial class MainViewModel : INotifyPropertyChanged
         LocalizationService.Instance.T("نمایش اعلان‌های وضعیت اتصال و برنامه. اعلان‌های تبلیغ/به‌روزرسانی با دکمه ✕ بسته می‌شوند.");
 
     public string HelpSettingsTabBodyText =>
-        LocalizationService.Instance.T("پورت پراکسی محلی، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
+        LocalizationService.Instance.T("پورت پراکسی محلی، نام کاربری/رمز پیش‌فرض پروکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
+
+    private string _healthCheckEndpointsText = "";
+    public string HealthCheckEndpointsText
+    {
+        get => _healthCheckEndpointsText;
+        set
+        {
+            var next = value ?? "";
+            if (_healthCheckEndpointsText == next) return;
+            _healthCheckEndpointsText = next;
+            OnPropertyChanged();
+            PersistHealthCheckSettings();
+        }
+    }
+
+    private bool _includeDefaultHealthCheckEndpoints = true;
+    public bool IncludeDefaultHealthCheckEndpoints
+    {
+        get => _includeDefaultHealthCheckEndpoints;
+        set
+        {
+            if (_includeDefaultHealthCheckEndpoints == value) return;
+            _includeDefaultHealthCheckEndpoints = value;
+            OnPropertyChanged();
+            PersistHealthCheckSettings();
+        }
+    }
+
+    private string _healthCheckEndpointsStatusText = "";
+    public string HealthCheckEndpointsStatusText
+    {
+        get => _healthCheckEndpointsStatusText;
+        private set
+        {
+            if (_healthCheckEndpointsStatusText == value) return;
+            _healthCheckEndpointsStatusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string HealthCheckSectionTitleText =>
+        LocalizationService.Instance.T("🩺 بررسی سلامت اتصال");
+
+    public string HealthCheckEndpointsLabelText =>
+        LocalizationService.Instance.T("مقصدهای سفارشی");
+
+    public string HealthCheckEndpointsHintText =>
+        LocalizationService.Instance.T("هر خط یک آدرس (URL، دامنه یا IP). اگر خالی بماند، google.com و cloudflare.com بررسی می‌شوند.");
+
+    public string HealthCheckEndpointsPlaceholderText =>
+        "https://intranet.company.com";
+
+    public string IncludeDefaultHealthCheckEndpointsTitleText =>
+        LocalizationService.Instance.T("مقصدهای عمومی پیش‌فرض");
+
+    public string IncludeDefaultHealthCheckEndpointsDescriptionText =>
+        LocalizationService.Instance.T("google.com و cloudflare.com هم بررسی می‌شوند. با خاموش کردن این گزینه، فقط مقصدهای سفارشی معتبر استفاده می‌شوند.");
+
+    private void PersistHealthCheckSettings()
+    {
+        RefreshHealthCheckStatus();
+        SyncPingTargetWithHealthChecks();
+        _appSettings.HealthCheckEndpoints = _healthCheckEndpointsText;
+        _appSettings.IncludeDefaultHealthCheckEndpoints = _includeDefaultHealthCheckEndpoints;
+        _profileService.SaveAppSettings(_appSettings);
+    }
+
+    private HealthCheckPlan GetHealthCheckPlan()
+        => HealthCheckTargets.Resolve(_healthCheckEndpointsText, _includeDefaultHealthCheckEndpoints);
+
+    private void RefreshHealthCheckStatus()
+    {
+        var plan = GetHealthCheckPlan();
+        var loc = LocalizationService.Instance;
+        var parts = new List<string>();
+        if (plan.FellBackToDefaults)
+        {
+            parts.Add(loc.T("مقصد سفارشی معتبری نیست؛ بررسی سلامت با google.com و cloudflare.com ادامه پیدا می‌کند."));
+        }
+        else if (!plan.HasCustomEndpoints)
+        {
+            parts.Add(loc.T("پیش‌فرض: google.com:443 و cloudflare.com:443"));
+        }
+        else
+        {
+            parts.Add(loc.Format(
+                "مقصدهای فعال: {0}",
+                string.Join(" ، ", plan.Targets.Select(t => t.ToString()))));
+        }
+
+        if (plan.InvalidEntries.Count > 0)
+        {
+            parts.Add(loc.Format(
+                "این خطوط نادیده گرفته شد: {0}",
+                string.Join(" ، ", plan.InvalidEntries)));
+        }
+
+        if (plan.IgnoredExtraEntries.Count > 0)
+        {
+            parts.Add(loc.Format(
+                "بیش از {0} مقصد سفارشی نادیده گرفته شد.",
+                HealthCheckTargets.MaxCustomEndpoints));
+        }
+
+        HealthCheckEndpointsStatusText = string.Join(" ", parts);
+    }
+
+    private bool _pingTargetFollowsHealthCheck = true;
+    private bool _settingPingTargetFromHealthCheck;
+
+    private void SyncPingTargetWithHealthChecks()
+    {
+        if (!_pingTargetFollowsHealthCheck)
+            return;
+
+        var next = GetHealthCheckPlan().SuggestedPingTarget;
+        if (string.Equals(_pingTarget, next, StringComparison.Ordinal))
+            return;
+
+        _settingPingTargetFromHealthCheck = true;
+        try
+        {
+            PingTarget = next;
+        }
+        finally
+        {
+            _settingPingTargetFromHealthCheck = false;
+        }
+    }
 
     public string? LastActiveProfileId
     {
@@ -354,7 +535,24 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public string LanguageToggleText => LocalizationService.Instance.ToggleLanguageText;
+    public string UiLanguageSetting
+    {
+        get => LocalizationService.Instance.LanguageSetting;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value, LocalizationService.Instance.LanguageSetting, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            LocalizationService.Instance.SetLanguage(value);
+            var selected = LocalizationService.Instance.LanguageSetting;
+            if (string.Equals(_appSettings.Language, selected, StringComparison.Ordinal))
+                return;
+
+            _appSettings.Language = selected;
+            _profileService.SaveAppSettings(_appSettings);
+        }
+    }
     public bool AppIsRightToLeft => LocalizationService.Instance.IsRightToLeft;
     public string AppTitleText => LocalizationService.Instance.IsRightToLeft ? "تانلکس" : "TunnelX";
     public string AppTitleAccentText => LocalizationService.Instance.IsRightToLeft ? "س" : "X";
@@ -926,6 +1124,148 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private OpenVpnUpstreamProxyKind _openVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind.None;
+    public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind
+    {
+        get => _openVpnUpstreamProxyKind;
+        set
+        {
+            if (_openVpnUpstreamProxyKind == value) return;
+            var previous = _openVpnUpstreamProxyKind;
+            _openVpnUpstreamProxyKind = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyKind = value;
+            // Port is applied before kind when importing a .ovpn, so an explicit port is kept.
+            // Switching HTTP <-> SOCKS replaces only that protocol's default port.
+            if (value == OpenVpnUpstreamProxyKind.Http &&
+                (_openVpnUpstreamProxyPort == 0 ||
+                 (previous == OpenVpnUpstreamProxyKind.Socks &&
+                  _openVpnUpstreamProxyPort == OpenVpnUpstreamProxy.DefaultSocksPort)))
+                OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultHttpPort;
+            else if (value == OpenVpnUpstreamProxyKind.Socks &&
+                     (_openVpnUpstreamProxyPort == 0 ||
+                      (previous == OpenVpnUpstreamProxyKind.Http &&
+                       _openVpnUpstreamProxyPort == OpenVpnUpstreamProxy.DefaultHttpPort)))
+                OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultSocksPort;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    public bool IsOpenVpnUpstreamProxyEnabled =>
+        _openVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None;
+
+    private string _openVpnUpstreamProxyHost = "";
+    public string OpenVpnUpstreamProxyHost
+    {
+        get => _openVpnUpstreamProxyHost;
+        set
+        {
+            if (_openVpnUpstreamProxyHost == value) return;
+            _openVpnUpstreamProxyHost = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyHost = value;
+            OnPropertyChanged();
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    private int _openVpnUpstreamProxyPort;
+    public int OpenVpnUpstreamProxyPort
+    {
+        get => _openVpnUpstreamProxyPort;
+        set
+        {
+            if (_openVpnUpstreamProxyPort == value) return;
+            _openVpnUpstreamProxyPort = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyPort = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPortText));
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    public string OpenVpnUpstreamProxyPortText
+    {
+        get => _openVpnUpstreamProxyPort.ToString();
+        set
+        {
+            if (int.TryParse((value ?? "").Trim(), out var port))
+            {
+                OpenVpnUpstreamProxyPort = port;
+                return;
+            }
+
+            ConfigValidationText = string.IsNullOrWhiteSpace(value)
+                ? OpenVpnUpstreamProxy.PortInvalidKey
+                : OpenVpnUpstreamProxy.PortNumberKey;
+        }
+    }
+
+    private string _openVpnUpstreamProxyUsername = "";
+    public string OpenVpnUpstreamProxyUsername
+    {
+        get => _openVpnUpstreamProxyUsername;
+        set
+        {
+            if (_openVpnUpstreamProxyUsername == value) return;
+            _openVpnUpstreamProxyUsername = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyUsername = value;
+            OnPropertyChanged();
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    private string _openVpnUpstreamProxyPassword = "";
+    public string OpenVpnUpstreamProxyPassword
+    {
+        get => _openVpnUpstreamProxyPassword;
+        set
+        {
+            if (_openVpnUpstreamProxyPassword == value) return;
+            _openVpnUpstreamProxyPassword = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyPassword = value;
+            OnPropertyChanged();
+            SaveCurrentState();
+        }
+    }
+
+    public string OpenVpnUpstreamProxyIntroText =>
+        LocalizationService.Instance.T(OpenVpnUpstreamProxy.IntroTextKey);
+
+    private OpenVpnUpstreamProxySettings CurrentUpstreamProxySettings() =>
+        OpenVpnUpstreamProxySettings.From(
+            OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword);
+
+    private void ImportUpstreamProxyFromOpenVpnConfig(string config)
+    {
+        if (!OpenVpnUpstreamProxy.TryParse(config, out var parsed))
+            return;
+
+        OpenVpnUpstreamProxyHost = parsed.Host;
+        OpenVpnUpstreamProxyPort = parsed.Port;
+        if (parsed.HasInlineCredentials)
+        {
+            OpenVpnUpstreamProxyUsername = parsed.Username;
+            OpenVpnUpstreamProxyPassword = parsed.Password;
+            OpenVpnUpstreamProxyPasswordChanged?.Invoke(parsed.Password);
+        }
+
+        OpenVpnUpstreamProxyKind = parsed.Kind;
+    }
+
     public string OpenVpnConfigIntroText =>
         LocalizationService.Instance.T("فایل .ovpn و اطلاعات احراز هویت OpenVPN را وارد کنید. TunnelX بر اساس محتوای فایل مشخص می‌کند کدام فیلدها اجباری است.");
 
@@ -1480,11 +1820,19 @@ public partial class MainViewModel : INotifyPropertyChanged
         set { _directTraffic = value; OnPropertyChanged(); }
     }
 
-    private string _pingTarget = "www.google.com";
+    private string _pingTarget = HealthCheckTargets.DefaultPingTarget;
     public string PingTarget
     {
         get => _pingTarget;
-        set { _pingTarget = value; OnPropertyChanged(); }
+        set
+        {
+            var next = value ?? "";
+            if (_pingTarget == next) return;
+            _pingTarget = next;
+            if (!_settingPingTargetFromHealthCheck)
+                _pingTargetFollowsHealthCheck = false;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isPinging;
@@ -1762,10 +2110,15 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand RefreshAppsCommand { get; }
     public ICommand NewProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
+    public ICommand ToggleSelectAllProfilesCommand { get; }
+    public ICommand DeleteSelectedProfilesCommand { get; }
     public ICommand DuplicateProfileCommand { get; }
     public ICommand EditProfileCommand { get; }
     public ICommand SelectProfileCommand { get; }
     public ICommand ImportConfigsFromClipboardCommand { get; }
+    public ICommand AddSubscriptionCommand { get; }
+    public ICommand RefreshSubscriptionCommand { get; }
+    public ICommand DeleteSubscriptionCommand { get; }
     public ICommand TestSelectedProfileLatencyCommand { get; }
     public ICommand TestProfileLatencyCommand { get; }
     public ICommand TestProfileServerPingCommand { get; }
@@ -1793,7 +2146,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand CopyHelpCryptoAddressCommand { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand OpenLatestReleaseCommand { get; }
-    public ICommand ToggleLanguageCommand { get; }
 
     #endregion
 
@@ -2044,7 +2396,10 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 var text = System.Windows.Clipboard.GetText().Trim();
                 if (CurrentTunnelType == TunnelType.OpenVpn)
+                {
                     SelectedOpenVpnConfig = text;
+                    ImportUpstreamProxyFromOpenVpnConfig(text);
+                }
                 else if (CurrentTunnelType == TunnelType.WireGuard)
                 {
                     SelectedWireGuardConfig = text;
@@ -2092,6 +2447,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             SelectedOpenVpnConfigPath = dialog.FileName;
             SelectedOpenVpnConfig = File.ReadAllText(dialog.FileName);
+            ImportUpstreamProxyFromOpenVpnConfig(SelectedOpenVpnConfig);
             WarnIfOpenVpnMissingAfterConfigAdded();
         }
         catch (Exception ex)
@@ -2218,6 +2574,24 @@ public partial class MainViewModel : INotifyPropertyChanged
                     out var openVpnValidationError))
             {
                 ConfigValidationText = openVpnValidationError;
+                return;
+            }
+
+            if (OpenVpnUpstreamProxy.TryGetConnectError(
+                    CurrentUpstreamProxySettings(),
+                    SelectedOpenVpnConfig,
+                    out var upstreamProxyError))
+            {
+                ConfigValidationText = upstreamProxyError;
+                return;
+            }
+
+            if (OpenVpnUpstreamProxy.TryParse(SelectedOpenVpnConfig, out var parsedUpstream) &&
+                parsedUpstream.ReferencesExternalAuthFile &&
+                string.IsNullOrWhiteSpace(OpenVpnUpstreamProxyUsername) &&
+                OpenVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None)
+            {
+                ConfigValidationText = OpenVpnUpstreamProxy.ExternalAuthFileKey;
                 return;
             }
 
@@ -2487,11 +2861,27 @@ public partial class MainViewModel : INotifyPropertyChanged
         SyncStartupRegistryFromSettings();
         _autoConnectOnStartup = _appSettings.AutoConnectOnStartup;
         _enableInformationalNotifications = _appSettings.EnableInformationalNotifications;
+        _healthCheckEndpointsText = _appSettings.HealthCheckEndpoints ?? "";
+        _includeDefaultHealthCheckEndpoints = _appSettings.IncludeDefaultHealthCheckEndpoints;
+        _localProxyUsername = _appSettings.LocalProxyUsername ?? "";
+        _localProxyPassword = _appSettings.LocalProxyPassword ?? "";
         _githubInstallCount = _appSettings.GitHubAppDownloadCount;
         AppNotificationService.Configure(() => _enableInformationalNotifications);
         OnPropertyChanged(nameof(StartWithWindows));
         OnPropertyChanged(nameof(AutoConnectOnStartup));
         OnPropertyChanged(nameof(EnableInformationalNotifications));
+        OnPropertyChanged(nameof(HealthCheckEndpointsText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpoints));
+        OnPropertyChanged(nameof(LocalProxyUsername));
+        LocalProxyPasswordChanged?.Invoke(_localProxyPassword);
+        ApplyLocalProxyAuthToRouter();
+        RefreshHealthCheckStatus();
+        SyncPingTargetWithHealthChecks();
+        OnPropertyChanged(nameof(HealthCheckSectionTitleText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsLabelText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
         OnPropertyChanged(nameof(InformationalNotificationsSectionTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsDescriptionText));
@@ -2499,7 +2889,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasGitHubInstallCount));
         OnPropertyChanged(nameof(GitHubInstallCountText));
         OnPropertyChanged(nameof(AdAudienceText));
-        OnPropertyChanged(nameof(LanguageToggleText));
+        OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppFlowDirection));
         OnPropertyChanged(nameof(AppTextAlignment));
@@ -2528,16 +2918,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void ToggleLanguage()
-    {
-        LocalizationService.Instance.ToggleLanguage();
-        _appSettings.Language = LocalizationService.Instance.EffectiveLanguage;
-        _profileService.SaveAppSettings(_appSettings);
-    }
-
     private void OnLanguageChanged()
     {
-        OnPropertyChanged(nameof(LanguageToggleText));
+        OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppTitleText));
         OnPropertyChanged(nameof(AppTitleAccentText));
@@ -2555,6 +2938,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(InformationalNotificationsTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsDescriptionText));
         OnPropertyChanged(nameof(HelpSettingsTabBodyText));
+        OnPropertyChanged(nameof(HealthCheckSectionTitleText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsLabelText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
+        RefreshHealthCheckStatus();
         OnPropertyChanged(nameof(OpenVpnPrerequisiteText));
         OnPropertyChanged(nameof(OpenVpnIntroText));
         OnPropertyChanged(nameof(OpenVpnInstallGuideText));
@@ -2661,6 +3050,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ConnectedServerPingToolTipText));
         OnPropertyChanged(nameof(ImportConfigsButtonText));
         OnPropertyChanged(nameof(ImportConfigsToolTipText));
+        OnPropertyChanged(nameof(AddSubscriptionButtonText));
+        OnPropertyChanged(nameof(AddSubscriptionToolTipText));
+        OnPropertyChanged(nameof(RefreshSubscriptionButtonText));
+        OnPropertyChanged(nameof(RefreshSubscriptionToolTipText));
+        OnPropertyChanged(nameof(DeleteSubscriptionButtonText));
+        OnPropertyChanged(nameof(DeleteSubscriptionToolTipText));
+        foreach (var subscription in Subscriptions)
+            subscription.RefreshLocalization();
         OnPropertyChanged(nameof(TestProfileLatencyButtonText));
         OnPropertyChanged(nameof(TestAllProfilesLatencyButtonText));
         OnPropertyChanged(nameof(TestProfileLatencyToolTipText));
@@ -2677,6 +3074,11 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ProfilesSectionTitleText));
         OnPropertyChanged(nameof(ProfileEditButtonText));
         OnPropertyChanged(nameof(ProfileDeleteButtonText));
+        OnPropertyChanged(nameof(SelectAllProfilesButtonText));
+        OnPropertyChanged(nameof(SelectAllProfilesToolTipText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesToolTipText));
+        OnPropertyChanged(nameof(ProfileBulkSelectToolTipText));
         OnPropertyChanged(nameof(SingleProfileLatencyButtonText));
         OnPropertyChanged(nameof(CancelProfileLatencyTestButtonText));
         OnPropertyChanged(nameof(CanUseConnectionTabQuickActions));
@@ -2706,6 +3108,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OpenVpnUsernameFieldLabelText));
         OnPropertyChanged(nameof(OpenVpnPasswordFieldLabelText));
         OnPropertyChanged(nameof(OpenVpnSecretFieldLabelText));
+        OnPropertyChanged(nameof(OpenVpnUpstreamProxyIntroText));
         OnPropertyChanged(nameof(ActiveProfileTypeText));
         OnPropertyChanged(nameof(ActiveProfileEndpointText));
         OnPropertyChanged(nameof(ProfileSaveHintText));

@@ -405,6 +405,19 @@
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
 
+    <!-- Collapsible card expander (routing guides, history, etc.) -->
+    <Style x:Key="CardExpander" TargetType="Expander">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Background" Value="{StaticResource CardBrush}"/>
+        <Setter Property="BorderBrush" Value="#18FFFFFF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="IsExpanded" Value="False"/>
+    </Style>
+
     <!-- Section Header -->
     <Style x:Key="SectionHeader" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
@@ -425,6 +438,8 @@
     <!-- Toggle Switch Style (using CheckBox) -->
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
         <Setter Property="Cursor" Value="Hand"/>
+        <!-- Keep thumb Left/Right mapping stable under RTL parents. -->
+        <Setter Property="FlowDirection" Value="LeftToRight"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -464,7 +479,8 @@
                         <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
                                 Padding="4,4,4,3">
-                            <TabPanel IsItemsHost="True" HorizontalAlignment="Center"/>
+                            <!-- UniformGrid spreads tabs across the wider window instead of a centered fixed strip. -->
+                            <UniformGrid Rows="1" IsItemsHost="True"/>
                         </Border>
                         <!-- Tab content (Arrow default; Hand only on tab headers) -->
                         <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" Cursor="Arrow"/>
@@ -484,7 +500,8 @@
         <Setter Property="TextOptions.TextRenderingMode" Value="Auto"/>
         <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
         <Setter Property="Padding" Value="4,4"/>
-        <Setter Property="Width" Value="88"/>
+        <Setter Property="MinWidth" Value="88"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="MinHeight" Value="44"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -676,18 +693,23 @@
         </Setter>
     </Style>
 
-    <!-- Passive containers: Arrow unless a child control sets its own cursor -->
+    <!-- Passive containers: Arrow unless a child control sets its own cursor.
+         Pixel scrolling + GentleWheelScroll keeps wheel speed comfortable. -->
     <Style TargetType="ScrollViewer">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="CanContentScroll" Value="False"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
     <Style TargetType="ItemsControl">
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
     <Style TargetType="ListBox">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
     <Style TargetType="ListView">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
 
     <!-- ComboBoxItem Dark Style -->

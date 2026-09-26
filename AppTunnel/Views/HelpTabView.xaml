@@ -86,10 +86,11 @@
     </UserControl.Resources>
 
     <ScrollViewer FlowDirection="{Binding AppFlowDirection}"
+                  CanContentScroll="False"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="0,12,0,10">
-        <StackPanel Margin="14,0">
+                  Padding="0,8,0,8">
+        <StackPanel Margin="16,0">
 
             <!-- Header -->
             <Border Style="{StaticResource HelpCard}">
@@ -195,6 +196,7 @@
                                 HorizontalAlignment="Stretch"
                                 Margin="0,0,0,8"/>
                         <ScrollViewer MaxHeight="200"
+                                      CanContentScroll="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding HelpCryptoWalletRows}"
@@ -213,7 +215,7 @@
                             <StackPanel>
                                 <TextBlock Text="۱. پروفایل" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Text="کانفیگ را بسازید و نوع اتصال را انتخاب کنید."
+                                <TextBlock Text="کانفیگ بسازید، از لینک اشتراک بگیرید، یا از کلیپ‌بورد پیست کنید."
                                            Style="{StaticResource HelpBody}" FontSize="10" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Border>
@@ -258,7 +260,7 @@
                     </Expander>
 
                     <Expander Header="V2Ray / Xray" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. TunnelX معمولاً sing-box را اجرا می‌کند و برای قابلیت‌هایی مثل xhttp از Xray-core استفاده می‌کند."
+                        <TextBlock Text="لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. vmess، vless، trojan، shadowsocks و Hysteria (hysteria:// و hysteria2:// و hy2://) با sing-box اجرا می‌شوند. برای xhttp از Xray-core استفاده می‌شود."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 
@@ -268,7 +270,12 @@
                     </Expander>
 
                     <Expander Header="OpenVPN" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید."
+                        <TextBlock Text="فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید. برای عبور اتصال از پراکسی، در همان پروفایل نوع پراکسی بالادستی را HTTP یا SOCKS5 بگذارید و آدرس و پورت را وارد کنید. این حالت فقط با کانفیگ TCP کار می‌کند."
+                                   Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
+                    </Expander>
+
+                    <Expander Header="WireGuard" Style="{StaticResource HelpExpander}">
+                        <TextBlock Text="TunnelX کانفیگ WireGuard را با WireGuard رسمی ویندوز به‌صورت adapter واقعی اجرا می‌کند و سپس اسپلیت‌تانلینگ برنامه‌ها را مثل OpenVPN/L2TP مدیریت می‌کند. نسخه فعلی فقط کانفیگ تک-peer را پشتیبانی می‌کند."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
                 </StackPanel>
@@ -280,7 +287,7 @@
                     <TextBlock Text="بخش‌های اپ" Style="{StaticResource HelpTitle}"/>
 
                     <Expander Header="اتصال VPN" Style="{StaticResource HelpExpander}" IsExpanded="True">
-                        <TextBlock Text="پروفایل فعال، تست سرور، اتصال/قطع اتصال، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."
+                        <TextBlock Text="پروفایل فعال، اشتراک (sub)، تست تأخیر قبل از اتصال، اتصال/قطع، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 
@@ -349,6 +356,8 @@
                                            Foreground="{StaticResource AccentBrush}"
                                            FlowDirection="LeftToRight"
                                            Margin="0,3,0,0"/>
+                                <TextBlock Text="نام کاربری/رمز پیش‌فرض را در تنظیمات بگذارید؛ خالی یعنی بدون احراز هویت."
+                                           Style="{StaticResource HelpBody}" FontSize="10" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Border>
                         <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource HelpChip}">
@@ -365,7 +374,7 @@
                     <TextBlock Text="عیب‌یابی سریع" Style="{StaticResource HelpTitle}"/>
 
                     <Expander Header="اتصال برقرار نمی‌شود" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="برنامه را با Administrator اجرا کنید. فایروال، آنتی‌ویروس، آدرس سرور، پورت، رمزها، PSK، نصب OpenVPN Community و اعتبار کانفیگ را بررسی کنید."
+                        <TextBlock Text="برنامه را با Administrator اجرا کنید. فایروال، آنتی‌ویروس، آدرس سرور، پورت، رمزها، PSK، نصب OpenVPN Community یا WireGuard رسمی ویندوز، و اعتبار کانفیگ را بررسی کنید."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 
@@ -375,7 +384,7 @@
                     </Expander>
 
                     <Expander Header="پراکسی کار نمی‌کند" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="برای پروفایل پراکسی، آدرس، پورت، نوع و اطلاعات ورود را بررسی کنید. برای ابزارهای محلی، آدرس 127.0.0.1 و پورت تنظیمات را وارد کنید."
+                        <TextBlock Text="برای پروفایل پراکسی خارجی، آدرس، پورت، نوع و اطلاعات ورود را بررسی کنید. برای ابزارهای محلی، آدرس 127.0.0.1 و پورت تنظیمات را وارد کنید؛ اگر در تنظیمات نام کاربری پیش‌فرض گذاشته‌اید، همان را در کلاینت هم بزنید."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 

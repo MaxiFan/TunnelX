@@ -27,6 +27,9 @@ public partial class TrafficRouterService
     // removal after a grace period so short-lived target-app reconnects
     // don't lose the route, but non-target apps stop piggy-backing eventually.
     private readonly ConcurrentDictionary<uint, CancellationTokenSource> _pendingRouteRemoval = new();
+    // Dedupes off-thread route deletes so a burst of non-tunnel packets cannot
+    // spawn one route.exe per packet (that locks the Windows routing stack).
+    private readonly ConcurrentDictionary<uint, byte> _immediateRouteRemovalQueued = new();
     // pid → parent pid cache (walked up the tree to detect child processes of
     // target apps, e.g. msedgewebview2.exe hosted inside WhatsApp.Root.exe).
     private readonly ConcurrentDictionary<int, int> _pidParentCache = new();
@@ -345,6 +348,10 @@ public partial class TrafficRouterService
                     (b0 == 192 && b1 == 168) ||
                     (b0 == 169 && b1 == 254); // link-local
                 if (isPrivate) continue;
+
+                // Windows NCSI probes must stay on the physical NIC in per-app mode.
+                if (!_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(remoteNbo))
+                    continue;
 
                 // Check user exclude list (domains/IPs that should bypass tunnel)
                 if (IsExcludedDestination(remoteNbo))

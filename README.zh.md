@@ -2,7 +2,7 @@
 
 [فارسی](README.fa.md) · [English](README.md) · [Русский](README.ru.md) · 简体中文
 
-**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语和英语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
+**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语、英语和俄语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
 
 ## 在 Telegram 获取更新
 
@@ -24,10 +24,10 @@
 - 为需要 `127.0.0.1` 的工具提供本地 SOCKS5 代理
 - DNS 重定向、IPv6 阻断、泄漏防护、路由诊断与流量历史
 - 多配置、复制/编辑、服务器测试、公网出口 IP 检测与版本更新检查
-- **连接健康检查**：在“已连接”界面前，经隧道 SOCKS 路径对 `google.com` 和 `cloudflare.com` 进行端到端 TCP 探测，验证阶段显示各主机延迟
+- **连接健康检查**：在“已连接”界面前，经隧道 SOCKS 路径做端到端 TCP 探测，验证阶段显示各主机延迟。默认目标为 `google.com` 和 `cloudflare.com`；可在设置中添加自定义 URL、主机名或 IP，并可关闭这些公共目标
 - 已连接面板：**出口 IP** 及国家名称与旗帜（地理信息与旗帜 PNG 经隧道获取，非本地网络直连）
 - Windows 托盘通知（更清晰的错误指引）、更新卡片上的可选发布说明，以及连接后的定时更新检查
-- 波斯语/英语桌面界面，自动语言检测、手动切换及正确的 RTL/LTR 布局
+- 波斯语/英语/俄语桌面界面，自动语言检测、设置（及页脚）中的语言下拉选择及正确的 RTL/LTR 布局
 - V2Ray/Xray 内部组件动态选择本地端口，减少 `2080/2081` 绑定冲突
 
 ## 快速开始
@@ -61,9 +61,19 @@
 
 将 V2Ray/Xray 链接或 JSON 配置粘贴到配置中。TunnelX 对常规配置使用 sing-box，对需要 Xray 特有行为（如 `xhttp`）的配置切换到 Xray-core。
 
+Hysteria 由附带的 sing-box 1.12 运行（Xray 没有 Hysteria 出站）：
+
+- **Hysteria 2：** `hysteria2://` 与 `hy2://`。认证在 userinfo，或 `auth` / `password` 参数。可选 `sni`、`insecure`、`obfs=salamander` 与 `obfs-password`、端口跳跃 `mport`，以及 `upmbps` / `downmbps`。
+- **Hysteria 1：** `hysteria://` 仅 UDP（`auth`、`peer` 或 `sni`、`insecure`、`obfsParam`、`upmbps` / `downmbps`）。不支持 `faketcp` 与 `wechat-video`。未写带宽时默认为 100/100 Mbps。
+- **sing-box JSON：** 已含 inbounds 的完整配置会原样使用。没有 inbounds 的裸 outbound，或仅含 `hysteria` / `hysteria2` 出站的文档，会包上 TunnelX 的 TUN 与 mixed inbound。示例：`examples/singbox-hysteria2.example.json`。
+
+此版 sing-box 会忽略 `pinSHA256`。连接延迟走 sing-box；服务器按钮使用 ICMP，因为 Hysteria 是 QUIC/UDP。
+
 ### SOCKS5/HTTP Proxy
 
 若已有外部代理端点，使用 SOCKS5/HTTP Proxy 配置。输入代理服务器、端口及可选凭据。这与连接后暴露的本地 `127.0.0.1` SOCKS5 代理不同，后者供需要本地代理地址的工具使用。
+
+当该本地代理（以及引擎的 SOCKS/mixed 入站）断开或恢复时，TunnelX 会重置已有会话并宣布 `127.0.0.1:port`。Telethon 等客户端的观察方式见 `docs/PROXY_LIFECYCLE.md`。
 
 ### WireGuard
 
@@ -78,6 +88,8 @@ TunnelX 可运行已安装的 **OpenVPN Community** `openvpn.exe` 及用户选�
 OpenVPN 未随 TunnelX 捆绑。请单独安装 OpenVPN Community，在 TunnelX 中选择 `.ovpn` 文件，若服务器需要则输入 OpenVPN 用户名/密码。仅安装 OpenVPN Connect 不足以使用此模式，因其通过自有客户端管理路由和 DNS。
 
 为兼容分流，TunnelX 通过控制推送的路由和 DNS 行为准备 OpenVPN 配置。近期版本改进了多 `<connection>` 配置的稳定性：远程端口顺序（443/80 优先于 21/53）、保留 `tcp-client` 块、跳过无法解析的远程主机名，以及控制通道重置时更清晰的断开信息。若 OpenVPN 重连并更改隧道 IP、网关、接口或远程端点，TunnelX 会用新值重启数据包路由。
+
+若 OpenVPN 服务器无法直连，可在同一配置中将上游代理设为 HTTP 或 SOCKS5，并填写地址、端口以及可选的用户名/密码。TunnelX 会保存这些字段，并在连接时写入 `http-proxy` 或 `socks-proxy`。仅 TCP 配置（`proto tcp` 或 `tcp-client`）可通过该代理连接。若 `.ovpn` 已包含代理指令，重新选择该文件即可把主机和端口填入配置。
 
 ## 路由说明
 

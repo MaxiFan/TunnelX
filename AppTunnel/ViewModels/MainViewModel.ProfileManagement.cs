@@ -1,5 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using System.Windows.Input;
+using AppTunnel.Helpers;
 using AppTunnel.Models;
 using AppTunnel.Services;
 using AppTunnel.Views;
@@ -11,6 +15,9 @@ public partial class MainViewModel
     #region Profile Management
 
     public ObservableCollection<ConnectionProfile> Profiles { get; } = new();
+
+    private bool _profileDeletionTrackingAttached;
+    private int _deletionSelectionRefreshDepth;
 
     private ConnectionProfile? _selectedProfile;
     public ConnectionProfile? SelectedProfile
@@ -76,11 +83,15 @@ public partial class MainViewModel
     public event Action<string, string>? PasswordChanged;
     public event Action<string>? OpenVpnPasswordChanged;
     public event Action<string>? OpenVpnPrivateKeyPasswordChanged;
+    public event Action<string>? OpenVpnUpstreamProxyPasswordChanged;
     public event Action<string>? ProxyPasswordChanged;
 
     private void LoadProfiles()
     {
+        EnsureProfileDeletionTracking();
         var profiles = _profileService.LoadProfiles();
+        foreach (var existing in Profiles)
+            existing.PropertyChanged -= OnProfilePropertyChanged;
         Profiles.Clear();
 
         if (profiles.Count == 0)
@@ -164,6 +175,11 @@ public partial class MainViewModel
         _selectedProfile.OpenVpnUsername = OpenVpnUsername;
         _selectedProfile.OpenVpnPassword = OpenVpnPassword;
         _selectedProfile.OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword;
+        _selectedProfile.OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind;
+        _selectedProfile.OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost;
+        _selectedProfile.OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort;
+        _selectedProfile.OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername;
+        _selectedProfile.OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword;
         _selectedProfile.WireGuardConfig = SelectedWireGuardConfig;
         _selectedProfile.WireGuardConfigPath = SelectedWireGuardConfigPath;
         _selectedProfile.ProxyProtocol = ProxyProtocol;
@@ -235,6 +251,11 @@ public partial class MainViewModel
             _openVpnUsername = profile.OpenVpnUsername;
             _openVpnPassword = profile.OpenVpnPassword;
             _openVpnPrivateKeyPassword = profile.OpenVpnPrivateKeyPassword;
+            _openVpnUpstreamProxyKind = profile.OpenVpnUpstreamProxyKind;
+            _openVpnUpstreamProxyHost = profile.OpenVpnUpstreamProxyHost;
+            _openVpnUpstreamProxyPort = profile.OpenVpnUpstreamProxyPort;
+            _openVpnUpstreamProxyUsername = profile.OpenVpnUpstreamProxyUsername;
+            _openVpnUpstreamProxyPassword = profile.OpenVpnUpstreamProxyPassword;
             _proxyProtocol = profile.ProxyProtocol;
             _proxyServerAddress = profile.ProxyServerAddress;
             _proxyPort = profile.ProxyPort > 0 ? profile.ProxyPort : 1080;
@@ -249,6 +270,12 @@ public partial class MainViewModel
             OnPropertyChanged(nameof(SelectedWireGuardConfigPath));
             OnPropertyChanged(nameof(OpenVpnUsername));
             OnPropertyChanged(nameof(OpenVpnPrivateKeyPassword));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyKind));
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyHost));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPort));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPortText));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyUsername));
             OnPropertyChanged(nameof(ProxyProtocol));
             OnPropertyChanged(nameof(ProxyServerAddress));
             OnPropertyChanged(nameof(ProxyPort));
@@ -260,7 +287,9 @@ public partial class MainViewModel
             PasswordChanged?.Invoke(profile.Password, profile.PreSharedKey);
             OpenVpnPasswordChanged?.Invoke(profile.OpenVpnPassword);
             OpenVpnPrivateKeyPasswordChanged?.Invoke(profile.OpenVpnPrivateKeyPassword);
+            OpenVpnUpstreamProxyPasswordChanged?.Invoke(profile.OpenVpnUpstreamProxyPassword);
             ProxyPasswordChanged?.Invoke(profile.ProxyPassword);
+            ApplyLocalProxyAuthToRouter();
         }
         finally
         {
@@ -298,6 +327,8 @@ public partial class MainViewModel
 
         var clone = CloneProfile(source);
         clone.Name = LocalizationService.Instance.Format("{0} (کپی)", source.Name);
+        clone.SubscriptionId = "";
+        clone.SubscriptionNodeKey = "";
 
         if (ProfileEditorDialog.Show(clone, "کپی پروفایل", System.Windows.Application.Current.MainWindow) != true)
             return;
@@ -352,6 +383,192 @@ public partial class MainViewModel
         NotifyReadyProfilesForLatencyTestChanged();
     }
 
+    public bool CanBulkSelectProfiles => Profiles.Count > 1;
+
+    public bool HasProfilesSelectedForDeletion => PlanBulkDelete().ToRemove.Count > 0;
+
+    public string SelectAllProfilesButtonText =>
+        Profiles.Count > 0 && Profiles.All(p => p.IsSelectedForDeletion)
+            ? LocalizationService.Instance.T("لغو انتخاب")
+            : LocalizationService.Instance.T("انتخاب همه");
+
+    public string SelectAllProfilesToolTipText => LocalizationService.Instance.T(
+        "همه کانفیگ‌ها را برای حذف انتخاب می‌کند. اگر همه انتخاب شده باشند، انتخاب را برمی‌دارد.");
+
+    public string DeleteSelectedProfilesButtonText =>
+        LocalizationService.Instance.Format("حذف انتخاب‌شده‌ها ({0})", PlanBulkDelete().ToRemove.Count);
+
+    public string DeleteSelectedProfilesToolTipText
+    {
+        get
+        {
+            var plan = PlanBulkDelete();
+            return plan.Kept != null
+                ? LocalizationService.Instance.Format(
+                    "{0} کانفیگ حذف می‌شود و پروفایل «{1}» باقی می‌ماند.",
+                    plan.ToRemove.Count,
+                    plan.Kept.Name)
+                : LocalizationService.Instance.T(
+                    "کانفیگ‌های انتخاب‌شده با یک تأیید حذف می‌شوند. حداقل یک کانفیگ باقی می‌ماند.");
+        }
+    }
+
+    public string ProfileBulkSelectToolTipText => LocalizationService.Instance.T("انتخاب برای حذف دسته‌جمعی");
+
+    private void EnsureProfileDeletionTracking()
+    {
+        if (_profileDeletionTrackingAttached)
+            return;
+
+        _profileDeletionTrackingAttached = true;
+        Profiles.CollectionChanged += OnProfilesCollectionChanged;
+    }
+
+    private void OnProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (ConnectionProfile profile in e.OldItems)
+                profile.PropertyChanged -= OnProfilePropertyChanged;
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (ConnectionProfile profile in e.NewItems)
+                profile.PropertyChanged += OnProfilePropertyChanged;
+        }
+
+        if (_deletionSelectionRefreshDepth == 0)
+            RefreshDeletionSelectionState();
+    }
+
+    private void OnProfilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ConnectionProfile.IsSelectedForDeletion) && _deletionSelectionRefreshDepth == 0)
+            RefreshDeletionSelectionState();
+    }
+
+    private void ToggleSelectAllProfilesForDeletion()
+    {
+        if (Profiles.Count <= 1)
+            return;
+
+        var selectAll = Profiles.Any(p => !p.IsSelectedForDeletion);
+        _deletionSelectionRefreshDepth++;
+        try
+        {
+            foreach (var profile in Profiles)
+                profile.IsSelectedForDeletion = selectAll;
+        }
+        finally
+        {
+            _deletionSelectionRefreshDepth--;
+        }
+
+        RefreshDeletionSelectionState();
+    }
+
+    private void DeleteSelectedProfiles()
+    {
+        if (IsConnected)
+            return;
+
+        var plan = PlanBulkDelete();
+        if (plan.ToRemove.Count == 0)
+            return;
+
+        var message = plan.Kept != null
+            ? LocalizationService.Instance.Format(
+                "{0} کانفیگ حذف شود؟ پروفایل «{1}» باقی می‌ماند.",
+                plan.ToRemove.Count,
+                plan.Kept.Name)
+            : plan.ToRemove.Count == 1
+                ? LocalizationService.Instance.Format("پروفایل «{0}» حذف شود؟", plan.ToRemove[0].Name)
+                : LocalizationService.Instance.Format("{0} کانفیگ حذف شود؟", plan.ToRemove.Count);
+
+        if (!DialogService.Confirm(message, "حذف پروفایل"))
+            return;
+
+        RemoveProfiles(plan.ToRemove);
+    }
+
+    /// <summary>
+    /// Profiles marked for deletion, excluding the one profile the list must keep.
+    /// When every profile is marked, the active profile stays.
+    /// </summary>
+    private (List<ConnectionProfile> ToRemove, ConnectionProfile? Kept) PlanBulkDelete()
+    {
+        var marked = Profiles.Where(p => p.IsSelectedForDeletion).ToList();
+        if (marked.Count == 0 || Profiles.Count <= 1)
+            return (new List<ConnectionProfile>(), null);
+
+        if (Profiles.Count - marked.Count >= 1)
+            return (marked, null);
+
+        var survivor = _selectedProfile != null && marked.Contains(_selectedProfile)
+            ? _selectedProfile
+            : marked[0];
+        var toRemove = marked.Where(p => !ReferenceEquals(p, survivor)).ToList();
+        return (toRemove, survivor);
+    }
+
+    private void RemoveProfiles(IReadOnlyList<ConnectionProfile> toRemove)
+    {
+        SaveCurrentProfileState();
+        var selected = _selectedProfile;
+        var selectedRemoved = selected != null && toRemove.Contains(selected);
+        var anchorIndex = selectedRemoved ? Profiles.IndexOf(selected!) : -1;
+
+        foreach (var profile in toRemove)
+            Profiles.Remove(profile);
+
+        _deletionSelectionRefreshDepth++;
+        try
+        {
+            foreach (var profile in Profiles)
+                profile.IsSelectedForDeletion = false;
+        }
+        finally
+        {
+            _deletionSelectionRefreshDepth--;
+        }
+
+        if (selectedRemoved && Profiles.Count > 0)
+            SelectedProfile = Profiles[Math.Clamp(anchorIndex, 0, Profiles.Count - 1)];
+        else
+        {
+            OnPropertyChanged(nameof(ProfileCountText));
+            SaveProfiles();
+        }
+
+        NotifyReadyProfilesForLatencyTestChanged();
+        RefreshDeletionSelectionState();
+    }
+
+    private void RefreshDeletionSelectionState()
+    {
+        if (Profiles.Count <= 1)
+        {
+            _deletionSelectionRefreshDepth++;
+            try
+            {
+                foreach (var profile in Profiles)
+                    profile.IsSelectedForDeletion = false;
+            }
+            finally
+            {
+                _deletionSelectionRefreshDepth--;
+            }
+        }
+
+        OnPropertyChanged(nameof(CanBulkSelectProfiles));
+        OnPropertyChanged(nameof(HasProfilesSelectedForDeletion));
+        OnPropertyChanged(nameof(SelectAllProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesToolTipText));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     private static ConnectionProfile CloneProfile(ConnectionProfile source) => new()
     {
         Name = source.Name,
@@ -366,6 +583,11 @@ public partial class MainViewModel
         OpenVpnUsername = source.OpenVpnUsername,
         OpenVpnPassword = source.OpenVpnPassword,
         OpenVpnPrivateKeyPassword = source.OpenVpnPrivateKeyPassword,
+        OpenVpnUpstreamProxyKind = source.OpenVpnUpstreamProxyKind,
+        OpenVpnUpstreamProxyHost = source.OpenVpnUpstreamProxyHost,
+        OpenVpnUpstreamProxyPort = source.OpenVpnUpstreamProxyPort,
+        OpenVpnUpstreamProxyUsername = source.OpenVpnUpstreamProxyUsername,
+        OpenVpnUpstreamProxyPassword = source.OpenVpnUpstreamProxyPassword,
         WireGuardConfig = source.WireGuardConfig,
         WireGuardConfigPath = source.WireGuardConfigPath,
         ProxyProtocol = source.ProxyProtocol,
@@ -374,9 +596,13 @@ public partial class MainViewModel
         ProxyUsername = source.ProxyUsername,
         ProxyPassword = source.ProxyPassword,
         MixedProxyPort = source.MixedProxyPort,
+        MixedProxyUsername = source.MixedProxyUsername,
+        MixedProxyPassword = source.MixedProxyPassword,
         AutoTuneMtu = source.AutoTuneMtu,
         EnableDnsOptimization = source.EnableDnsOptimization,
-        EnableGameMode = source.EnableGameMode
+        EnableGameMode = source.EnableGameMode,
+        SubscriptionId = source.SubscriptionId,
+        SubscriptionNodeKey = source.SubscriptionNodeKey
     };
 
     private static void ApplyProfileValues(ConnectionProfile target, ConnectionProfile source)
@@ -393,6 +619,11 @@ public partial class MainViewModel
         target.OpenVpnUsername = source.OpenVpnUsername;
         target.OpenVpnPassword = source.OpenVpnPassword;
         target.OpenVpnPrivateKeyPassword = source.OpenVpnPrivateKeyPassword;
+        target.OpenVpnUpstreamProxyKind = source.OpenVpnUpstreamProxyKind;
+        target.OpenVpnUpstreamProxyHost = source.OpenVpnUpstreamProxyHost;
+        target.OpenVpnUpstreamProxyPort = source.OpenVpnUpstreamProxyPort;
+        target.OpenVpnUpstreamProxyUsername = source.OpenVpnUpstreamProxyUsername;
+        target.OpenVpnUpstreamProxyPassword = source.OpenVpnUpstreamProxyPassword;
         target.WireGuardConfig = source.WireGuardConfig;
         target.WireGuardConfigPath = source.WireGuardConfigPath;
         target.ProxyProtocol = source.ProxyProtocol;
@@ -401,9 +632,13 @@ public partial class MainViewModel
         target.ProxyUsername = source.ProxyUsername;
         target.ProxyPassword = source.ProxyPassword;
         target.MixedProxyPort = source.MixedProxyPort;
+        target.MixedProxyUsername = source.MixedProxyUsername;
+        target.MixedProxyPassword = source.MixedProxyPassword;
         target.AutoTuneMtu = source.AutoTuneMtu;
         target.EnableDnsOptimization = source.EnableDnsOptimization;
         target.EnableGameMode = source.EnableGameMode;
+        target.SubscriptionId = source.SubscriptionId;
+        target.SubscriptionNodeKey = source.SubscriptionNodeKey;
     }
 
     private void RaiseProfileCardChanged()

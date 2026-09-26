@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -11,7 +10,7 @@ using AppTunnel.Models;
 namespace AppTunnel.Services;
 
 /// <summary>
-/// ITunnelProvider implementation for V2Ray/sing-box (vmess, vless, trojan, shadowsocks, raw JSON).
+/// ITunnelProvider implementation for V2Ray/sing-box (vmess, vless, trojan, shadowsocks, hysteria, raw JSON).
 /// Starts sing-box as a child process with a TUN inbound called "TunnelX-V2Ray".
 /// WinDivert in TrafficRouterService handles per-app routing into that interface.
 /// </summary>
@@ -119,7 +118,7 @@ public class V2RayTunnelProvider : ITunnelProvider
                     string serverHost = ExtractServerHost(config.V2RayConfig);
                     tunMtu = await TunnelPerformanceTuner.GetRecommendedTunMtuAsync(
                         serverHost,
-                        highOverheadTransport: false,
+                        highOverheadTransport: HysteriaShareLink.IsHysteria(config.V2RayConfig),
                         ct);
                     Logger.Info($"[MTU] Auto-tuned TUN MTU={tunMtu} (server={serverHost})");
                 }
@@ -135,7 +134,9 @@ public class V2RayTunnelProvider : ITunnelProvider
             {
                 mixedProxyPortReservation.Dispose();
                 Status.State   = ConnectionState.Error;
-                Status.Message = LocalizationService.Instance.Format("خطا در پارس کانفیگ: {0}", ex.Message);
+                Status.Message = LocalizationService.Instance.Format(
+                    "خطا در پارس کانفیگ: {0}",
+                    LocalizationService.Instance.T(ex.Message));
                 Logger.Error("V2Ray config parse error", ex);
                 return false;
             }
@@ -170,7 +171,17 @@ public class V2RayTunnelProvider : ITunnelProvider
             //   * "missing default interface" is also transient — it can fire
             //     during a brief Wi-Fi roam or routing-table flux. We require it
             //     to be reported repeatedly within a short window before acting.
-            //   * Process exit is the only definitive failure (handled elsewhere).
+            //   * Process exit is a definitive failure and closes the local mixed
+            //     inbound. That must surface as a tunnel drop so clients on the
+            //     built-in proxy are reset and the endpoint is announced down.
+            _process.Exited += (_, _) =>
+            {
+                if (Status.State == ConnectionState.Connected)
+                {
+                    Logger.Warning("[WATCHDOG] sing-box process exited — triggering tunnel failure");
+                    TriggerTunnelFailed();
+                }
+            };
             _process.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data == null) return;
@@ -282,6 +293,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             Status.VpnServerPort     = statusServerPort;
             Status.VpnInterfaceIndex = interfaceIndex;
             Status.SingBoxMixedPort  = mixedProxyPort;
+            LocalProxyAnnouncements.Connected(mixedProxyPort);
             Status.Message           = config.TunnelType == TunnelType.SocksProxy ? "Proxy connected" : "V2Ray connected";
             Logger.Info($"{(config.TunnelType == TunnelType.SocksProxy ? "Proxy" : "V2Ray")} tunnel up — interface index {interfaceIndex}, server={Status.VpnServerIp}:{Status.VpnServerPort}");
 
@@ -315,8 +327,10 @@ public class V2RayTunnelProvider : ITunnelProvider
 
         // Stop watchdog from firing during/after deliberate disconnect.
         _tunnelFailedFired = 1;
+        var mixedPort = Status.SingBoxMixedPort;
 
         await KillProcessAsync();
+        LocalProxyAnnouncements.Disconnected(mixedPort);
 
         try { if (File.Exists(_configPath)) File.Delete(_configPath); }
         catch { /* best effort */ }
@@ -357,43 +371,60 @@ public class V2RayTunnelProvider : ITunnelProvider
     // Config builder
     // =========================================================================
 
-    private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort)
+    private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort) =>
+        BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: true, tunMtu, enableDnsOptimization);
+
+    internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true) =>
+        BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: false, DefaultTunMtu, enableDnsOptimization);
+
+    internal static string BuildSingBoxDocument(
+        string userConfig,
+        int mixedProxyPort,
+        bool includeTun,
+        int tunMtu,
+        bool enableDnsOptimization)
     {
         userConfig = userConfig.Trim();
-        if (userConfig.StartsWith("{"))
-            return userConfig;
+        if (userConfig.StartsWith('{'))
+        {
+            if (!HysteriaShareLink.TryCreateOutbound(userConfig, out var bareOutbound, out var bareTag))
+            {
+                if (!includeTun)
+                    throw new InvalidOperationException(LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"));
+                return userConfig;
+            }
+
+            ApplyServerPreResolve(bareOutbound, enableDnsOptimization);
+            return SerializeSingBoxDocument(bareOutbound, bareTag, mixedProxyPort, includeTun, tunMtu);
+        }
 
         var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
         ApplyServerPreResolve(outbound, enableDnsOptimization);
-        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: true, tunMtu);
-    }
-
-    internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true)
-    {
-        userConfig = userConfig.Trim();
-        if (userConfig.StartsWith("{"))
-            throw new InvalidOperationException(LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"));
-
-        var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
-        ApplyServerPreResolve(outbound, enableDnsOptimization);
-        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: false, DefaultTunMtu);
+        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun, tunMtu);
     }
 
     internal async Task<long> ProbeMixedProxyLatencyAsync(
         string userConfig,
         CancellationToken ct,
         string probeHost = Socks5LatencyProbe.DefaultProbeHost,
-        int probePort = Socks5LatencyProbe.DefaultProbePort)
+        int probePort = Socks5LatencyProbe.DefaultProbePort,
+        int probeTimeoutMs = 10_000)
     {
         Directory.CreateDirectory(_workDir);
         await NativeEngineSupport.EnsureEmbeddedExecutableAsync("sing-box.exe", _singBoxExe, ct);
         if (!File.Exists(_singBoxExe))
             throw new FileNotFoundException(LocalizationService.Instance.Format("فایل sing-box.exe پیدا نشد: {0}", _singBoxExe));
 
-        using var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17);
-        var mixedPort = portReservation.Port;
+        // Release the reservation before sing-box starts. Holding it makes the probe
+        // connect to our own listener and never exercise the outbound.
+        int mixedPort;
+        using (var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17))
+            mixedPort = portReservation.Port;
+
         var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
         Process? process = null;
+        var started = false;
+        var stderrTail = new StringBuilder();
 
         try
         {
@@ -417,8 +448,9 @@ public class V2RayTunnelProvider : ITunnelProvider
 
             process.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data != null)
-                    Logger.ProcessOutput("[sing-box probe stderr]", e.Data, isError: true);
+                if (e.Data == null) return;
+                Logger.ProcessOutput("[sing-box probe stderr]", e.Data, isError: true);
+                ProbeProcess.AppendLogTail(stderrTail, e.Data);
             };
             process.OutputDataReceived += (_, e) =>
             {
@@ -427,62 +459,44 @@ public class V2RayTunnelProvider : ITunnelProvider
             };
 
             process.Start();
+            started = true;
             process.BeginErrorReadLine();
             process.BeginOutputReadLine();
 
-            await WaitForLocalPortAsync(mixedPort, TimeSpan.FromSeconds(12), ct);
-            if (process.HasExited)
-                throw new InvalidOperationException(LocalizationService.Instance.Format("sing-box probe exited early (code {0})", process.ExitCode));
+            try
+            {
+                await LocalPortWait.UntilAcceptingAsync(
+                    mixedPort,
+                    TimeSpan.FromSeconds(6),
+                    ct,
+                    process,
+                    LocalizationService.Instance.T("پورت محلی sing-box آماده نشد"));
+            }
+            catch (ProbeProcessExitedException ex)
+            {
+                throw new InvalidOperationException(ProbeProcess.FormatExitMessage(
+                    LocalizationService.Instance.Format("sing-box probe exited early (code {0})", ex.ExitCode),
+                    stderrTail));
+            }
 
-            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, mixedPort, ct);
+            Logger.Info($"[PING] sing-box real-delay probe listening on 127.0.0.1:{mixedPort}");
+            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, mixedPort, ct, probeTimeoutMs);
         }
         finally
         {
-            try
-            {
-                if (process is { HasExited: false })
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync(CancellationToken.None);
-                }
-            }
-            catch
-            {
-                // ignored
-            }
-
-            process?.Dispose();
+            if (started)
+                await ProbeProcess.StopAsync(process);
+            else
+                process?.Dispose();
             try { if (File.Exists(probeConfigPath)) File.Delete(probeConfigPath); } catch { }
         }
     }
 
-    private static async Task WaitForLocalPortAsync(int port, TimeSpan timeout, CancellationToken ct)
+    internal static (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        Exception? lastError = null;
-        while (DateTime.UtcNow < deadline)
-        {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                using var tcp = new System.Net.Sockets.TcpClient();
-                await tcp.ConnectAsync("127.0.0.1", port, ct);
-                return;
-            }
-            catch (Exception ex) when (ex is SocketException or TimeoutException or OperationCanceledException)
-            {
-                lastError = ex;
-                if (ex is OperationCanceledException)
-                    throw;
-                await Task.Delay(250, ct);
-            }
-        }
+        if (HysteriaShareLink.IsShareLink(userConfig))
+            return HysteriaShareLink.Parse(userConfig);
 
-        throw new TimeoutException(lastError?.Message ?? LocalizationService.Instance.T("پورت محلی sing-box آماده نشد"));
-    }
-
-    private (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)
-    {
         if (userConfig.StartsWith("vmess://"))
         {
             var parsed = ParseVmess(userConfig);
@@ -502,7 +516,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             return ParseHttp(userConfig);
 
         throw new InvalidOperationException(
-            "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد");
+            "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// باشد");
     }
 
     private static void ApplyServerPreResolve(JsonObject outbound, bool enableDnsOptimization)
@@ -985,22 +999,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             ["version"]     = "5"
         };
 
-        if (!string.IsNullOrEmpty(u.UserInfo))
-        {
-            var userInfo = Uri.UnescapeDataString(u.UserInfo);
-            var colonIdx = userInfo.IndexOf(':');
-            if (colonIdx >= 0)
-            {
-                outbound["users"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["username"] = userInfo[..colonIdx],
-                        ["password"] = userInfo[(colonIdx + 1)..]
-                    }
-                };
-            }
-        }
+        ApplySingBoxProxyCredentials(outbound, u.UserInfo);
 
         return (outbound, tag);
     }
@@ -1019,24 +1018,31 @@ public class V2RayTunnelProvider : ITunnelProvider
             ["server_port"] = u.Port > 0 ? u.Port : 3128
         };
 
-        if (!string.IsNullOrEmpty(u.UserInfo))
-        {
-            var userInfo = Uri.UnescapeDataString(u.UserInfo);
-            var colonIdx = userInfo.IndexOf(':');
-            if (colonIdx >= 0)
-            {
-                outbound["users"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["username"] = userInfo[..colonIdx],
-                        ["password"] = userInfo[(colonIdx + 1)..]
-                    }
-                };
-            }
-        }
+        ApplySingBoxProxyCredentials(outbound, u.UserInfo);
 
         return (outbound, tag);
+    }
+
+    /// <summary>
+    /// sing-box SOCKS and HTTP outbounds authenticate with top-level <c>username</c> and <c>password</c>.
+    /// The inbound <c>users</c> array is rejected during config decode (<c>outbounds[0].users: unknown field</c>).
+    /// </summary>
+    private static void ApplySingBoxProxyCredentials(JsonObject outbound, string? userInfo)
+    {
+        if (string.IsNullOrEmpty(userInfo))
+            return;
+
+        var decoded = Uri.UnescapeDataString(userInfo);
+        var colonIdx = decoded.IndexOf(':');
+        if (colonIdx < 0)
+            return;
+
+        var username = decoded[..colonIdx];
+        var password = decoded[(colonIdx + 1)..];
+        if (username.Length > 0)
+            outbound["username"] = username;
+        if (password.Length > 0)
+            outbound["password"] = password;
     }
 
     // =========================================================================

@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### English
+
+- Fixed SOCKS5 and HTTP proxy connects that failed while sing-box decoded the config (`outbounds[0].users: unknown field "users"`). Proxy credentials are now written as outbound `username` and `password`.
+- Fixed per-app / split-route sessions marking Wi-Fi as "Connected, no internet" after a long run. Windows connectivity probes stay on the physical NIC, and route-table updates no longer run on the packet path that every outbound packet has to pass through.
+- Pre-connect ping for V2Ray/Xray configs no longer succeeds just because the server port accepts TCP. Like v2rayN "test real delay", a latency value is shown only when a request through the config reaches the target. A closed connection is a failure, not a successful ping.
+- Delete many configs at once from the list, with multi-select, Select all, and one confirmation that states how many will be removed.
+- Custom connection health-check targets in Settings (URL, hostname, or IP). With nothing configured, `google.com` and `cloudflare.com` are still used. The default public targets can be turned off.
+- Subscription (sub) links: add an http/https URL, import the returned configs as profiles, and refresh them later.
+- Russian UI, with Auto, Persian, English, or Russian selectable in Settings.
+- Local proxy disconnect and reconnect are announced as `127.0.0.1:port is now disconnected` / `connected`. Active sessions on the built-in listener are reset so clients such as Telethon `run_until_disconnected()` wake up. See `docs/PROXY_LIFECYCLE.md`.
+- Upstream HTTP or SOCKS5 proxy for OpenVPN connections. Host, port, and optional username/password are saved on the profile and written into the OpenVPN config as `http-proxy` or `socks-proxy` when connecting.
+- Hysteria 1 (`hysteria://`) and Hysteria 2 (`hysteria2://` / `hy2://`) on the bundled sing-box path, including bare outbound JSON wrapping.
+- Localization lookup never throws on missing or empty keys: falls back English → Persian → key-name placeholder. Filled remaining EN/RU gaps for RC UI strings (new profile, WireGuard IPv4 Address, VPN adapter ifIdx).
+- Language is chosen from a dropdown (Settings and footer): Auto, Persian, English, or Russian — no more multi-press cycle button.
+- Settings can store default local SOCKS/HTTP proxy username and password (DPAPI-encrypted). The built-in listener uses them when a profile has no MixedProxy credentials; empty username keeps no-auth.
+- In-app Help covers WireGuard, subscription import, pre-connect latency, and local proxy auth defaults; connection troubleshooting mentions WireGuard install; ping tooltips include Hysteria. FA/EN/RU help strings completed for those guides.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- اتصال پراکسی SOCKS5 و HTTP که هنگام خواندن کانفیگ sing-box با خطای `unknown field "users"` قطع می‌شد اصلاح شد. نام کاربری و رمز اکنون در فیلدهای خروجی `username` و `password` نوشته می‌شوند.
+- رفع مشکلی که در حالت per-app / اسپلیت، بعد از مدتی طولانی وای‌فای را «Connected - No Internet» نشان می‌داد. بررسی اتصال ویندوز روی کارت شبکه فیزیکی می‌ماند و تغییر جدول مسیر دیگر روی مسیر بسته‌ها انجام نمی‌شود.
+- پینگ قبل از اتصال برای کانفیگ‌های V2Ray/Xray دیگر با باز بودن پورت سرور موفق حساب نمی‌شود. مثل «test real delay» در v2rayN، عدد پینگ فقط وقتی نشان داده می‌شود که درخواست واقعاً از داخل کانفیگ به مقصد برسد. قطع شدن اتصال به‌جای پینگ موفق ثبت نمی‌شود.
+- حذف چند کانفیگ با هم از لیست: تیک چندتایی، انتخاب همه، و یک تأیید که تعداد حذف را می‌گوید.
+- مقصدهای سفارشی برای بررسی سلامت اتصال در تنظیمات (URL، دامنه یا IP). اگر چیزی تنظیم نشود، `google.com` و `cloudflare.com` مثل قبل بررسی می‌شوند. می‌توان مقصدهای عمومی پیش‌فرض را خاموش کرد.
+- لینک اشتراک (sub): افزودن آدرس http/https، ساخت پروفایل از کانفیگ‌های دریافتی، و به‌روزرسانی بعدی.
+- رابط کاربری روسی و انتخاب زبان در تنظیمات: خودکار، فارسی، انگلیسی یا روسی.
+- قطع و وصل پراکسی محلی (`127.0.0.1:port`) اعلام می‌شود و اتصال‌های فعال آن ریست می‌شوند تا کلاینت‌هایی مثل Telethon از `run_until_disconnected()` باخبر شوند. جزئیات در `docs/PROXY_LIFECYCLE.md`.
+- پراکسی بالادستی HTTP یا SOCKS5 برای اتصال OpenVPN؛ آدرس، پورت و نام کاربری/رمز اختیاری در پروفایل ذخیره می‌شود و هنگام اتصال در کانفیگ OpenVPN نوشته می‌شود.
+- پشتیبانی از Hysteria 1 (`hysteria://`) و Hysteria 2 (`hysteria2://` / `hy2://`) روی مسیر sing-box همراه برنامه، شامل wrapping برای JSON outbound خام.
+- جستجوی ترجمه دیگر با کلید خالی یا غایب خطا نمی‌دهد؛ ترتیب پشتیبان: انگلیسی → فارسی → نام کلید. کلیدهای EN/RU باقی‌مانده برای رشته‌های RC تکمیل شد.
+- انتخاب زبان از لیست بازشو (تنظیمات و فوتر): خودکار، فارسی، انگلیسی یا روسی — دیگر نیازی به چندبار فشردن دکمه چرخش زبان نیست.
+- در تنظیمات می‌توان نام کاربری و رمز پیش‌فرض پروکسی محلی SOCKS/HTTP را ذخیره کرد (رمز با DPAPI). اگر پروفایل اعتبارنامه جدا نداشته باشد، هنگام گوش‌دادن همین پیش‌فرض‌ها اعمال می‌شوند؛ نام کاربری خالی یعنی بدون احراز هویت.
+- راهنمای داخل برنامه برای WireGuard، اشتراک، تست تأخیر قبل از اتصال و احراز هویت پروکسی محلی تکمیل شد؛ عیب‌یابی اتصال به نصب WireGuard اشاره می‌کند و tooltipهای پینگ Hysteria را هم پوشش می‌دهند. متن‌های راهنما برای FA/EN/RU پر شد.
+
+</div>
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

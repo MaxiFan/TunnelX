@@ -17,6 +17,11 @@ public class ServerConfig
     public string OpenVpnUsername { get; set; } = "";
     public string OpenVpnPassword { get; set; } = "";
     public string OpenVpnPrivateKeyPassword { get; set; } = "";
+    public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind { get; set; } = OpenVpnUpstreamProxyKind.None;
+    public string OpenVpnUpstreamProxyHost { get; set; } = "";
+    public int OpenVpnUpstreamProxyPort { get; set; }
+    public string OpenVpnUpstreamProxyUsername { get; set; } = "";
+    public string OpenVpnUpstreamProxyPassword { get; set; } = "";
     public string WireGuardConfig { get; set; } = "";
     public string WireGuardConfigPath { get; set; } = "";
     public ProxyProtocol ProxyProtocol { get; set; } = ProxyProtocol.Socks5;

@@ -118,6 +118,17 @@ public partial class MainViewModel
             ConfigValidationText = openVpnProfileError;
             return;
         }
+        if (tunnelType == TunnelType.OpenVpn &&
+            OpenVpnUpstreamProxy.TryGetConnectError(
+                CurrentUpstreamProxySettings(),
+                _selectedProfile?.OpenVpnConfig ?? SelectedOpenVpnConfig,
+                out var upstreamProxyError))
+        {
+            Logger.Warning($"ConnectAsync: OpenVPN upstream proxy invalid: {upstreamProxyError}");
+            StatusText = upstreamProxyError;
+            ConfigValidationText = upstreamProxyError;
+            return;
+        }
         if (tunnelType == TunnelType.WireGuard && !WireGuardConfigParser.TryParse(_selectedProfile?.WireGuardConfig ?? SelectedWireGuardConfig, out _, out var wireGuardError))
         {
             Logger.Warning($"ConnectAsync: WireGuard config invalid: {wireGuardError}");
@@ -151,6 +162,11 @@ public partial class MainViewModel
             OpenVpnUsername = OpenVpnUsername,
             OpenVpnPassword = OpenVpnPassword,
             OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword,
+            OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword,
             WireGuardConfig = SelectedWireGuardConfig,
             WireGuardConfigPath = SelectedWireGuardConfigPath,
             ProxyProtocol = ProxyProtocol,
@@ -631,6 +647,7 @@ public partial class MainViewModel
         }
 
         _trafficRouter.Socks5Port = MixedProxyPort;
+        ApplyLocalProxyAuthToRouter();
         _trafficRouter.EnableDnsOptimization = IsDnsOptimizationEnabled;
         _trafficRouter.DnsRedirectOverrideIp = CurrentTunnelType == TunnelType.WireGuard
             ? snap.DnsRedirectIp
@@ -638,6 +655,18 @@ public partial class MainViewModel
         _trafficRouter.EnableDnsRedirect = CurrentTunnelType != TunnelType.WireGuard ||
             !string.IsNullOrWhiteSpace(snap.DnsRedirectIp);
         _trafficRouter.EnableGameMode = IsGameModeEnabled;
+        var healthPlan = GetHealthCheckPlan();
+        string? customHealthHost = null;
+        var customHealthPort = 443;
+        if (healthPlan.HasCustomEndpoints && !healthPlan.IncludesDefaultPublicEndpoints)
+        {
+            customHealthHost = healthPlan.CustomEndpoints[0].Host;
+            customHealthPort = healthPlan.CustomEndpoints[0].Port;
+        }
+        _trafficRouter.ConfigureHealthConnectivity(
+            healthPlan.IncludesDefaultPublicEndpoints,
+            customHealthHost,
+            customHealthPort);
 
         // Apply lists before Start so RefreshDestinationLists (async in Start) does not
         // hold _destinationListLock while we block connect on route.exe purge per IP.
@@ -780,12 +809,6 @@ public partial class MainViewModel
         }
     }
 
-    private static readonly (string Host, int Port)[] TunnelVerifyProbeTargets =
-    [
-        ("google.com", 443),
-        ("cloudflare.com", 443)
-    ];
-
     private const int V2RayVerifyWarmupMs = 2500;
     private const int V2RayVerifyProbeTimeoutMs = 12000;
     private const int DefaultVerifyProbeTimeoutMs = 8000;
@@ -881,7 +904,15 @@ public partial class MainViewModel
 
             var serverHost = _vpnService.Status.VpnServerHost;
             var serverPort = _vpnService.Status.VpnServerPort;
-            if (!string.IsNullOrWhiteSpace(serverHost) && serverPort > 0)
+            var hysteriaUdp = tunnelType == TunnelType.V2Ray &&
+                              HysteriaShareLink.IsHysteria(SelectedV2RayConfig);
+            if (hysteriaUdp)
+            {
+                Logger.Info("[CONN-VERIFY] Hysteria is QUIC/UDP; skipping direct TCP port check");
+                uiLines.Add(loc.T("هیستوریا روی UDP است؛ بررسی سلامت از مسیر تونل انجام می‌شود"));
+                await ReportVerifyActiveAsync(JoinVerifyLines(uiLines));
+            }
+            else if (!string.IsNullOrWhiteSpace(serverHost) && serverPort > 0)
             {
                 var (outcome, portError) = await TryQuickProxyServerPortCheckAsync(serverHost, serverPort, ct);
                 switch (outcome)
@@ -920,6 +951,14 @@ public partial class MainViewModel
         uiLines.Add(loc.T("در حال پینگ از داخل تونل..."));
         await ReportVerifyActiveAsync(JoinVerifyLines(uiLines));
 
+        var healthPlan = GetHealthCheckPlan();
+        var probeTargets = healthPlan.Targets;
+        // Custom lists are fallbacks: the first success is enough. The built-in pair is
+        // still probed fully so the default per-host latency lines stay the same.
+        var stopAfterFirstSuccess = healthPlan.HasCustomEndpoints;
+        Logger.Info(
+            $"[CONN-VERIFY] Health targets [{string.Join(", ", probeTargets)}] publicDefaults={healthPlan.IncludesDefaultPublicEndpoints}");
+
         var probeSuccesses = 0;
         var pingResultLines = new List<string>();
 
@@ -928,22 +967,27 @@ public partial class MainViewModel
             ct.ThrowIfCancellationRequested();
             if (round > 1)
             {
-                Logger.Info("[CONN-VERIFY] Retrying international probes");
+                Logger.Info(healthPlan.HasCustomEndpoints
+                    ? "[CONN-VERIFY] Retrying health-check probes"
+                    : "[CONN-VERIFY] Retrying international probes");
                 pingResultLines.Add(loc.T("تلاش دوباره پینگ..."));
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
                 await Task.Delay(1500, ct);
             }
 
-            foreach (var (host, port) in TunnelVerifyProbeTargets)
+            foreach (var target in probeTargets)
             {
-                pingResultLines.Add(loc.Format("در حال پینگ {0}...", TextHelper.EmbedLtr(host)));
+                var host = target.Host;
+                var port = target.Port;
+                pingResultLines.Add(loc.Format("در حال پینگ {0}...", TextHelper.EmbedLtr(target.Display)));
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
 
-                var (probeHost, ok, ms, error, usedPort) = await ProbeTunnelTargetOnAnyPortAsync(
+                var (_, ok, ms, error, usedPort) = await ProbeTunnelTargetOnAnyPortAsync(
                     host, port, probePorts, ct, probeTimeoutMs);
+                var shownTarget = TextHelper.EmbedLtr(target.Display);
                 pingResultLines[^1] = ok
-                    ? loc.Format("پینگ {0} (از مسیر پروکسی): {1} میلی‌ثانیه ✓", TextHelper.EmbedLtr(probeHost), ms)
-                    : loc.Format("پینگ {0}: بدون پاسخ", TextHelper.EmbedLtr(probeHost));
+                    ? loc.Format("پینگ {0} (از مسیر پروکسی): {1} میلی‌ثانیه ✓", shownTarget, ms)
+                    : loc.Format("پینگ {0}: بدون پاسخ", shownTarget);
 
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
 
@@ -951,6 +995,8 @@ public partial class MainViewModel
                 {
                     probeSuccesses++;
                     Logger.Info($"[CONN-VERIFY] {host}:{port} OK ({ms}ms, round {round}, port {usedPort})");
+                    if (stopAfterFirstSuccess)
+                        break;
                 }
                 else
                 {
@@ -969,13 +1015,16 @@ public partial class MainViewModel
                 "بررسی سلامت اتصال",
                 failDetail);
             await PumpConnectionProgressUiAsync();
-            return (false, loc.T("تونل روی سیستم بالا آمد، اما از طریق سرور به اینترنت بین‌الملل دسترسی ندارید. کانفیگ، سهمیه حجم یا تاریخ انقضا را بررسی کنید."));
+            var failMessage = healthPlan.IncludesDefaultPublicEndpoints
+                ? loc.T("تونل روی سیستم بالا آمد، اما از طریق سرور به اینترنت بین‌الملل دسترسی ندارید. کانفیگ، سهمیه حجم یا تاریخ انقضا را بررسی کنید.")
+                : loc.T("تونل روی سیستم بالا آمد، اما هیچ‌کدام از مقصدهای بررسی سلامت پاسخ ندادند. آدرس‌های تنظیم‌شده را بررسی کنید.");
+            return (false, failMessage);
         }
 
         var summary = loc.Format(
             "بررسی سلامت موفق — پینگ {0} از {1} مقصد",
             probeSuccesses,
-            TunnelVerifyProbeTargets.Length);
+            probeTargets.Count);
         var completeDetail = JoinVerifyLines(uiLines.Concat(pingResultLines).Append(summary));
         ConnectionProgressService.Report(
             "verify",
@@ -1728,6 +1777,13 @@ public partial class MainViewModel
             }
 
             var rawConfig = SelectedV2RayConfig.Trim();
+            if (HysteriaShareLink.IsHysteria(rawConfig))
+            {
+                var hyMs = await MeasureHysteriaServerPingAsync(rawConfig, CancellationToken.None);
+                SetServerPingResult("ICMP {0} ms", hyMs);
+                return;
+            }
+
             if (!TryExtractProxyEndpointDetails(rawConfig, out var endpoint, out var error))
             {
                 SetServerPingResult(error);
@@ -1852,7 +1908,15 @@ public partial class MainViewModel
                 return;
             }
 
-            if (!TryExtractProxyEndpointDetails(SelectedV2RayConfig.Trim(), out var endpoint, out var error))
+            var connectedConfig = SelectedV2RayConfig.Trim();
+            if (HysteriaShareLink.IsHysteria(connectedConfig))
+            {
+                var hyMs = await MeasureHysteriaServerPingAsync(connectedConfig, CancellationToken.None);
+                SetPingResult("ICMP {0} ms", hyMs);
+                return;
+            }
+
+            if (!TryExtractProxyEndpointDetails(connectedConfig, out var endpoint, out var error))
             {
                 SetPingResult(error);
                 return;
@@ -1879,6 +1943,16 @@ public partial class MainViewModel
 
     private readonly record struct ProxyEndpoint(string Server, int Port, bool UseTls, string? Sni);
     private readonly record struct OpenVpnRemoteEndpoint(string Host, int Port, string Protocol);
+
+    private static async Task<long> MeasureHysteriaServerPingAsync(string config, CancellationToken ct)
+    {
+        if (!V2RayEndpointHelper.TryExtract(config, out var host, out _) || string.IsNullOrWhiteSpace(host))
+            throw new InvalidOperationException(LocalizationService.Instance.T("سرور پیدا نشد"));
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(3));
+        return await MeasureIcmpLatencyAsync(host, cts.Token);
+    }
 
     private static async Task<long> MeasureIcmpLatencyAsync(string host, CancellationToken ct)
     {
@@ -2046,6 +2120,18 @@ public partial class MainViewModel
                 return ValidateEndpoint(endpoint.Server, endpoint.Port, out error);
             }
 
+            if (HysteriaShareLink.IsShareLink(config))
+            {
+                if (!V2RayEndpointHelper.TryExtract(config, out var hyServer, out var hyPort))
+                {
+                    error = "endpoint سرور از کانفیگ تشخیص داده نشد";
+                    return false;
+                }
+
+                endpoint = new ProxyEndpoint(hyServer, hyPort, true, null);
+                return ValidateEndpoint(hyServer, hyPort, out error);
+            }
+
             if (config.StartsWith("{"))
             {
                 var root = JsonNode.Parse(config)?.AsObject();
@@ -2072,6 +2158,13 @@ public partial class MainViewModel
                             return ValidateEndpoint(server, port, out error);
                         }
                     }
+                }
+
+                if (HysteriaShareLink.IsHysteriaType(root?["type"]?.GetValue<string>()) &&
+                    V2RayEndpointHelper.TryExtract(config, out var bareServer, out var barePort))
+                {
+                    endpoint = new ProxyEndpoint(bareServer, barePort, true, null);
+                    return ValidateEndpoint(bareServer, barePort, out error);
                 }
             }
 
@@ -2170,9 +2263,7 @@ public partial class MainViewModel
         }
 
         var raw = PingTarget?.Trim() ?? "";
-        // Accept IP or hostname:port — extract host for route installation
-        var host = raw.Contains(':') ? raw.Split(':')[0] : raw;
-        if (string.IsNullOrWhiteSpace(host))
+        if (!HealthCheckTargets.TryParse(raw, out var pingEndpoint))
         {
             SetPingResult("آدرس نامعتبر");
             return;
@@ -2199,7 +2290,7 @@ public partial class MainViewModel
             return;
         }
 
-        _ = RunPingLoopAsync(host, raw, pingProxyPort, _pingCts.Token);
+        _ = RunPingLoopAsync(pingEndpoint.Host, pingEndpoint.Port, pingProxyPort, _pingCts.Token);
     }
 
     /// <summary>
@@ -2212,15 +2303,10 @@ public partial class MainViewModel
     ///     immediately (1-2 ms) before the remote connection is established.
     ///   • L2TP mode  → TunnelX built-in SOCKS5 (port 1080), bound to VPN IP.
     ///     Packets route through the real PPP adapter; no fake local handshake.
-    /// Format of <paramref name="target"/>: "host" or "host:port" (default port 443).
+    /// Port defaults to 443 when the ping box has a bare hostname. URLs and host:port use the shared parser.
     /// </summary>
-    private async Task RunPingLoopAsync(string host, string target, int proxyPort, CancellationToken ct)
+    private async Task RunPingLoopAsync(string host, int port, int proxyPort, CancellationToken ct)
     {
-        // Parse optional port from "host:port"
-        int port = 443;
-        if (target.Contains(':') && int.TryParse(target.Split(':')[^1], out var p))
-            port = p;
-
         int socks5Port = proxyPort;
 
         int sent = 0, success = 0;
@@ -2258,20 +2344,10 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// Measures the true end-to-end TCP round-trip through the SOCKS5 proxy.
-    ///
-    /// IMPORTANT: We CANNOT just time the SOCKS5 CONNECT reply — sing-box (and
-    /// many modern SOCKS5 implementations) deliberately send the CONNECT success
-    /// reply IMMEDIATELY, before dialing the upstream, as a latency optimization.
-    /// On loopback this returns in 1-2 ms regardless of the real path.
-    ///
-    /// Instead we do CONNECT (untimed), then send a probe and time how long
-    /// until the FIRST response byte from the upstream server arrives. That gives
-    /// us exactly one round-trip through the entire proxy chain to the remote
-    /// host. For port 443 we send a minimal TLS ClientHello (server replies with
-    /// ServerHello after 1 RTT). For other ports we send an HTTP GET (server
-    /// replies with response data or RST after 1 RTT). Either way, time-to-first-
-    /// byte is the real RTT.
+    /// Measures delay through the SOCKS5 proxy. Success requires a real upstream
+    /// response (TLS plus HTTP on port 443). A closed or reset connection is a
+    /// failure, not a latency value — sing-box can answer CONNECT before the
+    /// outbound dial finishes.
     /// </summary>
     private static Task<long> PingViaSocks5Async(
         string host, int port, int socks5Port, CancellationToken ct, int probeTimeoutMs = 5000)

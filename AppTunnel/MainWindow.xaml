@@ -6,8 +6,8 @@
         xmlns:vm="clr-namespace:AppTunnel.ViewModels"
         xmlns:model="clr-namespace:AppTunnel.Models"
         Title="TunnelX — Split Traffic Per App"
-        Width="640" Height="800"
-        MinWidth="580" MinHeight="680"
+        Width="832" Height="800"
+        MinWidth="754" MinHeight="680"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -60,7 +60,7 @@
                     Grid.Row="0" Background="{StaticResource SurfaceBrush}"
                     BorderBrush="#12FFFFFF"
                     BorderThickness="0,0,0,1"
-                    CornerRadius="12,0,0,0" Padding="14,8">
+                    CornerRadius="12,12,0,0" Padding="14,8">
                 <Grid FlowDirection="LeftToRight">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -114,28 +114,34 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Connection Status + Compact Health Chips -->
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Border HorizontalAlignment="Center"
+                    <!-- Connection Status + Compact Health Chips (fills title-bar middle column) -->
+                    <StackPanel Grid.Column="1"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Margin="10,0">
+                        <Border HorizontalAlignment="Stretch"
                                 CornerRadius="12"
                                 Padding="12,5"
                                 Background="#121212"
                                 BorderBrush="#20FFFFFF"
                                 BorderThickness="1">
-                            <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,8,0"
+                            <Grid>
+                                <Ellipse Width="9" Height="9"
+                                         HorizontalAlignment="Left"
+                                         VerticalAlignment="Center"
                                          Fill="{Binding StatusColor, Converter={StaticResource StringToColor}}"/>
                                 <TextBlock Text="{Binding StatusText}"
                                            Foreground="{StaticResource TextPrimaryBrush}"
                                            FontSize="12"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
-                                           MaxWidth="210"
+                                           HorizontalAlignment="Stretch"
+                                           TextAlignment="Center"
                                            TextTrimming="CharacterEllipsis"
+                                           Margin="17,0,17,0"
                                            FlowDirection="{Binding StatusText, Converter={StaticResource TextToFlowDirection}}"
-                                           TextAlignment="{Binding StatusText, Converter={StaticResource TextToTextAlignment}}"
                                            ToolTip="{Binding StatusBarToolTipText}"/>
-                            </StackPanel>
+                            </Grid>
                         </Border>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5,0,0"
                                     FlowDirection="LeftToRight">
@@ -295,7 +301,6 @@
                                    FontSize="10"
                                    FontWeight="Medium"
                                    TextWrapping="NoWrap"
-                                   MaxWidth="88"
                                    TextTrimming="CharacterEllipsis"
                                    FlowDirection="{Binding AppFlowDirection}"
                                    TextAlignment="{Binding AppTextAlignment}"
@@ -334,8 +339,10 @@
                     </StackPanel>
                 </TabItem.Header>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,10,0,0">
-                    <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="False"
+                              Padding="0,10,0,0">
+                    <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,8">
 
                     <Border Background="#121212" BorderBrush="#18FFFFFF" BorderThickness="1"
                             CornerRadius="10" Padding="12,8" Margin="0,0,0,10">
@@ -370,21 +377,31 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Exclude entry guide -->
-                    <Border Background="#1247A3F3" BorderBrush="#2647A3F3" BorderThickness="1"
-                            CornerRadius="9" Padding="10,8" Margin="0,0,0,8">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="💡" FontSize="11" Margin="0,0,5,0"/>
-                                <TextBlock Text="{Binding ExcludeRulesGuideTitleText}" FontSize="10" FontWeight="SemiBold"
-                                           Foreground="#47A3F3"/>
+                    <!-- Exclude entry guide (collapsed by default) -->
+                    <Expander Style="{StaticResource CardExpander}"
+                              Background="#1247A3F3"
+                              BorderBrush="#2647A3F3"
+                              Foreground="#47A3F3"
+                              FlowDirection="{Binding AppFlowDirection}">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💡" FontSize="11" Margin="0,0,5,0"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ExcludeRulesGuideTitleText}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="#47A3F3"
+                                           VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="{Binding ExcludeRulesGuideBodyText}"
-                                       TextWrapping="Wrap" FontSize="10" LineHeight="16"
-                                       FlowDirection="{Binding AppFlowDirection}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </StackPanel>
-                    </Border>
+                        </Expander.Header>
+                        <TextBlock Text="{Binding ExcludeRulesGuideBodyText}"
+                                   TextWrapping="Wrap"
+                                   FontSize="10"
+                                   LineHeight="16"
+                                   Margin="0,4,0,0"
+                                   FlowDirection="{Binding AppFlowDirection}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Expander>
 
                     <!-- Add Entry -->
                     <Border Style="{StaticResource CardPanel}" Margin="0,0,0,8">
@@ -422,6 +439,8 @@
                                       FlowDirection="LeftToRight"
                                       Cursor="Arrow"
                                       PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      VirtualizingPanel.ScrollUnit="Pixel"
+                                      ScrollViewer.CanContentScroll="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
@@ -484,21 +503,31 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Include entry guide -->
-                    <Border Background="#1233C481" BorderBrush="#2633C481" BorderThickness="1"
-                            CornerRadius="9" Padding="10,8" Margin="0,0,0,8">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="💡" FontSize="11" Margin="0,0,5,0"/>
-                                <TextBlock Text="{Binding IncludeRulesGuideTitleText}" FontSize="10" FontWeight="SemiBold"
-                                           Foreground="#33C481"/>
+                    <!-- Include entry guide (collapsed by default) -->
+                    <Expander Style="{StaticResource CardExpander}"
+                              Background="#1233C481"
+                              BorderBrush="#2633C481"
+                              Foreground="#33C481"
+                              FlowDirection="{Binding AppFlowDirection}">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💡" FontSize="11" Margin="0,0,5,0"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding IncludeRulesGuideTitleText}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="#33C481"
+                                           VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="{Binding IncludeRulesGuideBodyText}"
-                                       TextWrapping="Wrap" FontSize="10" LineHeight="16"
-                                       FlowDirection="{Binding AppFlowDirection}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </StackPanel>
-                    </Border>
+                        </Expander.Header>
+                        <TextBlock Text="{Binding IncludeRulesGuideBodyText}"
+                                   TextWrapping="Wrap"
+                                   FontSize="10"
+                                   LineHeight="16"
+                                   Margin="0,4,0,0"
+                                   FlowDirection="{Binding AppFlowDirection}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Expander>
 
                     <!-- Add Include Entry -->
                     <Border Style="{StaticResource CardPanel}" Margin="0,0,0,8">
@@ -536,6 +565,8 @@
                                       FlowDirection="LeftToRight"
                                       Cursor="Arrow"
                                       PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      VirtualizingPanel.ScrollUnit="Pixel"
+                                      ScrollViewer.CanContentScroll="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
@@ -594,12 +625,14 @@
                 <TabItem.Header>
                     <StackPanel>
                         <TextBlock Text="📊" FontSize="12" HorizontalAlignment="Center"/>
-                        <TextBlock Text="ترافیک/تاریخچه" FontSize="9.5" FontWeight="Medium" TextAlignment="Center"/>
+                        <TextBlock Text="ترافیک/تاریخچه" FontSize="10" FontWeight="Medium" TextAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,0">
-                    <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="False"
+                              Padding="0,12,0,0">
+                    <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,8">
 
                     <!-- Summary Card -->
                     <Border Style="{StaticResource CardPanel}" BorderBrush="#22E8803A">
@@ -701,13 +734,9 @@
                         </Grid>
                     </Border>
 
-                    <Expander Header="📜 تاریخچه اتصالات"
-                              IsExpanded="False"
-                              Foreground="{StaticResource TextPrimaryBrush}"
-                              Background="#121212"
-                              BorderBrush="#18FFFFFF"
-                              Padding="10,6"
-                              Margin="0,0,0,8">
+                    <Expander Style="{StaticResource CardExpander}"
+                              Header="📜 تاریخچه اتصالات"
+                              FlowDirection="{Binding AppFlowDirection}">
                         <views:HistoryTabView/>
                     </Expander>
 
@@ -845,7 +874,7 @@
                     Background="#121212"
                     BorderBrush="#18FFFFFF"
                     BorderThickness="0,1,0,0"
-                    CornerRadius="0,0,0,12"
+                    CornerRadius="0,0,12,12"
                     Padding="12,6">
                 <Grid VerticalAlignment="Center" FlowDirection="{Binding AppFlowDirection}">
                     <Grid.ColumnDefinitions>
@@ -898,15 +927,20 @@
                                 HorizontalAlignment="{Binding AppEndHorizontalAlignment}"
                                 VerticalAlignment="Center"
                                 FlowDirection="{Binding AppFlowDirection}">
-                        <Button Content="{Binding LanguageToggleText}"
-                                Command="{Binding ToggleLanguageCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                Padding="9,4"
-                                FontSize="10"
-                                Margin="0,0,0,0"
-                                VerticalAlignment="Center"
-                                FlowDirection="LeftToRight"
-                                ToolTip="تغییر زبان"/>
+                        <ComboBox Style="{StaticResource DarkComboBox}"
+                                  SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
+                                  SelectedValuePath="Tag"
+                                  MinWidth="118"
+                                  FontSize="10"
+                                  Padding="8,4"
+                                  VerticalAlignment="Center"
+                                  FlowDirection="LeftToRight"
+                                  ToolTip="تغییر زبان">
+                            <ComboBoxItem Content="خودکار" Tag="auto"/>
+                            <ComboBoxItem Content="فارسی" Tag="fa-IR"/>
+                            <ComboBoxItem Content="English" Tag="en-US"/>
+                            <ComboBoxItem Content="Русский" Tag="ru-RU"/>
+                        </ComboBox>
                         <Button Content="{Binding FooterTelegramButtonText}"
                                 Command="{Binding OpenTelegramChannelCommand}"
                                 Style="{StaticResource SecondaryButton}"
