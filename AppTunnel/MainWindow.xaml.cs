@@ -90,9 +90,9 @@ public partial class MainWindow : Window
             or System.Windows.Controls.ComboBox;
     }
 
-    private const double DesignWidth = 640;
+    private const double DesignWidth = 832;
     private const double DesignHeight = 800;
-    private const double DesignMinWidth = 580;
+    private const double DesignMinWidth = 754;
     private const double DesignMinHeight = 680;
 
     protected override void OnSourceInitialized(EventArgs e)

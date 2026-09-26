@@ -13,7 +13,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="190"/>
+                        <ColumnDefinition Width="247"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
                         <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 زبان"
