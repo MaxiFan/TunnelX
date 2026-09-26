@@ -760,28 +760,40 @@ public partial class MainWindow : Window
 
     private void OnNestedScrollPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (sender is not DependencyObject source) return;
+        if (e.Handled || sender is not DependencyObject source)
+            return;
 
         var parent = FindVisualParent<ScrollViewer>(source);
-        if (parent == null) return;
+        if (parent == null || parent.ScrollableHeight <= 0)
+            return;
 
+        // Same step as GentleWheelScroll — avoid re-raising full Delta (felt too fast).
         e.Handled = true;
-        parent.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
-        {
-            RoutedEvent = MouseWheelEvent,
-            Source = sender
-        });
+        const double pixelsPerNotch = 52;
+        var notches = e.Delta / 120.0;
+        var next = Math.Clamp(
+            parent.VerticalOffset - notches * pixelsPerNotch,
+            0,
+            parent.ScrollableHeight);
+        parent.ScrollToVerticalOffset(next);
     }
 
     private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
     {
-        var parent = VisualTreeHelper.GetParent(child);
+        var parent = child is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetParent(child)
+            : LogicalTreeHelper.GetParent(child);
+
         while (parent != null)
         {
             if (parent is T typed)
                 return typed;
-            parent = VisualTreeHelper.GetParent(parent);
+
+            parent = parent is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(parent)
+                : LogicalTreeHelper.GetParent(parent);
         }
+
         return null;
     }
 

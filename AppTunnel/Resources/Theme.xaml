@@ -405,6 +405,19 @@
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
 
+    <!-- Collapsible card expander (routing guides, history, etc.) -->
+    <Style x:Key="CardExpander" TargetType="Expander">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Background" Value="{StaticResource CardBrush}"/>
+        <Setter Property="BorderBrush" Value="#18FFFFFF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="IsExpanded" Value="False"/>
+    </Style>
+
     <!-- Section Header -->
     <Style x:Key="SectionHeader" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
@@ -681,20 +694,22 @@
     </Style>
 
     <!-- Passive containers: Arrow unless a child control sets its own cursor.
-         Pixel scrolling (CanContentScroll=False) keeps mouse-wheel speed at the
-         system/default WPF line height instead of jumping whole items. -->
+         Pixel scrolling + GentleWheelScroll keeps wheel speed comfortable. -->
     <Style TargetType="ScrollViewer">
         <Setter Property="Cursor" Value="Arrow"/>
         <Setter Property="CanContentScroll" Value="False"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
     <Style TargetType="ItemsControl">
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
     <Style TargetType="ListBox">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
     <Style TargetType="ListView">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="helpers:GentleWheelScroll.IsEnabled" Value="True"/>
     </Style>
 
     <!-- ComboBoxItem Dark Style -->
