@@ -10,6 +10,7 @@
 - Delete many configs at once from the list, with multi-select, Select all, and one confirmation that states how many will be removed.
 - Custom connection health-check targets in Settings (URL, hostname, or IP). With nothing configured, `google.com` and `cloudflare.com` are still used. The default public targets can be turned off.
 - Subscription (sub) links: add an http/https URL, import the returned configs as profiles, and refresh them later.
+- Russian UI, with Auto, Persian, English, or Russian selectable in Settings.
 
 ### فارسی
 
@@ -21,6 +22,7 @@
 - حذف چند کانفیگ با هم از لیست: تیک چندتایی، انتخاب همه، و یک تأیید که تعداد حذف را می‌گوید.
 - مقصدهای سفارشی برای بررسی سلامت اتصال در تنظیمات (URL، دامنه یا IP). اگر چیزی تنظیم نشود، `google.com` و `cloudflare.com` مثل قبل بررسی می‌شوند. می‌توان مقصدهای عمومی پیش‌فرض را خاموش کرد.
 - لینک اشتراک (sub): افزودن آدرس http/https، ساخت پروفایل از کانفیگ‌های دریافتی، و به‌روزرسانی بعدی.
+- رابط کاربری روسی و انتخاب زبان در تنظیمات: خودکار، فارسی، انگلیسی یا روسی.
 
 </div>
 

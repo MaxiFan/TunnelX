@@ -491,6 +491,25 @@ public partial class MainViewModel : INotifyPropertyChanged
     }
 
     public string LanguageToggleText => LocalizationService.Instance.ToggleLanguageText;
+
+    public string UiLanguageSetting
+    {
+        get => LocalizationService.Instance.LanguageSetting;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value, LocalizationService.Instance.LanguageSetting, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            LocalizationService.Instance.SetLanguage(value);
+            var selected = LocalizationService.Instance.LanguageSetting;
+            if (string.Equals(_appSettings.Language, selected, StringComparison.Ordinal))
+                return;
+
+            _appSettings.Language = selected;
+            _profileService.SaveAppSettings(_appSettings);
+        }
+    }
     public bool AppIsRightToLeft => LocalizationService.Instance.IsRightToLeft;
     public string AppTitleText => LocalizationService.Instance.IsRightToLeft ? "تانلکس" : "TunnelX";
     public string AppTitleAccentText => LocalizationService.Instance.IsRightToLeft ? "س" : "X";
@@ -2660,6 +2679,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(GitHubInstallCountText));
         OnPropertyChanged(nameof(AdAudienceText));
         OnPropertyChanged(nameof(LanguageToggleText));
+        OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppFlowDirection));
         OnPropertyChanged(nameof(AppTextAlignment));
@@ -2698,6 +2718,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void OnLanguageChanged()
     {
         OnPropertyChanged(nameof(LanguageToggleText));
+        OnPropertyChanged(nameof(UiLanguageSetting));
         OnPropertyChanged(nameof(AppIsRightToLeft));
         OnPropertyChanged(nameof(AppTitleText));
         OnPropertyChanged(nameof(AppTitleAccentText));

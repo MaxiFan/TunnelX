@@ -102,8 +102,9 @@ public static class IpGeoLookupService
         if (IPAddress.IsLoopback(address) || IsPrivateOrLinkLocal(address))
             return null;
 
-        var lang = LocalizationService.Instance.EffectiveLanguage.StartsWith("fa", StringComparison.OrdinalIgnoreCase)
-            ? "fa"
+        var effectiveLanguage = LocalizationService.Instance.EffectiveLanguage;
+        var lang = effectiveLanguage.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? "fa"
+            : effectiveLanguage.StartsWith("ru", StringComparison.OrdinalIgnoreCase) ? "ru"
             : "en";
         var encodedIp = Uri.EscapeDataString(ip.Trim());
 

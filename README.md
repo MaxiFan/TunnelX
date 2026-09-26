@@ -6,7 +6,7 @@
 
 ## فارسی
 
-<span dir="ltr">**TunnelX**</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص یا کل سیستم را از تونل عبور می‌دهد و مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ می‌کند. رابط دو‌زبانه فارسی/انگلیسی با تشخیص خودکار زبان و چینش <span dir="ltr">RTL/LTR</span> دارد.
+<span dir="ltr">**TunnelX**</span> یک نرم‌افزار آزاد و رایگان برای ویندوز است که توسط **<span dir="ltr">MaxFan</span>** ساخته شده و برای مدیریت تونل، وی‌پی‌ان و <span dir="ltr">Split Tunneling</span> استفاده می‌شود. ترافیک برنامه‌های انتخاب‌شده، مقصدهای مشخص یا کل سیستم را از تونل عبور می‌دهد و مسیر عادی شبکه را برای مقصدهای محلی یا مستثنی‌شده حفظ می‌کند. رابط فارسی، انگلیسی و روسی با تشخیص خودکار زبان و چینش <span dir="ltr">RTL/LTR</span> دارد.
 
 **[مستند کامل فارسی ←](README.fa.md)**
 
@@ -14,19 +14,19 @@
 
 ## English
 
-**TunnelX** is a free and open-source Windows split-tunneling client built by **MaxFan**. It routes selected apps, selected destinations, or the whole system through supported tunnel cores while keeping local and excluded destinations on the normal network path. The app supports Persian and English UI modes with automatic system-language detection and correct RTL/LTR layout handling.
+**TunnelX** is a free and open-source Windows split-tunneling client built by **MaxFan**. It routes selected apps, selected destinations, or the whole system through supported tunnel cores while keeping local and excluded destinations on the normal network path. The app supports Persian, English, and Russian UI modes with automatic system-language detection and correct RTL/LTR layout handling.
 
 *Full English documentation continues below.*
 
 ## Русский
 
-**TunnelX** — бесплатный клиент с открытым исходным кодом для Windows (split tunneling) от **MaxFan**. Он направляет через VPN, V2Ray/Xray, OpenVPN или SOCKS5/HTTP Proxy только выбранные приложения, домены/IP или весь системный трафик, сохраняя обычный маршрут для локальных и исключённых назначений. Интерфейс поддерживает персидский и английский языки с автоматическим выбором языка системы и корректным RTL/LTR.
+**TunnelX** — бесплатный клиент с открытым исходным кодом для Windows (split tunneling) от **MaxFan**. Он направляет через VPN, V2Ray/Xray, OpenVPN или SOCKS5/HTTP Proxy только выбранные приложения, домены/IP или весь системный трафик, сохраняя обычный маршрут для локальных и исключённых назначений. Интерфейс поддерживает персидский, английский и русский языки с автоматическим выбором языка системы и корректным RTL/LTR.
 
 **[Полная документация на русском →](README.ru.md)**
 
 ## 简体中文
 
-**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语和英语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
+**TunnelX** 是由 **MaxFan** 构建的免费开源 Windows 分流隧道客户端。它可让选定应用、指定域名/IP 或整个系统通过 VPN、V2Ray/Xray、OpenVPN 或 SOCKS5/HTTP Proxy，同时让本地或排除的目标继续走普通网络。应用支持波斯语、英语和俄语界面，可自动检测系统语言并正确处理 RTL/LTR 布局。
 
 **[完整中文文档 →](README.zh.md)**
 
@@ -54,7 +54,7 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 - **Connection health check** before the connected screen: end-to-end TCP probes through the tunnel SOCKS path, with live per-host latency during the verify step. Defaults are `google.com` and `cloudflare.com`. Settings can add custom URLs, hostnames, or IPs and can turn the public defaults off
 - Connected dashboard: **exit IP** with country name and flag image (geo and flag PNG fetched through the tunnel, not direct from the local network)
 - Windows tray notifications with clearer error guidance, optional release-notes action on update cards, and scheduled update check after connect
-- Persian and English desktop UI with automatic language detection, manual language switching, and correct RTL/LTR layout behavior
+- Persian, English, and Russian desktop UI with automatic language detection, manual language switching in Settings, and correct RTL/LTR layout behavior
 - Dynamic local port selection for V2Ray/Xray internals to reduce `2080/2081` binding conflicts
 
 ## Quick Start

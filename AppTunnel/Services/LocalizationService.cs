@@ -11,17 +11,19 @@ using AppTunnel.Helpers;
 
 namespace AppTunnel.Services;
 
-public sealed class LocalizationService : INotifyPropertyChanged
+public sealed partial class LocalizationService : INotifyPropertyChanged
 {
     public const string AutoLanguage = "auto";
     public const string PersianLanguage = "fa-IR";
     public const string EnglishLanguage = "en-US";
+    public const string RussianLanguage = "ru-RU";
 
     public static LocalizationService Instance { get; } = new();
 
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new(StringComparer.Ordinal)
     {
-        [EnglishLanguage] = EnglishTranslations()
+        [EnglishLanguage] = EnglishTranslations(),
+        [RussianLanguage] = RussianTranslations()
     };
 
     private string _languageSetting = AutoLanguage;
@@ -55,7 +57,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
     public System.Windows.TextAlignment TextAlignment => System.Windows.TextAlignment.Left;
     public System.Windows.HorizontalAlignment StartHorizontalAlignment => System.Windows.HorizontalAlignment.Left;
     public System.Windows.HorizontalAlignment EndHorizontalAlignment => System.Windows.HorizontalAlignment.Right;
-    public string ToggleLanguageText => IsRightToLeft ? "English" : "فارسی";
+    public string ToggleLanguageText => _effectiveLanguage switch
+    {
+        PersianLanguage => "English",
+        EnglishLanguage => "Русский",
+        _ => "فارسی"
+    };
 
     public void Initialize(string? savedLanguage)
     {
@@ -64,7 +71,13 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     public void ToggleLanguage()
     {
-        SetLanguage(IsRightToLeft ? EnglishLanguage : PersianLanguage);
+        var next = _effectiveLanguage switch
+        {
+            PersianLanguage => EnglishLanguage,
+            EnglishLanguage => RussianLanguage,
+            _ => PersianLanguage
+        };
+        SetLanguage(next);
     }
 
     public void SetLanguage(string language)
@@ -110,9 +123,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
             if (TryMatchFormatTemplate(key, message, out var arg))
                 return (key, arg);
 
-            if (table.TryGetValue(key, out var englishTemplate) &&
-                TryMatchFormatTemplate(englishTemplate, message, out arg))
-                return (key, arg);
+            foreach (var langTable in _translations.Values)
+            {
+                if (langTable.TryGetValue(key, out var template) &&
+                    TryMatchFormatTemplate(template, message, out arg))
+                    return (key, arg);
+            }
         }
 
         return (message, null);
@@ -227,11 +243,15 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     private static string NormalizeLanguageSetting(string language)
     {
-        if (string.Equals(language, EnglishLanguage, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(language, EnglishLanguage, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(language, "en", StringComparison.OrdinalIgnoreCase))
             return EnglishLanguage;
         if (string.Equals(language, PersianLanguage, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(language, "fa", StringComparison.OrdinalIgnoreCase))
             return PersianLanguage;
+        if (string.Equals(language, RussianLanguage, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(language, "ru", StringComparison.OrdinalIgnoreCase))
+            return RussianLanguage;
         return AutoLanguage;
     }
 
@@ -240,10 +260,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
         if (setting != AutoLanguage)
             return setting;
 
-        var ui = CultureInfo.CurrentUICulture;
-        return ui.TwoLetterISOLanguageName.Equals("fa", StringComparison.OrdinalIgnoreCase)
-            ? PersianLanguage
-            : EnglishLanguage;
+        var two = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        if (two.Equals("fa", StringComparison.OrdinalIgnoreCase))
+            return PersianLanguage;
+        if (two.Equals("ru", StringComparison.OrdinalIgnoreCase))
+            return RussianLanguage;
+        return EnglishLanguage;
     }
 
     private static bool HasBinding(DependencyObject element, DependencyProperty property)
@@ -1239,6 +1261,11 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["ارتباط از سمت سرور یا شبکه قطع شد. کانال کنترل OpenVPN بارها reset شد ({0} بار).\n\nاحتمال‌ها:\n• بار زیاد یا محدودیت اتصال همزمان روی سرور\n• فیلترینگ یا قطع موقت TCP به سرور\n• مشکل موقت اپراتور اینترنت\n\nچند دقیقه صبر کنید؛ فقط یک برنامه با این اکانت وصل باشد."] = "The connection was dropped by the server or network. The OpenVPN control channel reset many times ({0} times).\n\nPossible causes:\n• Server load or concurrent connection limits\n• Filtering or temporary TCP loss to the server\n• Temporary ISP issues\n\nWait a few minutes; connect with only one app using this account.",
         ["ارتباط VPN از سمت سرور قطع شد. کانال کنترل OpenVPN یک‌بار یا چند بار reset شد ({0} بار).\n\nممکن است سرور session را بسته باشد، محدودیت اتصال همزمان باشد، یا شبکه بین شما و سرور ناپایدار باشد. ۳۰–۶۰ ثانیه بعد دوباره Connect بزنید."] = "The VPN connection was closed by the server. The OpenVPN control channel reset once or several times ({0} times).\n\nThe server may have closed the session, enforced concurrent limits, or the network was unstable. Connect again after 30–60 seconds.",
         ["فرآیند OpenVPN بسته شد و اتصال VPN قطع شد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای [OpenVPN-DROP] بررسی کنید."] = "The OpenVPN process exited and the VPN disconnected.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP].",
-        ["اتصال VPN به‌طور ناگهانی قطع شد. آداپتور OpenVPN یا فرآیند تونل از کار افتاد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای خطوط [OpenVPN-DROP] بررسی کنید."] = "The VPN connection dropped suddenly. The OpenVPN adapter or tunnel process stopped.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP] lines."
+        ["اتصال VPN به‌طور ناگهانی قطع شد. آداپتور OpenVPN یا فرآیند تونل از کار افتاد.\n\nاگر مدتی وصل بودید، احتمالاً سرور session را بسته یا کانال کنترل را reset کرده است. لاگ TunnelX را برای خطوط [OpenVPN-DROP] بررسی کنید."] = "The VPN connection dropped suddenly. The OpenVPN adapter or tunnel process stopped.\n\nIf you were connected for a while, the server likely closed the session or reset the control channel. Check TunnelX logs for [OpenVPN-DROP] lines.",
+
+        ["🌐 زبان"] = "🌐 Language",
+        ["زبان رابط کاربری"] = "Interface language",
+        ["در حالت خودکار TunnelX زبان ویندوز را دنبال می‌کند. می‌توانید فارسی، انگلیسی یا روسی را دستی انتخاب کنید."] = "In Auto mode, TunnelX follows the Windows language. You can also choose Persian, English, or Russian manually.",
+        ["خودکار"] = "Auto"
     };
 }
