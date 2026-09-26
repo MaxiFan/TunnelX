@@ -29,11 +29,16 @@ public sealed class LocalizationService : INotifyPropertyChanged
 
     private LocalizationService()
     {
-        EventManager.RegisterClassHandler(
-            typeof(FrameworkElement),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnFrameworkElementLoaded),
-            handledEventsToo: true);
+        // WPF class handlers must be registered on an STA thread. The app always
+        // touches this service from the UI thread; unit tests may not.
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            EventManager.RegisterClassHandler(
+                typeof(FrameworkElement),
+                FrameworkElement.LoadedEvent,
+                new RoutedEventHandler(OnFrameworkElementLoaded),
+                handledEventsToo: true);
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -861,6 +866,39 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ["این پورت همین حالا توسط برنامه دیگری استفاده می‌شود"] = "This port is currently used by another app",
         ["پورت SOCKS5 داخلی آماده است"] = "Internal SOCKS5 port is ready",
         ["چسباندن کانفیگ"] = "Paste config",
+        ["افزودن اشتراک"] = "Add subscription",
+        ["در حال دریافت اشتراک..."] = "Fetching subscription...",
+        ["لینک اشتراک (sub) را دریافت می‌کند و کانفیگ‌های آن را به پروفایل تبدیل می‌کند"] = "Fetches a subscription (sub) link and turns its configs into profiles",
+        ["به‌روزرسانی"] = "Refresh",
+        ["به‌روزرسانی این اشتراک"] = "Refresh this subscription",
+        ["حذف این اشتراک و کانفیگ‌های آن"] = "Remove this subscription and its configs",
+        ["افزودن لینک اشتراک"] = "Add subscription link",
+        ["لینک http یا https که لیست کانفیگ برمی‌گرداند. پشتیبانی: لیست base64 لینک‌های v2ray، لینک خام، و sing-box JSON."] = "An http or https link that returns configs. Supported: base64 v2ray link lists, raw links, and sing-box JSON.",
+        ["آدرس اشتراک"] = "Subscription URL",
+        ["آدرس اشتراک را وارد کنید"] = "Enter a subscription URL",
+        ["آدرس اشتراک معتبر نیست"] = "Subscription URL is not valid",
+        ["آدرس اشتراک باید با http:// یا https:// شروع شود"] = "Subscription URL must start with http:// or https://",
+        ["دریافت اشتراک در حال انجام است"] = "A subscription fetch is already running",
+        ["پاسخ اشتراک خالی است"] = "Subscription response was empty",
+        ["پاسخ اشتراک خیلی بزرگ است"] = "Subscription response is too large",
+        ["پاسخ سرور صفحه وب بود، نه لیست کانفیگ"] = "Server returned a web page, not a config list",
+        ["فرمت Clash پشتیبانی نمی‌شود. از اشتراک v2ray (base64) یا sing-box JSON استفاده کنید"] = "Clash format is not supported. Use a v2ray (base64) or sing-box JSON subscription",
+        ["هیچ کانفیگ معتبری در اشتراک پیدا نشد"] = "No valid configs were found in the subscription",
+        ["دریافت اشتراک ناموفق بود (HTTP {0})"] = "Subscription fetch failed (HTTP {0})",
+        ["دریافت اشتراک ناموفق بود: {0}"] = "Subscription fetch failed: {0}",
+        ["مهلت دریافت اشتراک تمام شد"] = "Subscription fetch timed out",
+        ["اشتراک به‌روز شد: {0} جدید، {1} به‌روز، {2} حذف"] = "Subscription updated: {0} added, {1} updated, {2} removed",
+        ["اشتراک «{0}» حذف شود؟ کانفیگ‌های دریافت‌شده از این لینک هم حذف می‌شوند."] = "Remove subscription \"{0}\"? Configs fetched from this link will be removed too.",
+        ["حذف اشتراک"] = "Remove subscription",
+        ["اشتراک حذف شد"] = "Subscription removed",
+        ["هنوز دریافت نشده"] = "Not fetched yet",
+        ["{0} کانفیگ · {1}"] = "{0} configs · {1}",
+        ["همین الان"] = "Just now",
+        ["{0} دقیقه پیش"] = "{0} min ago",
+        ["{0} ساعت پیش"] = "{0} h ago",
+        ["مصرف {0}"] = "Usage {0}",
+        ["مصرف {0} · تا {1}"] = "Usage {0} · until {1}",
+        ["اشتراک"] = "Subscription",
         ["افزودن از کلیپ‌بورد"] = "Add from clipboard",
         ["پیست کانفیگ"] = "Paste configs",
         ["در حال افزودن..."] = "Importing...",

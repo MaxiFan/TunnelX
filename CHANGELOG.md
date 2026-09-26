@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+- لینک اشتراک (sub): افزودن آدرس http/https، ساخت پروفایل از کانفیگ‌های دریافتی، و به‌روزرسانی بعدی
+
+</div>
+
+### English
+
+- Subscription (sub) links: add an http/https URL, import the returned configs as profiles, and refresh them later
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

@@ -50,6 +50,7 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 - Local SOCKS5 proxy for tools that need `127.0.0.1`
 - DNS redirect, IPv6 blocking, leak guard, route diagnostics, and traffic history
 - Multiple profiles, duplicate/edit flows, server tests, public exit IP detection, and release update checks
+- Subscription (sub) links: fetch an `http`/`https` URL and import its configs as profiles, then refresh later
 - **Connection health check** before the connected screen: end-to-end TCP probes to `google.com` and `cloudflare.com` through the tunnel SOCKS path, with live per-host latency during the verify step
 - Connected dashboard: **exit IP** with country name and flag image (geo and flag PNG fetched through the tunnel, not direct from the local network)
 - Windows tray notifications with clearer error guidance, optional release-notes action on update cards, and scheduled update check after connect
@@ -86,6 +87,21 @@ Enter the server address, username, password, and pre-shared key. TunnelX create
 ### V2Ray / Xray
 
 Paste a V2Ray/Xray link or JSON config into the profile. TunnelX uses sing-box for regular configs and switches to Xray-core for configs that require Xray-specific behavior such as `xhttp`.
+
+### Subscription links
+
+On the connection tab, **Add subscription** takes an `http://` or `https://` URL that returns a config list. TunnelX fetches it directly from that host (the URL is stored locally and can contain an access token), imports each config as a profile, and can refresh the same link later. Refresh adds new nodes, updates existing ones, and removes nodes that disappeared. A failed or empty fetch does not delete profiles already imported from that link.
+
+Pasting a subscription URL on the connection tab (Ctrl+V) starts the same fetch. A bare `http://host:port` proxy address is still imported as an HTTP proxy profile.
+
+Supported subscription bodies:
+
+- Base64-encoded lists of share links (`vmess://`, `vless://`, `trojan://`, `ss://`, `socks://`, `http://`), including line-wrapped and double-encoded payloads
+- The same share links as plain text, or a JSON array of those strings
+- sing-box / V2Ray JSON with an `outbounds` array
+- OpenVPN and WireGuard text when the body contains those configs
+
+Not supported: Clash YAML/JSON (`proxies:`), SIP008, and share links the importer does not already understand (for example `hy2://`). If the server chooses the format from the User-Agent, TunnelX sends `TunnelX/<version>`, which most v2ray panels answer with a base64 link list. The optional `profile-title` and `subscription-userinfo` response headers set the subscription name and usage line.
 
 ### SOCKS5/HTTP Proxy
 

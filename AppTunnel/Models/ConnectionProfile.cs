@@ -63,6 +63,8 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _lastServerLatencyLabel = "";
     private string _lastServerLatencyError = "";
     private bool _isServerPingTesting;
+    private string _subscriptionId = "";
+    private string _subscriptionNodeKey = "";
 
     public ConnectionProfile()
     {
@@ -78,6 +80,7 @@ public class ConnectionProfile : INotifyPropertyChanged
             OnPropertyChanged(nameof(LatencyColor));
             OnPropertyChanged(nameof(ServerLatencyDisplayText));
             OnPropertyChanged(nameof(ServerLatencyColor));
+            OnPropertyChanged(nameof(SubscriptionBadgeText));
         };
     }
 
@@ -255,6 +258,31 @@ public class ConnectionProfile : INotifyPropertyChanged
         get => _enableGameMode;
         set => SetField(ref _enableGameMode, value);
     }
+
+    /// <summary>Owning subscription id, empty for manually added profiles.</summary>
+    public string SubscriptionId
+    {
+        get => _subscriptionId;
+        set
+        {
+            if (!SetField(ref _subscriptionId, value ?? ""))
+                return;
+            OnPropertyChanged(nameof(IsFromSubscription));
+        }
+    }
+
+    /// <summary>Stable identity of this node inside its subscription, used to update it on refresh.</summary>
+    public string SubscriptionNodeKey
+    {
+        get => _subscriptionNodeKey;
+        set => SetField(ref _subscriptionNodeKey, value ?? "");
+    }
+
+    [JsonIgnore]
+    public bool IsFromSubscription => !string.IsNullOrWhiteSpace(SubscriptionId);
+
+    [JsonIgnore]
+    public string SubscriptionBadgeText => LocalizationService.Instance.T("اشتراک");
 
     [JsonIgnore]
     public string ConnectionName => $"TunnelX-{Id}";

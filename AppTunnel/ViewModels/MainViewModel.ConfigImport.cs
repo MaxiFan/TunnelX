@@ -205,6 +205,12 @@ public partial class MainViewModel
 
     private void ImportConfigsFromText(string? rawText)
     {
+        if (SubscriptionUrl.LooksLikeSubscriptionUrl(rawText))
+        {
+            _ = ImportSubscriptionUrlAsync(rawText!);
+            return;
+        }
+
         var drafts = ConfigImportService.ParseClipboard(rawText);
         if (drafts.Count == 0)
         {

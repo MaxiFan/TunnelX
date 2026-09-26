@@ -12,6 +12,14 @@ public sealed class ImportedConfigDraft
     public string? SkipReason { get; init; }
 }
 
+public enum SubscriptionContentKind
+{
+    Supported,
+    Empty,
+    Html,
+    Clash
+}
+
 /// <summary>
 /// Parses clipboard/subscription text into connection profiles (share links, JSON, OpenVPN, WireGuard).
 /// </summary>
@@ -31,6 +39,7 @@ public static class ConfigImportService
         var text = rawText.Trim();
         if (TryDecodeSubscriptionBlob(text, out var decoded))
             text = decoded;
+        text = ExpandJsonStringArray(text);
 
         var segments = SplitConfigSegments(text);
         var results = new List<ImportedConfigDraft>();
@@ -97,6 +106,63 @@ public static class ConfigImportService
             return false;
 
         return existing.Any(p => string.Equals(NormalizeConfigKey(p), key, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Identity used to match a subscription node across refreshes. URI remarks are ignored.
+    /// </summary>
+    public static string GetSubscriptionNodeKey(ConnectionProfile profile)
+    {
+        var raw = NormalizeConfigKey(profile);
+        if (profile.TunnelType != TunnelType.V2Ray || string.IsNullOrWhiteSpace(raw))
+            return raw;
+
+        var hash = raw.IndexOf('#');
+        if (hash >= 0)
+            raw = raw[..hash];
+
+        if (raw.StartsWith("vmess://", StringComparison.OrdinalIgnoreCase))
+        {
+            var identity = TryVmessIdentity(raw);
+            if (!string.IsNullOrWhiteSpace(identity))
+                return identity;
+        }
+
+        return raw.Trim();
+    }
+
+    /// <summary>
+    /// Why a fetched subscription body cannot be imported, or null when the body may contain configs.
+    /// </summary>
+    public static string? DescribeSubscriptionProblem(string? rawText) => ClassifySubscription(rawText) switch
+    {
+        SubscriptionContentKind.Empty => LocalizationService.Instance.T("پاسخ اشتراک خالی است"),
+        SubscriptionContentKind.Html => LocalizationService.Instance.T("پاسخ سرور صفحه وب بود، نه لیست کانفیگ"),
+        SubscriptionContentKind.Clash => LocalizationService.Instance.T("فرمت Clash پشتیبانی نمی‌شود. از اشتراک v2ray (base64) یا sing-box JSON استفاده کنید"),
+        _ => null
+    };
+
+    public static SubscriptionContentKind ClassifySubscription(string? rawText)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+            return SubscriptionContentKind.Empty;
+
+        var text = rawText.Trim();
+        if (TryDecodeSubscriptionBlob(text, out var decoded))
+            text = decoded.Trim();
+        else if (TryBase64Decode(text, out var plain))
+            text = plain.Trim();
+
+        if (string.IsNullOrWhiteSpace(text))
+            return SubscriptionContentKind.Empty;
+
+        if (IsHtmlDocument(text))
+            return SubscriptionContentKind.Html;
+
+        if (LooksLikeClashDocument(text))
+            return SubscriptionContentKind.Clash;
+
+        return SubscriptionContentKind.Supported;
     }
 
     private static string NormalizeConfigKey(ConnectionProfile profile) => profile.TunnelType switch
@@ -376,17 +442,141 @@ public static class ConfigImportService
         if (text.Contains("://", StringComparison.Ordinal))
             return false;
 
+        if (!TryBase64Decode(text, out var once))
+            return false;
+
+        if (once.Contains("://", StringComparison.Ordinal))
+        {
+            decoded = once;
+            return true;
+        }
+
+        // A few panels wrap the share-link list in a second base64 layer.
+        if (TryBase64Decode(once, out var twice) && twice.Contains("://", StringComparison.Ordinal))
+        {
+            decoded = twice;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryBase64Decode(string text, out string decoded)
+    {
+        decoded = "";
+        var compact = new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        if (compact.Length < 8)
+            return false;
+
+        foreach (var c in compact)
+        {
+            if (char.IsAsciiLetterOrDigit(c) || c is '+' or '/' or '-' or '_' or '=')
+                continue;
+            return false;
+        }
+
         try
         {
-            var normalized = text.Replace('-', '+').Replace('_', '/');
-            normalized = normalized.PadRight((normalized.Length + 3) / 4 * 4, '=');
-            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(normalized));
-            return decoded.Contains("://", StringComparison.Ordinal);
+            var normalized = compact.Replace('-', '+').Replace('_', '/');
+            var mod = normalized.Length % 4;
+            if (mod == 1)
+                return false;
+            if (mod > 0)
+                normalized = normalized.PadRight(normalized.Length + (4 - mod), '=');
+
+            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(normalized)).Trim().TrimStart('\uFEFF');
+            return decoded.Length > 0;
         }
         catch
         {
             return false;
         }
+    }
+
+    private static string ExpandJsonStringArray(string text)
+    {
+        var trimmed = text.Trim();
+        if (!trimmed.StartsWith('['))
+            return text;
+
+        try
+        {
+            if (JsonNode.Parse(trimmed) is not JsonArray array || array.Count == 0)
+                return text;
+
+            var lines = new List<string>(array.Count);
+            foreach (var item in array)
+            {
+                if (item is not JsonValue value || !value.TryGetValue<string>(out var line) || string.IsNullOrWhiteSpace(line))
+                    return text;
+                lines.Add(line.Trim());
+            }
+
+            return string.Join('\n', lines);
+        }
+        catch
+        {
+            return text;
+        }
+    }
+
+    private static bool IsHtmlDocument(string text)
+    {
+        var head = text.TrimStart();
+        return head.StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase) ||
+               head.StartsWith("<html", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeClashDocument(string text)
+    {
+        var sample = text.Length > 8000 ? text[..8000] : text;
+        var hasProxies = sample.Contains("proxies:", StringComparison.OrdinalIgnoreCase) ||
+                         sample.Contains("\"proxies\"", StringComparison.OrdinalIgnoreCase);
+        if (!hasProxies)
+            return false;
+
+        return sample.Contains("vmess", StringComparison.OrdinalIgnoreCase) ||
+               sample.Contains("vless", StringComparison.OrdinalIgnoreCase) ||
+               sample.Contains("trojan", StringComparison.OrdinalIgnoreCase) ||
+               sample.Contains("hysteria", StringComparison.OrdinalIgnoreCase) ||
+               sample.Contains("\"type\"", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryVmessIdentity(string vmessUrl)
+    {
+        try
+        {
+            var b64 = vmessUrl["vmess://".Length..];
+            if (!TryBase64Decode(b64, out var json))
+                return null;
+
+            var node = JsonNode.Parse(json)?.AsObject();
+            if (node == null)
+                return null;
+
+            return string.Join('|',
+                "vmess",
+                JsonScalar(node["add"]),
+                JsonScalar(node["port"]),
+                JsonScalar(node["id"]),
+                JsonScalar(node["net"]),
+                JsonScalar(node["path"]),
+                JsonScalar(node["host"]),
+                JsonScalar(node["tls"]));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string JsonScalar(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+            return "";
+        if (value.TryGetValue<string>(out var text))
+            return text;
+        return value.ToString();
     }
 
     private static List<string> SplitConfigSegments(string text)

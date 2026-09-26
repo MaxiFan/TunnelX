@@ -53,12 +53,15 @@ public partial class MainViewModel : INotifyPropertyChanged
         RefreshAppsCommand = new RelayCommand(_ => LoadInstalledApps(), _ => !IsBusy);
 
         // Profile commands
-        NewProfileCommand = new RelayCommand(_ => CreateNewProfile(), _ => !IsConnected);
-        DeleteProfileCommand = new RelayCommand(DeleteCurrentProfile, _ => !IsConnected && Profiles.Count > 1);
-        DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected);
-        EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected);
+        NewProfileCommand = new RelayCommand(_ => CreateNewProfile(), _ => !IsConnected && !IsSubscriptionBusy);
+        DeleteProfileCommand = new RelayCommand(DeleteCurrentProfile, _ => !IsConnected && !IsSubscriptionBusy && Profiles.Count > 1);
+        DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected && !IsSubscriptionBusy);
+        EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected && !IsSubscriptionBusy);
         SelectProfileCommand = new RelayCommand(SelectProfile, _ => !IsConnected);
-        ImportConfigsFromClipboardCommand = new RelayCommand(_ => ImportConfigsFromClipboard(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs);
+        ImportConfigsFromClipboardCommand = new RelayCommand(_ => ImportConfigsFromClipboard(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        AddSubscriptionCommand = new RelayCommand(_ => PromptAddSubscription(), _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        RefreshSubscriptionCommand = new RelayCommand(RefreshSubscription, _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
+        DeleteSubscriptionCommand = new RelayCommand(DeleteSubscription, _ => CanUseConnectionTabQuickActions && !IsImportingConfigs && !IsSubscriptionBusy);
         TestSelectedProfileLatencyCommand = new RelayCommand(
             _ => _ = TestProfileLatencyAsync(SelectedProfile),
             _ => CanUseConnectionTabQuickActions && !IsTestingProfileLatency && !IsTestingAllProfilesLatency && !IsTestingProfileServerPing
@@ -133,6 +136,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // Load saved profiles, global tunnel apps, global excludes, global includes, and history on startup
         LoadProfiles();
+        LoadSubscriptions();
+        Subscriptions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubscriptions));
         LoadTunnelApps();
         LoadExcludes();
         LoadIncludes();
@@ -1766,6 +1771,9 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand EditProfileCommand { get; }
     public ICommand SelectProfileCommand { get; }
     public ICommand ImportConfigsFromClipboardCommand { get; }
+    public ICommand AddSubscriptionCommand { get; }
+    public ICommand RefreshSubscriptionCommand { get; }
+    public ICommand DeleteSubscriptionCommand { get; }
     public ICommand TestSelectedProfileLatencyCommand { get; }
     public ICommand TestProfileLatencyCommand { get; }
     public ICommand TestProfileServerPingCommand { get; }
@@ -2661,6 +2669,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ConnectedServerPingToolTipText));
         OnPropertyChanged(nameof(ImportConfigsButtonText));
         OnPropertyChanged(nameof(ImportConfigsToolTipText));
+        OnPropertyChanged(nameof(AddSubscriptionButtonText));
+        OnPropertyChanged(nameof(AddSubscriptionToolTipText));
+        OnPropertyChanged(nameof(RefreshSubscriptionButtonText));
+        OnPropertyChanged(nameof(RefreshSubscriptionToolTipText));
+        OnPropertyChanged(nameof(DeleteSubscriptionButtonText));
+        OnPropertyChanged(nameof(DeleteSubscriptionToolTipText));
+        foreach (var subscription in Subscriptions)
+            subscription.RefreshLocalization();
         OnPropertyChanged(nameof(TestProfileLatencyButtonText));
         OnPropertyChanged(nameof(TestAllProfilesLatencyButtonText));
         OnPropertyChanged(nameof(TestProfileLatencyToolTipText));

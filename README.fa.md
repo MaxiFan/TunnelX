@@ -30,6 +30,7 @@
 - پروکسی <span dir="ltr">SOCKS5</span> محلی روی <span dir="ltr">`127.0.0.1`</span> برای ابزارهایی که تنظیم پروکسی داخلی دارند
 - تغییر مسیر <span dir="ltr">DNS</span>، مسدودسازی <span dir="ltr">IPv6</span>، محافظ نشت، عیب‌یابی <span dir="ltr">route</span> و تاریخچه مصرف تونل
 - مدیریت چند پروفایل، کپی/ویرایش کانفیگ‌ها، تست سرور، تشخیص <span dir="ltr">IP</span> خروجی و اعلان بروزرسانی
+- لینک اشتراک (<span dir="ltr">sub</span>): دریافت یک آدرس <span dir="ltr">http/https</span>، ساخت پروفایل از کانفیگ‌های آن، و به‌روزرسانی بعدی
 - **بررسی سلامت اتصال** قبل از صفحه متصل: پینگ <span dir="ltr">TCP</span> واقعی به <span dir="ltr">`google.com`</span> و <span dir="ltr">`cloudflare.com`</span> از مسیر <span dir="ltr">SOCKS</span> تونل، با نمایش تأخیر هر مقصد در مرحله بررسی
 - داشبورد متصل: <span dir="ltr">IP</span> خروجی همراه نام کشور و تصویر پرچم (دریافت geo و پرچم از داخل تونل، نه مستقیم از شبکه محلی)
 - اعلان‌های <span dir="ltr">tray</span> ویندوز با راهنمای بهتر برای خطا، دکمه یادداشت انتشار روی کارت بروزرسانی، و بررسی بروزرسانی زمان‌بندی‌شده پس از اتصال
@@ -66,6 +67,21 @@
 ### <span dir="ltr">V2Ray / Xray</span>
 
 لینک یا کانفیگ <span dir="ltr">V2Ray/Xray</span> را در پروفایل وارد کنید. برنامه برای کانفیگ‌های معمول از <span dir="ltr">sing-box</span> استفاده می‌کند و برای کانفیگ‌هایی که به قابلیت‌های خاص <span dir="ltr">Xray</span> مثل <span dir="ltr">xhttp</span> نیاز دارند، <span dir="ltr">Xray-core</span> را انتخاب می‌کند.
+
+### لینک اشتراک
+
+در تب اتصال، **افزودن اشتراک** یک آدرس <span dir="ltr">http://</span> یا <span dir="ltr">https://</span> می‌گیرد که لیست کانفیگ برمی‌گرداند. برنامه همان را مستقیم از همان سرور دریافت می‌کند (آدرس روی دستگاه ذخیره می‌شود و ممکن است توکن دسترسی داشته باشد)، هر کانفیگ را به یک پروفایل تبدیل می‌کند و بعداً می‌توان همان لینک را به‌روز کرد. به‌روزرسانی، کانفیگ تازه را اضافه، کانفیگ موجود را عوض، و کانفیگی که از لیست حذف شده را برمی‌دارد. اگر دریافت خطا بدهد یا خالی باشد، پروفایل‌های قبلی آن اشتراک پاک نمی‌شوند.
+
+چسباندن خودِ آدرس اشتراک در تب اتصال (<span dir="ltr">Ctrl+V</span>) همان دریافت را شروع می‌کند. آدرس ساده <span dir="ltr">http://host:port</span> همچنان به‌عنوان پراکسی <span dir="ltr">HTTP</span> وارد می‌شود.
+
+بدنه‌های پشتیبانی‌شده:
+
+- لیست <span dir="ltr">base64</span> از لینک‌های <span dir="ltr">vmess://</span>، <span dir="ltr">vless://</span>، <span dir="ltr">trojan://</span>، <span dir="ltr">ss://</span>، <span dir="ltr">socks://</span> و <span dir="ltr">http://</span> (حتی چندخطی یا دو بار <span dir="ltr">base64</span>)
+- همان لینک‌ها به‌صورت متن ساده، یا آرایه <span dir="ltr">JSON</span> از رشته‌ها
+- <span dir="ltr">JSON</span> مربوط به <span dir="ltr">sing-box / V2Ray</span> که <span dir="ltr">outbounds</span> دارد
+- متن <span dir="ltr">OpenVPN</span> و <span dir="ltr">WireGuard</span> اگر داخل پاسخ باشد
+
+پشتیبانی نمی‌شود: <span dir="ltr">Clash YAML/JSON</span> (کلید <span dir="ltr">proxies</span>)، <span dir="ltr">SIP008</span>، و لینک‌هایی که واردکننده از قبل نمی‌شناسد (مثل <span dir="ltr">hy2://</span>). هدرهای اختیاری <span dir="ltr">profile-title</span> و <span dir="ltr">subscription-userinfo</span> نام اشتراک و خط مصرف را تنظیم می‌کنند.
 
 ### <span dir="ltr">SOCKS5/HTTP Proxy</span>
 
