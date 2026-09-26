@@ -1,10 +1,8 @@
-using System.Windows;
-using System.Windows.Controls;
 using AppTunnel.ViewModels;
 
 namespace AppTunnel.Views;
 
-public partial class SettingsTabView : UserControl
+public partial class SettingsTabView : System.Windows.Controls.UserControl
 {
     public SettingsTabView()
     {
@@ -13,7 +11,7 @@ public partial class SettingsTabView : UserControl
         LocalProxyPasswordField.PasswordChanged += OnLocalProxyPasswordFieldChanged;
     }
 
-    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    private void OnDataContextChanged(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
     {
         if (e.OldValue is MainViewModel oldVm)
             oldVm.LocalProxyPasswordChanged -= OnViewModelLocalProxyPasswordChanged;
@@ -25,7 +23,7 @@ public partial class SettingsTabView : UserControl
         }
     }
 
-    private void OnLocalProxyPasswordFieldChanged(object sender, RoutedEventArgs e)
+    private void OnLocalProxyPasswordFieldChanged(object sender, System.Windows.RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm && vm.LocalProxyPassword != LocalProxyPasswordField.Password)
             vm.LocalProxyPassword = LocalProxyPasswordField.Password;
