@@ -343,7 +343,9 @@
                     </StackPanel>
                 </TabItem.Header>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,10,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="False"
+                              Padding="0,10,0,0">
                     <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
 
                     <Border Background="#121212" BorderBrush="#18FFFFFF" BorderThickness="1"
@@ -431,6 +433,8 @@
                                       FlowDirection="LeftToRight"
                                       Cursor="Arrow"
                                       PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      VirtualizingPanel.ScrollUnit="Pixel"
+                                      ScrollViewer.CanContentScroll="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
@@ -545,6 +549,8 @@
                                       FlowDirection="LeftToRight"
                                       Cursor="Arrow"
                                       PreviewMouseWheel="OnNestedScrollPreviewMouseWheel"
+                                      VirtualizingPanel.ScrollUnit="Pixel"
+                                      ScrollViewer.CanContentScroll="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
@@ -607,7 +613,9 @@
                     </StackPanel>
                 </TabItem.Header>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="False"
+                              Padding="0,12,0,0">
                     <StackPanel HorizontalAlignment="Stretch" Margin="16,0">
 
                     <!-- Summary Card -->

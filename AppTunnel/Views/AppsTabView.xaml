@@ -133,7 +133,10 @@
                           BorderThickness="0"
                           FlowDirection="{Binding AppFlowDirection}"
                           Cursor="Arrow"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          ScrollViewer.CanContentScroll="False"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <Border Style="{StaticResource AppRowCard}" Cursor="Arrow">
@@ -267,7 +270,10 @@
                           Background="Transparent"
                           BorderThickness="0"
                           FlowDirection="{Binding AppFlowDirection}"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          ScrollViewer.CanContentScroll="False"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <Border x:Name="itemBorder"

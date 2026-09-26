@@ -307,6 +307,7 @@
                         <ScrollViewer Grid.Row="2"
                                       MaxHeight="148"
                                       Margin="0,6,0,0"
+                                      CanContentScroll="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
                                       Visibility="{Binding HasSubscriptions, Converter={StaticResource BoolToVis}}">
@@ -407,7 +408,6 @@
                          Cursor="Arrow"
                          MinHeight="80"
                          VerticalAlignment="Stretch"
-                         helpers:SmoothScrollBehavior.IsEnabled="True"
                          VirtualizingPanel.IsVirtualizing="False"
                          VirtualizingPanel.ScrollUnit="Pixel"
                          ScrollViewer.CanContentScroll="False"

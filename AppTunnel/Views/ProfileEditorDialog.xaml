@@ -83,6 +83,7 @@
             </Border>
 
             <ScrollViewer Grid.Row="1"
+                          CanContentScroll="False"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           FlowDirection="{Binding Source={x:Static services:LocalizationService.Instance}, Path=FlowDirection}">

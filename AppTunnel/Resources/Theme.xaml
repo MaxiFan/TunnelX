@@ -680,9 +680,12 @@
         </Setter>
     </Style>
 
-    <!-- Passive containers: Arrow unless a child control sets its own cursor -->
+    <!-- Passive containers: Arrow unless a child control sets its own cursor.
+         Pixel scrolling (CanContentScroll=False) keeps mouse-wheel speed at the
+         system/default WPF line height instead of jumping whole items. -->
     <Style TargetType="ScrollViewer">
         <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="CanContentScroll" Value="False"/>
     </Style>
     <Style TargetType="ItemsControl">
         <Setter Property="Cursor" Value="Arrow"/>

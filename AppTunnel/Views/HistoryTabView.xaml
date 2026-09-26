@@ -3,7 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer FlowDirection="{Binding AppFlowDirection}"
+                  CanContentScroll="False"
                   VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
                   Padding="0,6,0,0">
         <StackPanel HorizontalAlignment="Stretch" Margin="10,0">
 

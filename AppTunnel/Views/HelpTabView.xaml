@@ -86,6 +86,7 @@
     </UserControl.Resources>
 
     <ScrollViewer FlowDirection="{Binding AppFlowDirection}"
+                  CanContentScroll="False"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
                   Padding="0,12,0,10">
@@ -195,6 +196,7 @@
                                 HorizontalAlignment="Stretch"
                                 Margin="0,0,0,8"/>
                         <ScrollViewer MaxHeight="200"
+                                      CanContentScroll="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding HelpCryptoWalletRows}"
