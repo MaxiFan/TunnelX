@@ -427,7 +427,7 @@ public class ConnectionProfile : INotifyPropertyChanged
 
     [JsonIgnore]
     public string PingButtonToolTipText => TunnelType == TunnelType.V2Ray
-        ? LocalizationService.Instance.T("پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray). اگر نتیجه بیاید کانفیگ کار می‌کند")
+        ? LocalizationService.Instance.T("پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray/Hysteria). اگر نتیجه بیاید کانفیگ کار می‌کند")
         : LocalizationService.Instance.T("پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
 
     [JsonIgnore]

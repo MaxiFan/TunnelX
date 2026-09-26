@@ -393,7 +393,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         LocalizationService.Instance.T("نمایش اعلان‌های وضعیت اتصال و برنامه. اعلان‌های تبلیغ/به‌روزرسانی با دکمه ✕ بسته می‌شوند.");
 
     public string HelpSettingsTabBodyText =>
-        LocalizationService.Instance.T("پورت پراکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
+        LocalizationService.Instance.T("پورت پراکسی محلی، نام کاربری/رمز پیش‌فرض پروکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
 
     private string _healthCheckEndpointsText = "";
     public string HealthCheckEndpointsText

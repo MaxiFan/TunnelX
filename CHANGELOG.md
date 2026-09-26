@@ -17,6 +17,7 @@
 - Localization lookup never throws on missing or empty keys: falls back English → Persian → key-name placeholder. Filled remaining EN/RU gaps for RC UI strings (new profile, WireGuard IPv4 Address, VPN adapter ifIdx).
 - Language is chosen from a dropdown (Settings and footer): Auto, Persian, English, or Russian — no more multi-press cycle button.
 - Settings can store default local SOCKS/HTTP proxy username and password (DPAPI-encrypted). The built-in listener uses them when a profile has no MixedProxy credentials; empty username keeps no-auth.
+- In-app Help covers WireGuard, subscription import, pre-connect latency, and local proxy auth defaults; connection troubleshooting mentions WireGuard install; ping tooltips include Hysteria. FA/EN/RU help strings completed for those guides.
 
 ### فارسی
 
@@ -35,6 +36,7 @@
 - جستجوی ترجمه دیگر با کلید خالی یا غایب خطا نمی‌دهد؛ ترتیب پشتیبان: انگلیسی → فارسی → نام کلید. کلیدهای EN/RU باقی‌مانده برای رشته‌های RC تکمیل شد.
 - انتخاب زبان از لیست بازشو (تنظیمات و فوتر): خودکار، فارسی، انگلیسی یا روسی — دیگر نیازی به چندبار فشردن دکمه چرخش زبان نیست.
 - در تنظیمات می‌توان نام کاربری و رمز پیش‌فرض پروکسی محلی SOCKS/HTTP را ذخیره کرد (رمز با DPAPI). اگر پروفایل اعتبارنامه جدا نداشته باشد، هنگام گوش‌دادن همین پیش‌فرض‌ها اعمال می‌شوند؛ نام کاربری خالی یعنی بدون احراز هویت.
+- راهنمای داخل برنامه برای WireGuard، اشتراک، تست تأخیر قبل از اتصال و احراز هویت پروکسی محلی تکمیل شد؛ عیب‌یابی اتصال به نصب WireGuard اشاره می‌کند و tooltipهای پینگ Hysteria را هم پوشش می‌دهند. متن‌های راهنما برای FA/EN/RU پر شد.
 
 </div>
 

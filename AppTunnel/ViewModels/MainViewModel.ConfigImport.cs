@@ -152,7 +152,7 @@ public partial class MainViewModel
         "کانفیگ V2Ray/Xray/OpenVPN/WireGuard را از کلیپ‌بورد می‌خواند و پروفایل می‌سازد (Ctrl+V در تب اتصال)");
 
     public string TestProfileLatencyToolTipText => LocalizationService.Instance.T(
-        "پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray). اگر نتیجه بیاید کانفیگ کار می‌کند");
+        "پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray/Hysteria). اگر نتیجه بیاید کانفیگ کار می‌کند");
 
     public string TestProfileServerPingToolTipText => LocalizationService.Instance.T(
         "پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
@@ -169,7 +169,7 @@ public partial class MainViewModel
     public string CancelProfileLatencyTestButtonText => LocalizationService.Instance.T("توقف تست");
 
     public string ProfileQuickActionsHintText => LocalizationService.Instance.T(
-        "پینگ = تأخیر واقعی V2Ray/Xray، یا رسیدن به سرور برای بقیه. دکمه سرور فقط IP/پورت است و سالم بودن کانفیگ را نشان نمی‌دهد.");
+        "پینگ = تأخیر واقعی V2Ray/Xray/Hysteria، یا رسیدن به سرور برای بقیه. دکمه سرور فقط IP/پورت است و سالم بودن کانفیگ را نشان نمی‌دهد.");
 
     public bool TryImportConfigsFromClipboard()
     {
