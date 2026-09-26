@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+#### قابلیت‌های جدید
+- مقصدهای سفارشی برای بررسی سلامت اتصال در تنظیمات (URL، دامنه یا IP). اگر چیزی تنظیم نشود، `google.com` و `cloudflare.com` مثل قبل بررسی می‌شوند. می‌توان مقصدهای عمومی پیش‌فرض را خاموش کرد.
+
+</div>
+
+### English
+
+#### Added
+- Custom connection health-check targets in Settings (URL, hostname, or IP). With nothing configured, `google.com` and `cloudflare.com` are still used. The default public targets can be turned off.
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

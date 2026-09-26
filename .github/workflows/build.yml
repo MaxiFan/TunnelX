@@ -17,3 +17,5 @@ jobs:
         run: dotnet restore AppTunnel.sln
       - name: Build
         run: dotnet build AppTunnel.sln -c Release --no-restore
+      - name: Test
+        run: dotnet test AppTunnel.Tests/AppTunnel.Tests.csproj -c Release --no-build
