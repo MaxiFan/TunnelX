@@ -172,16 +172,11 @@
                                     </StackPanel>
 
                                     <!-- Compact actions -->
-                                    <Grid Grid.Column="4"
-                                          Width="76"
+                                    <StackPanel Grid.Column="4"
                                           VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
                                           FlowDirection="LeftToRight">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <StackPanel Grid.Row="0"
-                                                    Orientation="Horizontal"
+                                        <StackPanel Orientation="Horizontal"
                                                     HorizontalAlignment="Right">
                                             <CheckBox Style="{StaticResource CompactToggleSwitch}"
                                                       IsChecked="{Binding IsEnabled, Mode=OneWay}"
@@ -199,8 +194,7 @@
                                                         RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"/>
                                         </StackPanel>
-                                        <Border Grid.Row="1"
-                                                Background="#15121212"
+                                        <Border Background="#15121212"
                                                 CornerRadius="6"
                                                 Padding="4,1"
                                                 Margin="0,4,0,0"
@@ -210,7 +204,7 @@
                                                        FontSize="8.5"
                                                        FlowDirection="LeftToRight"/>
                                         </Border>
-                                    </Grid>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>

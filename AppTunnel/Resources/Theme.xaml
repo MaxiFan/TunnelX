@@ -466,7 +466,8 @@
                         <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
                                 Padding="4,4,4,3">
-                            <TabPanel IsItemsHost="True" HorizontalAlignment="Center"/>
+                            <!-- UniformGrid spreads tabs across the wider window instead of a centered fixed strip. -->
+                            <UniformGrid Rows="1" IsItemsHost="True"/>
                         </Border>
                         <!-- Tab content (Arrow default; Hand only on tab headers) -->
                         <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" Cursor="Arrow"/>
@@ -486,7 +487,8 @@
         <Setter Property="TextOptions.TextRenderingMode" Value="Auto"/>
         <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
         <Setter Property="Padding" Value="4,4"/>
-        <Setter Property="Width" Value="88"/>
+        <Setter Property="MinWidth" Value="88"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="MinHeight" Value="44"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">

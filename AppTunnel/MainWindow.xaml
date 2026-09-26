@@ -114,28 +114,38 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Connection Status + Compact Health Chips -->
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Border HorizontalAlignment="Center"
+                    <!-- Connection Status + Compact Health Chips (fills title-bar middle column) -->
+                    <StackPanel Grid.Column="1"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Margin="10,0">
+                        <Border HorizontalAlignment="Stretch"
                                 CornerRadius="12"
                                 Padding="12,5"
                                 Background="#121212"
                                 BorderBrush="#20FFFFFF"
                                 BorderThickness="1">
-                            <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,8,0"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0"
+                                         Width="9" Height="9"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,8,0"
                                          Fill="{Binding StatusColor, Converter={StaticResource StringToColor}}"/>
-                                <TextBlock Text="{Binding StatusText}"
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding StatusText}"
                                            Foreground="{StaticResource TextPrimaryBrush}"
                                            FontSize="12"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
-                                           MaxWidth="273"
                                            TextTrimming="CharacterEllipsis"
                                            FlowDirection="{Binding StatusText, Converter={StaticResource TextToFlowDirection}}"
                                            TextAlignment="{Binding StatusText, Converter={StaticResource TextToTextAlignment}}"
                                            ToolTip="{Binding StatusBarToolTipText}"/>
-                            </StackPanel>
+                            </Grid>
                         </Border>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5,0,0"
                                     FlowDirection="LeftToRight">
@@ -295,7 +305,6 @@
                                    FontSize="10"
                                    FontWeight="Medium"
                                    TextWrapping="NoWrap"
-                                   MaxWidth="88"
                                    TextTrimming="CharacterEllipsis"
                                    FlowDirection="{Binding AppFlowDirection}"
                                    TextAlignment="{Binding AppTextAlignment}"
@@ -901,7 +910,7 @@
                         <ComboBox Style="{StaticResource DarkComboBox}"
                                   SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
                                   SelectedValuePath="Tag"
-                                  Width="154"
+                                  MinWidth="118"
                                   FontSize="10"
                                   Padding="8,4"
                                   VerticalAlignment="Center"

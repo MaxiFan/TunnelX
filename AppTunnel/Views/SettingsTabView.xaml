@@ -13,7 +13,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="247"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
                         <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 زبان"
@@ -33,6 +33,7 @@
                               SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
                               SelectedValuePath="Tag"
                               VerticalAlignment="Center"
+                              MinWidth="160"
                               FontSize="12"
                               Padding="8,6">
                         <ComboBoxItem Content="خودکار" Tag="auto"/>
@@ -52,7 +53,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="10"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
@@ -68,6 +69,8 @@
                                  FlowDirection="LeftToRight"
                                  FontSize="12"
                                  Padding="8,5"
+                                 MinWidth="90"
+                                 Width="110"
                                  ToolTip="پورت داخلی 127.0.0.1 برای پروکسی SOCKS5 و HTTP"/>
                         <TextBlock Grid.Column="4"
                                    Text="{Binding MixedProxyPortStatusText}"
