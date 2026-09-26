@@ -4,7 +4,7 @@ TunnelX is designed as a local desktop app.
 
 ## Data Stored Locally
 
-The app may store profiles, selected apps, include/exclude destinations, connection history, and logs on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature.
+The app may store profiles, selected apps, include/exclude destinations, connection history, and logs (including `proxy-lifecycle.log`) on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or the app directory depending on the feature.
 
 ## Network Data
 

@@ -91,6 +91,8 @@ Paste a V2Ray/Xray link or JSON config into the profile. TunnelX uses sing-box f
 
 Use a SOCKS5/HTTP Proxy profile when you already have an external proxy endpoint. Enter the proxy server, port, and optional credentials. This is different from the local `127.0.0.1` SOCKS5 proxy, which is exposed after connection for tools that need a local proxy address.
 
+When that local listener (and the engine SOCKS/mixed inbounds) drops or comes back, TunnelX resets active proxy sessions and announces `127.0.0.1:port`. Clients such as Telethon can use the socket reset for `run_until_disconnected()`, and the lifecycle log to see the endpoint return. See `docs/PROXY_LIFECYCLE.md`.
+
 ### WireGuard
 
 Select a standard WireGuard `.conf` file or paste its contents into the profile. TunnelX runs WireGuard through sing-box and keeps Windows routing under TunnelX control, so app-based split tunneling, include/exclude rules, DNS redirect, IPv6 leak guard, and full-route mode work through the existing routing engine.
@@ -116,7 +118,7 @@ Destination include/exclude rules match both the entered domain and its subdomai
 
 ## Local Data and Logs
 
-Profiles, selected apps, include/exclude destinations, connection history, and logs are stored on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or next to the app depending on the feature. TunnelX does not intentionally send analytics or telemetry to the maintainer. Optional exit-IP and country lookups use third-party HTTPS endpoints **through the tunnel**; see `docs/PRIVACY.md`.
+Profiles, selected apps, include/exclude destinations, connection history, logs, and the local-proxy lifecycle log (`proxy-lifecycle.log`) are stored on the user's Windows machine, typically under `%LOCALAPPDATA%\TunnelX` or next to the app depending on the feature. TunnelX does not intentionally send analytics or telemetry to the maintainer. Optional exit-IP and country lookups use third-party HTTPS endpoints **through the tunnel**; see `docs/PRIVACY.md`.
 
 Logs can contain process names, hostnames, IP addresses, ports, and connection state. Before posting logs publicly, remove server credentials, UUIDs, private keys, private endpoints, and other sensitive data.
 

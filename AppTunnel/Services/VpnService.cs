@@ -38,6 +38,8 @@ public class VpnService
         // Wire up the tunnel-failure watchdog for sing-box-backed providers.
         if (_activeProvider is V2RayTunnelProvider v2r)
             v2r.OnTunnelFailed = OnTunnelFailed;
+        else if (_activeProvider is XrayTunnelProvider xray)
+            xray.OnTunnelFailed = OnTunnelFailed;
         else if (_activeProvider is WireGuardTunnelProvider wg)
             wg.OnTunnelFailed = OnTunnelFailed;
         else if (_activeProvider is OpenVpnTunnelProvider ovpn)

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+- قطع و وصل پراکسی محلی (`127.0.0.1:port`) اعلام می‌شود و اتصال‌های فعال آن ریست می‌شوند تا کلاینت‌هایی مثل Telethon از `run_until_disconnected()` باخبر شوند. جزئیات در `docs/PROXY_LIFECYCLE.md`.
+
+</div>
+
+### English
+
+- Local proxy disconnect and reconnect are announced as `127.0.0.1:port is now disconnected` / `connected`. Active sessions on the built-in listener are reset so clients such as Telethon `run_until_disconnected()` wake up. See `docs/PROXY_LIFECYCLE.md`.
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

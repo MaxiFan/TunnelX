@@ -65,6 +65,8 @@
 
 若已有外部代理端点，使用 SOCKS5/HTTP Proxy 配置。输入代理服务器、端口及可选凭据。这与连接后暴露的本地 `127.0.0.1` SOCKS5 代理不同，后者供需要本地代理地址的工具使用。
 
+当该本地代理（以及引擎的 SOCKS/mixed 入站）断开或恢复时，TunnelX 会重置已有会话并宣布 `127.0.0.1:port`。Telethon 等客户端的观察方式见 `docs/PROXY_LIFECYCLE.md`。
+
 ### WireGuard
 
 选择标准 WireGuard `.conf` 文件或将内容粘贴到配置中。TunnelX 通过 sing-box 运行 WireGuard 并保持 Windows 路由受 TunnelX 控制，因此应用分流、include/exclude 规则、DNS 重定向、IPv6 泄漏防护和全路由模式均通过现有路由引擎工作。
