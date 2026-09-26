@@ -323,6 +323,11 @@ public class Socks5LatencyProbeTests
         san.AddDnsName(host);
         request.CertificateExtensions.Add(san.Build());
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
+        using var ephemeral = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
+        // Windows Schannel cannot use the ephemeral in-memory private key from CreateSelfSigned.
+        // Re-import via PFX so AuthenticateAsServerAsync can complete the handshake in CI.
+#pragma warning disable SYSLIB0057 // X509Certificate2 PFX ctor is obsolete on newer SDKs but required on net8.0
+        return new X509Certificate2(ephemeral.Export(X509ContentType.Pfx), (string?)null, X509KeyStorageFlags.Exportable);
+#pragma warning restore SYSLIB0057
     }
 }
