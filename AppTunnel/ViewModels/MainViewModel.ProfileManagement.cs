@@ -1,5 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using System.Windows.Input;
+using AppTunnel.Helpers;
 using AppTunnel.Models;
 using AppTunnel.Services;
 using AppTunnel.Views;
@@ -11,6 +15,9 @@ public partial class MainViewModel
     #region Profile Management
 
     public ObservableCollection<ConnectionProfile> Profiles { get; } = new();
+
+    private bool _profileDeletionTrackingAttached;
+    private int _deletionSelectionRefreshDepth;
 
     private ConnectionProfile? _selectedProfile;
     public ConnectionProfile? SelectedProfile
@@ -80,7 +87,10 @@ public partial class MainViewModel
 
     private void LoadProfiles()
     {
+        EnsureProfileDeletionTracking();
         var profiles = _profileService.LoadProfiles();
+        foreach (var existing in Profiles)
+            existing.PropertyChanged -= OnProfilePropertyChanged;
         Profiles.Clear();
 
         if (profiles.Count == 0)
@@ -350,6 +360,192 @@ public partial class MainViewModel
         SelectedProfile = Profiles[Math.Min(idx, Profiles.Count - 1)];
         SaveProfiles();
         NotifyReadyProfilesForLatencyTestChanged();
+    }
+
+    public bool CanBulkSelectProfiles => Profiles.Count > 1;
+
+    public bool HasProfilesSelectedForDeletion => PlanBulkDelete().ToRemove.Count > 0;
+
+    public string SelectAllProfilesButtonText =>
+        Profiles.Count > 0 && Profiles.All(p => p.IsSelectedForDeletion)
+            ? LocalizationService.Instance.T("لغو انتخاب")
+            : LocalizationService.Instance.T("انتخاب همه");
+
+    public string SelectAllProfilesToolTipText => LocalizationService.Instance.T(
+        "همه کانفیگ‌ها را برای حذف انتخاب می‌کند. اگر همه انتخاب شده باشند، انتخاب را برمی‌دارد.");
+
+    public string DeleteSelectedProfilesButtonText =>
+        LocalizationService.Instance.Format("حذف انتخاب‌شده‌ها ({0})", PlanBulkDelete().ToRemove.Count);
+
+    public string DeleteSelectedProfilesToolTipText
+    {
+        get
+        {
+            var plan = PlanBulkDelete();
+            return plan.Kept != null
+                ? LocalizationService.Instance.Format(
+                    "{0} کانفیگ حذف می‌شود و پروفایل «{1}» باقی می‌ماند.",
+                    plan.ToRemove.Count,
+                    plan.Kept.Name)
+                : LocalizationService.Instance.T(
+                    "کانفیگ‌های انتخاب‌شده با یک تأیید حذف می‌شوند. حداقل یک کانفیگ باقی می‌ماند.");
+        }
+    }
+
+    public string ProfileBulkSelectToolTipText => LocalizationService.Instance.T("انتخاب برای حذف دسته‌جمعی");
+
+    private void EnsureProfileDeletionTracking()
+    {
+        if (_profileDeletionTrackingAttached)
+            return;
+
+        _profileDeletionTrackingAttached = true;
+        Profiles.CollectionChanged += OnProfilesCollectionChanged;
+    }
+
+    private void OnProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (ConnectionProfile profile in e.OldItems)
+                profile.PropertyChanged -= OnProfilePropertyChanged;
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (ConnectionProfile profile in e.NewItems)
+                profile.PropertyChanged += OnProfilePropertyChanged;
+        }
+
+        if (_deletionSelectionRefreshDepth == 0)
+            RefreshDeletionSelectionState();
+    }
+
+    private void OnProfilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ConnectionProfile.IsSelectedForDeletion) && _deletionSelectionRefreshDepth == 0)
+            RefreshDeletionSelectionState();
+    }
+
+    private void ToggleSelectAllProfilesForDeletion()
+    {
+        if (Profiles.Count <= 1)
+            return;
+
+        var selectAll = Profiles.Any(p => !p.IsSelectedForDeletion);
+        _deletionSelectionRefreshDepth++;
+        try
+        {
+            foreach (var profile in Profiles)
+                profile.IsSelectedForDeletion = selectAll;
+        }
+        finally
+        {
+            _deletionSelectionRefreshDepth--;
+        }
+
+        RefreshDeletionSelectionState();
+    }
+
+    private void DeleteSelectedProfiles()
+    {
+        if (IsConnected)
+            return;
+
+        var plan = PlanBulkDelete();
+        if (plan.ToRemove.Count == 0)
+            return;
+
+        var message = plan.Kept != null
+            ? LocalizationService.Instance.Format(
+                "{0} کانفیگ حذف شود؟ پروفایل «{1}» باقی می‌ماند.",
+                plan.ToRemove.Count,
+                plan.Kept.Name)
+            : plan.ToRemove.Count == 1
+                ? LocalizationService.Instance.Format("پروفایل «{0}» حذف شود؟", plan.ToRemove[0].Name)
+                : LocalizationService.Instance.Format("{0} کانفیگ حذف شود؟", plan.ToRemove.Count);
+
+        if (!DialogService.Confirm(message, "حذف پروفایل"))
+            return;
+
+        RemoveProfiles(plan.ToRemove);
+    }
+
+    /// <summary>
+    /// Profiles marked for deletion, excluding the one profile the list must keep.
+    /// When every profile is marked, the active profile stays.
+    /// </summary>
+    private (List<ConnectionProfile> ToRemove, ConnectionProfile? Kept) PlanBulkDelete()
+    {
+        var marked = Profiles.Where(p => p.IsSelectedForDeletion).ToList();
+        if (marked.Count == 0 || Profiles.Count <= 1)
+            return (new List<ConnectionProfile>(), null);
+
+        if (Profiles.Count - marked.Count >= 1)
+            return (marked, null);
+
+        var survivor = _selectedProfile != null && marked.Contains(_selectedProfile)
+            ? _selectedProfile
+            : marked[0];
+        var toRemove = marked.Where(p => !ReferenceEquals(p, survivor)).ToList();
+        return (toRemove, survivor);
+    }
+
+    private void RemoveProfiles(IReadOnlyList<ConnectionProfile> toRemove)
+    {
+        SaveCurrentProfileState();
+        var selected = _selectedProfile;
+        var selectedRemoved = selected != null && toRemove.Contains(selected);
+        var anchorIndex = selectedRemoved ? Profiles.IndexOf(selected!) : -1;
+
+        foreach (var profile in toRemove)
+            Profiles.Remove(profile);
+
+        _deletionSelectionRefreshDepth++;
+        try
+        {
+            foreach (var profile in Profiles)
+                profile.IsSelectedForDeletion = false;
+        }
+        finally
+        {
+            _deletionSelectionRefreshDepth--;
+        }
+
+        if (selectedRemoved && Profiles.Count > 0)
+            SelectedProfile = Profiles[Math.Clamp(anchorIndex, 0, Profiles.Count - 1)];
+        else
+        {
+            OnPropertyChanged(nameof(ProfileCountText));
+            SaveProfiles();
+        }
+
+        NotifyReadyProfilesForLatencyTestChanged();
+        RefreshDeletionSelectionState();
+    }
+
+    private void RefreshDeletionSelectionState()
+    {
+        if (Profiles.Count <= 1)
+        {
+            _deletionSelectionRefreshDepth++;
+            try
+            {
+                foreach (var profile in Profiles)
+                    profile.IsSelectedForDeletion = false;
+            }
+            finally
+            {
+                _deletionSelectionRefreshDepth--;
+            }
+        }
+
+        OnPropertyChanged(nameof(CanBulkSelectProfiles));
+        OnPropertyChanged(nameof(HasProfilesSelectedForDeletion));
+        OnPropertyChanged(nameof(SelectAllProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesToolTipText));
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private static ConnectionProfile CloneProfile(ConnectionProfile source) => new()

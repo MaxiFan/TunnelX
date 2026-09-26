@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using AppTunnel.Helpers;
 using AppTunnel.Services;
 using AppTunnel.ViewModels;
@@ -35,6 +36,8 @@ public partial class ConnectionTabView : System.Windows.Controls.UserControl
         ProfileQuickActionsHeader.FlowDirection = flow;
         ProfileQuickActionsButtons.FlowDirection = flow;
         ProfileQuickActionsButtons.HorizontalAlignment = start;
+        ProfileBulkActionsBar.FlowDirection = flow;
+        ProfileBulkActionsBar.HorizontalAlignment = start;
 
         foreach (var textBlock in ProfileQuickActionsHeader.Children.OfType<TextBlock>())
         {
@@ -53,6 +56,15 @@ public partial class ConnectionTabView : System.Windows.Controls.UserControl
         Dispatcher.BeginInvoke(() =>
             LocalizationLayoutHelper.RefreshLayoutBindings(this),
             System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ProfileBulkSelectCheckBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.CheckBox checkBox || !checkBox.IsEnabled)
+            return;
+
+        checkBox.IsChecked = checkBox.IsChecked != true;
+        e.Handled = true;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

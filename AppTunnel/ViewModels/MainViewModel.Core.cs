@@ -55,6 +55,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         // Profile commands
         NewProfileCommand = new RelayCommand(_ => CreateNewProfile(), _ => !IsConnected);
         DeleteProfileCommand = new RelayCommand(DeleteCurrentProfile, _ => !IsConnected && Profiles.Count > 1);
+        ToggleSelectAllProfilesCommand = new RelayCommand(_ => ToggleSelectAllProfilesForDeletion(), _ => Profiles.Count > 1);
+        DeleteSelectedProfilesCommand = new RelayCommand(_ => DeleteSelectedProfiles(), _ => !IsConnected && PlanBulkDelete().ToRemove.Count > 0);
         DuplicateProfileCommand = new RelayCommand(DuplicateCurrentProfile, _ => !IsConnected);
         EditProfileCommand = new RelayCommand(EditProfile, _ => !IsConnected);
         SelectProfileCommand = new RelayCommand(SelectProfile, _ => !IsConnected);
@@ -1762,6 +1764,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     public ICommand RefreshAppsCommand { get; }
     public ICommand NewProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
+    public ICommand ToggleSelectAllProfilesCommand { get; }
+    public ICommand DeleteSelectedProfilesCommand { get; }
     public ICommand DuplicateProfileCommand { get; }
     public ICommand EditProfileCommand { get; }
     public ICommand SelectProfileCommand { get; }
@@ -2677,6 +2681,11 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ProfilesSectionTitleText));
         OnPropertyChanged(nameof(ProfileEditButtonText));
         OnPropertyChanged(nameof(ProfileDeleteButtonText));
+        OnPropertyChanged(nameof(SelectAllProfilesButtonText));
+        OnPropertyChanged(nameof(SelectAllProfilesToolTipText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesButtonText));
+        OnPropertyChanged(nameof(DeleteSelectedProfilesToolTipText));
+        OnPropertyChanged(nameof(ProfileBulkSelectToolTipText));
         OnPropertyChanged(nameof(SingleProfileLatencyButtonText));
         OnPropertyChanged(nameof(CancelProfileLatencyTestButtonText));
         OnPropertyChanged(nameof(CanUseConnectionTabQuickActions));
