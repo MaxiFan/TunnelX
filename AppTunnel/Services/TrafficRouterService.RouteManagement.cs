@@ -89,6 +89,39 @@ public partial class TrafficRouterService
         => string.IsNullOrWhiteSpace(_vpnGatewayIp) ? "0.0.0.0" : _vpnGatewayIp;
 
     /// <summary>
+    /// Delete 0.0.0.0/0 entries that are bound to the VPN interface only.
+    /// Safe to call periodically: it does not spawn route.exe and cannot
+    /// remove the Wi-Fi default gateway.
+    /// </summary>
+    private void RemoveVpnDefaultRouteByInterface()
+    {
+        if (_vpnInterfaceIndex <= 0)
+            return;
+
+        foreach (int metric in new[] { 1, 6, 25, 26, 0 })
+        {
+            foreach (int proto in new[] { 3, 2, 5 }) // NETMGMT, LOCAL, ICMP/RIP
+            {
+                try
+                {
+                    var row = new MIB_IPFORWARDROW
+                    {
+                        dwForwardDest = 0,
+                        dwForwardMask = 0,
+                        dwForwardNextHop = 0,
+                        dwForwardIfIndex = (uint)_vpnInterfaceIndex,
+                        dwForwardType = 3,
+                        dwForwardProto = (uint)proto,
+                        dwForwardMetric1 = (uint)metric
+                    };
+                    IpHelperNative.DeleteIpForwardEntry(ref row);
+                }
+                catch { }
+            }
+        }
+    }
+
+    /// <summary>
     /// Remove default routes (0.0.0.0/0) on the VPN interface so only
     /// explicitly added /32 host routes use the tunnel. Without this,
     /// some VPN servers push a default route via IPCP that makes the
@@ -151,28 +184,8 @@ public partial class TrafficRouterService
             Logger.Warning($"[ROUTE] Failed to remove default route on VPN: {ex.Message}");
         }
 
-        // Also try via iphlpapi (different proto/metric combos the server might use)
-        foreach (int metric in new[] { 1, 6, 25, 26, 0 })
-        {
-            foreach (int proto in new[] { 3, 2, 5 }) // NETMGMT, LOCAL, ICMP/RIP
-            {
-                try
-                {
-                    var row = new MIB_IPFORWARDROW
-                    {
-                        dwForwardDest = 0,
-                        dwForwardMask = 0,
-                        dwForwardNextHop = 0,
-                        dwForwardIfIndex = (uint)_vpnInterfaceIndex,
-                        dwForwardType = 3,
-                        dwForwardProto = (uint)proto,
-                        dwForwardMetric1 = (uint)metric
-                    };
-                    IpHelperNative.DeleteIpForwardEntry(ref row);
-                }
-                catch { }
-            }
-        }
+        // Interface-scoped. Does not match the physical NIC's default route.
+        RemoveVpnDefaultRouteByInterface();
 
         // Log the route table after deletion (single-line summary).
         try
@@ -210,6 +223,11 @@ public partial class TrafficRouterService
     {
         // Exclude = direct outside tunnel (never install a VPN /32 for excluded IPs).
         if (IsExcludedDestination(dstIpNbo))
+            return false;
+
+        // Per-app mode: NCSI destinations stay on the physical default route.
+        // Full-route still reaches them through the VPN default route.
+        if (!_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(dstIpNbo))
             return false;
 
         // Skip private/multicast/broadcast ranges that should not be routed via VPN.
@@ -286,6 +304,54 @@ public partial class TrafficRouterService
     /// If a new target-app flow for the same IP appears before the
     /// timer fires, the removal is cancelled (see FLOW_ESTABLISHED).
     /// </summary>
+    /// <summary>
+    /// Drop a /32 off the packet thread. Used for NCSI, exclude, and blocked
+    /// senders so the hot path can reinject immediately.
+    /// </summary>
+    private void ScheduleImmediateHostRouteRemoval(uint dstIpNbo)
+    {
+        if (!_immediateRouteRemovalQueued.TryAdd(dstIpNbo, 1))
+            return;
+
+        if (_pendingRouteRemoval.TryRemove(dstIpNbo, out var pending))
+        {
+            try { pending.Cancel(); } catch { }
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (!_isRunning)
+                    return;
+
+                _ipToProcess.TryRemove(dstIpNbo, out _);
+                _ipRefCount.TryRemove(dstIpNbo, out _);
+                _loggedMatchIps.TryRemove(dstIpNbo, out _);
+                _loggedExcludedIps.TryRemove(dstIpNbo, out _);
+                foreach (var flowKey in _flowOwnerByTuple.Keys.Where(k => k.remoteIp == dstIpNbo).ToList())
+                    _flowOwnerByTuple.TryRemove(flowKey, out _);
+                TryRemoveHostRoute(dstIpNbo);
+            }
+            finally
+            {
+                _immediateRouteRemovalQueued.TryRemove(dstIpNbo, out _);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Arm the grace-period remover once. Repeated calls must not push the
+    /// deadline out, or background traffic to a stale CDN IP would keep the
+    /// /32 forever.
+    /// </summary>
+    private void ScheduleDelayedRouteRemovalIfIdle(uint dstIpNbo)
+    {
+        if (_pendingRouteRemoval.ContainsKey(dstIpNbo) || _immediateRouteRemovalQueued.ContainsKey(dstIpNbo))
+            return;
+        ScheduleDelayedRouteRemoval(dstIpNbo);
+    }
+
     private void ScheduleDelayedRouteRemoval(uint dstIpNbo)
     {
         var cts = new CancellationTokenSource();

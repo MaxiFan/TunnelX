@@ -29,6 +29,10 @@ public partial class TrafficRouterService
         if (!TryReadDnsQuestionHost(buffer, payloadOffset, payloadLength, out var host))
             return;
 
+        // Per-app mode keeps Windows connectivity probes on the physical resolver.
+        if (!_fullRouteEnabled && WindowsConnectivityGuard.IsProbeHost(host))
+            return;
+
         uint dnsServerNbo = BitConverter.ToUInt32(buffer, 16);
         var key = BuildDnsRuleKey(txId, srcPort, dnsServerNbo);
         _dnsRuleQueries.AddOrUpdate(key, _ => new DnsRuleQuery
@@ -56,6 +60,9 @@ public partial class TrafficRouterService
 
         ushort txId = ReadUInt16(buffer, payloadOffset);
         if (!TryReadDnsQuestionHost(buffer, payloadOffset, payloadLength, out var host))
+            return;
+
+        if (!_fullRouteEnabled && WindowsConnectivityGuard.IsProbeHost(host))
             return;
 
         bool excluded = IsExcludedDomain(host);
@@ -107,6 +114,9 @@ public partial class TrafficRouterService
         foreach (var ip in learnedIps)
         {
             var nbo = BitConverter.ToUInt32(ip.GetAddressBytes(), 0);
+            if (!_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(nbo))
+                continue;
+
             if (query.Excluded)
             {
                 _excludedIps[nbo] = true;
@@ -118,7 +128,7 @@ public partial class TrafficRouterService
             {
                 _includedIps[nbo] = true;
                 _ipToProcess[nbo] = "[INCLUDE]";
-                EnsureHostRouteViaVpn(nbo, ip);
+                QueueHostRouteViaVpn(nbo, ip);
                 continue;
             }
 
@@ -127,7 +137,7 @@ public partial class TrafficRouterService
                 !IsExcludedDestination(nbo))
             {
                 _ipToProcess[nbo] = query.TargetOwner;
-                EnsureHostRouteViaVpn(nbo, ip);
+                QueueHostRouteViaVpn(nbo, ip);
             }
         }
 
@@ -153,6 +163,27 @@ public partial class TrafficRouterService
 
     private static string BuildDnsRuleKey(ushort txId, ushort clientPort, uint dnsServerNbo)
         => $"{txId}:{clientPort}:{dnsServerNbo}";
+
+    /// <summary>
+    /// True when this UDP/53 question is a Windows NCSI name. Split mode must
+    /// not redirect it; the physical resolver is what NCSI is measuring.
+    /// </summary>
+    private bool IsSplitModeConnectivityProbeQuery(byte[] buffer, uint readLen)
+    {
+        if (_fullRouteEnabled)
+            return false;
+        if (!TryGetUdpPayload(buffer, readLen, out var payloadOffset, out var payloadLength, out _, out var dstPort))
+            return false;
+        if (dstPort != 53 || payloadLength < 12)
+            return false;
+        return TryReadDnsQuestionHost(buffer, payloadOffset, payloadLength, out var host) &&
+               WindowsConnectivityGuard.IsProbeHost(host);
+    }
+
+    private void QueueHostRouteViaVpn(uint dstIpNbo, IPAddress dstIp)
+    {
+        _ = Task.Run(() => EnsureHostRouteViaVpn(dstIpNbo, dstIp));
+    }
 
     private static bool TryGetUdpPayload(
         byte[] buffer,

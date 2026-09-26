@@ -119,6 +119,10 @@ public partial class TrafficRouterService
         {
             if (_isRunning) Logger.Warning($"[IPv6-BLOCK] Loop error: {ex.Message}");
         }
+        finally
+        {
+            FailOpenCaptureHandle(ref _ipv6BlockHandle, "IPv6-BLOCK");
+        }
     }
 
     /// <summary>

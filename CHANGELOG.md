@@ -5,12 +5,14 @@
 ### English
 
 - Fixed SOCKS5 and HTTP proxy connects that failed while sing-box decoded the config (`outbounds[0].users: unknown field "users"`). Proxy credentials are now written as outbound `username` and `password`.
+- Fixed per-app / split-route sessions marking Wi-Fi as "Connected, no internet" after a long run. Windows connectivity probes stay on the physical NIC, and route-table updates no longer run on the packet path that every outbound packet has to pass through.
 
 ### فارسی
 
 <div dir="rtl" align="right">
 
 - اتصال پراکسی SOCKS5 و HTTP که هنگام خواندن کانفیگ sing-box با خطای `unknown field "users"` قطع می‌شد اصلاح شد. نام کاربری و رمز اکنون در فیلدهای خروجی `username` و `password` نوشته می‌شوند.
+- رفع مشکلی که در حالت per-app / اسپلیت، بعد از مدتی طولانی وای‌فای را «Connected - No Internet» نشان می‌داد. بررسی اتصال ویندوز روی کارت شبکه فیزیکی می‌ماند و تغییر جدول مسیر دیگر روی مسیر بسته‌ها انجام نمی‌شود.
 
 </div>
 

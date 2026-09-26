@@ -688,12 +688,15 @@ public partial class TrafficRouterService : IDisposable
                 $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
                 $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count}");
         }
-        if (_vpnServerIsUdpOnly)
+        if (_vpnServerIsUdpOnly && !_fullRouteEnabled)
         {
             var wgTicks = Interlocked.Increment(ref _diagTick);
-            if (wgTicks % 2 == 0)
+            if (wgTicks % 6 == 0)
             {
-                try { RemoveDefaultRouteOnVpn(); } catch { }
+                // iphlpapi only. route.exe / route print on this timer holds the
+                // Windows routing lock; after a long per-app session that stall
+                // is enough for NCSI to fail and Wi-Fi to drop.
+                try { RemoveVpnDefaultRouteByInterface(); } catch { }
             }
         }
 
@@ -1137,6 +1140,7 @@ public partial class TrafficRouterService : IDisposable
         _flowOwnerByTuple.Clear();
         _dnsPortOwners.Clear();
         _dnsPidOwners.Clear();
+        _immediateRouteRemovalQueued.Clear();
         _loggedMatchIps.Clear();
         _loggedExcludedIps.Clear();
         _recentLeakByDst.Clear();
@@ -1213,6 +1217,36 @@ public partial class TrafficRouterService : IDisposable
             Logger.Warning($"[DISPOSE] StopAsync during Dispose threw: {ex.Message}");
         }
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// If a divert loop exits while routing is still active, the open handle
+    /// keeps swallowing packets and never reinjects them. Windows then shows
+    /// Wi-Fi as "Connected, no internet" until the user disconnects the VPN
+    /// (which is the only thing that closed the handle). Closing here fails
+    /// open so the physical NIC works again.
+    /// </summary>
+    private void FailOpenCaptureHandle(ref IntPtr handle, string name)
+    {
+        if (!_isRunning)
+            return;
+
+        IntPtr toClose;
+        lock (_handleLock)
+        {
+            if (!_isRunning)
+                return;
+            toClose = handle;
+            handle = IntPtr.Zero;
+        }
+
+        if (toClose == IntPtr.Zero || toClose == new IntPtr(-1))
+            return;
+
+        try { WinDivertNative.WinDivertClose(toClose); }
+        catch { /* already closed */ }
+
+        Logger.Warning($"[{name}] Capture loop stopped while routing was active. Closed the WinDivert handle so Wi-Fi traffic is not blackholed.");
     }
 
     private void CloseHandles()
