@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -383,17 +382,24 @@ public class V2RayTunnelProvider : ITunnelProvider
         string userConfig,
         CancellationToken ct,
         string probeHost = Socks5LatencyProbe.DefaultProbeHost,
-        int probePort = Socks5LatencyProbe.DefaultProbePort)
+        int probePort = Socks5LatencyProbe.DefaultProbePort,
+        int probeTimeoutMs = 10_000)
     {
         Directory.CreateDirectory(_workDir);
         await NativeEngineSupport.EnsureEmbeddedExecutableAsync("sing-box.exe", _singBoxExe, ct);
         if (!File.Exists(_singBoxExe))
             throw new FileNotFoundException(LocalizationService.Instance.Format("فایل sing-box.exe پیدا نشد: {0}", _singBoxExe));
 
-        using var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17);
-        var mixedPort = portReservation.Port;
+        // Release the reservation before sing-box starts. Holding it makes the probe
+        // connect to our own listener and never exercise the outbound.
+        int mixedPort;
+        using (var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17))
+            mixedPort = portReservation.Port;
+
         var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
         Process? process = null;
+        var started = false;
+        var stderrTail = new StringBuilder();
 
         try
         {
@@ -417,8 +423,9 @@ public class V2RayTunnelProvider : ITunnelProvider
 
             process.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data != null)
-                    Logger.ProcessOutput("[sing-box probe stderr]", e.Data, isError: true);
+                if (e.Data == null) return;
+                Logger.ProcessOutput("[sing-box probe stderr]", e.Data, isError: true);
+                ProbeProcess.AppendLogTail(stderrTail, e.Data);
             };
             process.OutputDataReceived += (_, e) =>
             {
@@ -427,58 +434,37 @@ public class V2RayTunnelProvider : ITunnelProvider
             };
 
             process.Start();
+            started = true;
             process.BeginErrorReadLine();
             process.BeginOutputReadLine();
 
-            await WaitForLocalPortAsync(mixedPort, TimeSpan.FromSeconds(12), ct);
-            if (process.HasExited)
-                throw new InvalidOperationException(LocalizationService.Instance.Format("sing-box probe exited early (code {0})", process.ExitCode));
+            try
+            {
+                await LocalPortWait.UntilAcceptingAsync(
+                    mixedPort,
+                    TimeSpan.FromSeconds(6),
+                    ct,
+                    process,
+                    LocalizationService.Instance.T("پورت محلی sing-box آماده نشد"));
+            }
+            catch (ProbeProcessExitedException ex)
+            {
+                throw new InvalidOperationException(ProbeProcess.FormatExitMessage(
+                    LocalizationService.Instance.Format("sing-box probe exited early (code {0})", ex.ExitCode),
+                    stderrTail));
+            }
 
-            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, mixedPort, ct);
+            Logger.Info($"[PING] sing-box real-delay probe listening on 127.0.0.1:{mixedPort}");
+            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, mixedPort, ct, probeTimeoutMs);
         }
         finally
         {
-            try
-            {
-                if (process is { HasExited: false })
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync(CancellationToken.None);
-                }
-            }
-            catch
-            {
-                // ignored
-            }
-
-            process?.Dispose();
+            if (started)
+                await ProbeProcess.StopAsync(process);
+            else
+                process?.Dispose();
             try { if (File.Exists(probeConfigPath)) File.Delete(probeConfigPath); } catch { }
         }
-    }
-
-    private static async Task WaitForLocalPortAsync(int port, TimeSpan timeout, CancellationToken ct)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        Exception? lastError = null;
-        while (DateTime.UtcNow < deadline)
-        {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                using var tcp = new System.Net.Sockets.TcpClient();
-                await tcp.ConnectAsync("127.0.0.1", port, ct);
-                return;
-            }
-            catch (Exception ex) when (ex is SocketException or TimeoutException or OperationCanceledException)
-            {
-                lastError = ex;
-                if (ex is OperationCanceledException)
-                    throw;
-                await Task.Delay(250, ct);
-            }
-        }
-
-        throw new TimeoutException(lastError?.Message ?? LocalizationService.Instance.T("پورت محلی sing-box آماده نشد"));
     }
 
     private (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)

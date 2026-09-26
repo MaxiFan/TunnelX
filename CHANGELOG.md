@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+- پینگ قبل از اتصال برای کانفیگ‌های V2Ray/Xray دیگر با باز بودن پورت سرور موفق حساب نمی‌شود. مثل «test real delay» در v2rayN، عدد پینگ فقط وقتی نشان داده می‌شود که درخواست واقعاً از داخل کانفیگ به مقصد برسد. قطع شدن اتصال به‌جای پینگ موفق ثبت نمی‌شود.
+
+</div>
+
+### English
+
+- Pre-connect ping for V2Ray/Xray configs no longer succeeds just because the server port accepts TCP. Like v2rayN "test real delay", a latency value is shown only when a request through the config reaches the target. A closed connection is a failure, not a successful ping.
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

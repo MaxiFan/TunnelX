@@ -233,6 +233,124 @@ public class XrayTunnelProvider : ITunnelProvider
         return false;
     }
 
+    /// <summary>
+    /// Starts a temporary Xray process with only a loopback SOCKS inbound (no TUN) and measures
+    /// real delay through that config. The process is always stopped before this returns.
+    /// </summary>
+    internal async Task<long> ProbeSocksLatencyAsync(
+        string userConfig,
+        CancellationToken ct,
+        string probeHost = Socks5LatencyProbe.DefaultProbeHost,
+        int probePort = Socks5LatencyProbe.DefaultProbePort,
+        int probeTimeoutMs = 10_000)
+    {
+        Directory.CreateDirectory(_workDir);
+        await NativeEngineSupport.EnsureEmbeddedExecutableAsync("xray.exe", _xrayExe, ct);
+        if (!File.Exists(_xrayExe))
+            throw new FileNotFoundException(LocalizationService.Instance.Format("فایل xray.exe پیدا نشد: {0}", _xrayExe));
+
+        int socksPort;
+        using (var reservation = LocalPortReservation.ReservePreferredOrRandom(DefaultXraySocksPort + 20))
+            socksPort = reservation.Port;
+
+        var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
+        Process? process = null;
+        var started = false;
+        var stderrTail = new StringBuilder();
+
+        try
+        {
+            var outbound = BuildXrayOutbound(userConfig);
+            var json = BuildXraySocksProbeConfig(outbound, socksPort);
+            await File.WriteAllTextAsync(probeConfigPath, json, new UTF8Encoding(false), ct);
+
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = _xrayExe,
+                    Arguments = $"run -c \"{probeConfigPath}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    WorkingDirectory = Path.GetDirectoryName(_xrayExe) ?? _workDir
+                },
+                EnableRaisingEvents = true
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data == null) return;
+                Logger.ProcessOutput("[xray probe stderr]", e.Data, isError: true);
+                ProbeProcess.AppendLogTail(stderrTail, e.Data);
+            };
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    Logger.ProcessOutput("[xray probe]", e.Data, isError: false);
+            };
+
+            process.Start();
+            started = true;
+            process.BeginErrorReadLine();
+            process.BeginOutputReadLine();
+
+            try
+            {
+                await LocalPortWait.UntilAcceptingAsync(
+                    socksPort,
+                    TimeSpan.FromSeconds(6),
+                    ct,
+                    process,
+                    LocalizationService.Instance.T("پورت محلی xray آماده نشد"));
+            }
+            catch (ProbeProcessExitedException ex)
+            {
+                throw new InvalidOperationException(ProbeProcess.FormatExitMessage(
+                    LocalizationService.Instance.Format("xray زودتر خارج شد (exit code {0})", ex.ExitCode),
+                    stderrTail));
+            }
+
+            Logger.Info($"[PING] Xray real-delay probe listening on 127.0.0.1:{socksPort}");
+            return await Socks5LatencyProbe.MeasureAsync(probeHost, probePort, socksPort, ct, probeTimeoutMs);
+        }
+        finally
+        {
+            if (started)
+                await ProbeProcess.StopAsync(process);
+            else
+                process?.Dispose();
+            try { if (File.Exists(probeConfigPath)) File.Delete(probeConfigPath); } catch { }
+        }
+    }
+
+    private static string BuildXraySocksProbeConfig(JsonObject outbound, int socksPort)
+    {
+        var doc = new JsonObject
+        {
+            ["log"] = new JsonObject { ["loglevel"] = "warning" },
+            ["inbounds"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["tag"] = "socks-in",
+                    ["listen"] = "127.0.0.1",
+                    ["port"] = socksPort,
+                    ["protocol"] = "socks",
+                    ["settings"] = new JsonObject
+                    {
+                        ["udp"] = true,
+                        ["auth"] = "noauth"
+                    }
+                }
+            },
+            ["outbounds"] = new JsonArray { outbound }
+        };
+
+        return JsonString(doc);
+    }
+
     private static JsonObject BuildXrayOutbound(string userConfig)
     {
         userConfig = userConfig.Trim();

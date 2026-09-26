@@ -152,16 +152,16 @@ public partial class MainViewModel
         "کانفیگ V2Ray/Xray/OpenVPN/WireGuard را از کلیپ‌بورد می‌خواند و پروفایل می‌سازد (Ctrl+V در تب اتصال)");
 
     public string TestProfileLatencyToolTipText => LocalizationService.Instance.T(
-        "پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link");
+        "پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray). اگر نتیجه بیاید کانفیگ کار می‌کند");
 
     public string TestProfileServerPingToolTipText => LocalizationService.Instance.T(
-        "پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — برای همه کانفیگ‌ها");
+        "پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
 
     public string TestAllProfilesLatencyToolTipText => LocalizationService.Instance.T(
-        "پینگ اتصال برای همه پروفایل‌های آماده — سریع‌ترین مسیر را پیدا کنید");
+        "تأخیر واقعی V2Ray/Xray برای پروفایل‌های آماده — سریع‌ترین کانفیگ سالم را پیدا کنید");
 
     public string ProfileLatencyResultToolTipText => LocalizationService.Instance.T(
-        "نتیجه پینگ اتصال از مسیر کانفیگ");
+        "نتیجه تأخیر واقعی از مسیر کانفیگ");
 
     public string ProfileServerPingResultToolTipText => LocalizationService.Instance.T(
         "نتیجه پینگ سرور (بدون عبور از تونل)");
@@ -169,7 +169,7 @@ public partial class MainViewModel
     public string CancelProfileLatencyTestButtonText => LocalizationService.Instance.T("توقف تست");
 
     public string ProfileQuickActionsHintText => LocalizationService.Instance.T(
-        "پینگ = اتصال (sing-box share link) یا سرور (OpenVPN و بقیه). دکمه سرور فقط برای کانفیگ‌های دارای پینگ اتصال.");
+        "پینگ = تأخیر واقعی V2Ray/Xray، یا رسیدن به سرور برای بقیه. دکمه سرور فقط IP/پورت است و سالم بودن کانفیگ را نشان نمی‌دهد.");
 
     public bool TryImportConfigsFromClipboard()
     {
@@ -290,14 +290,16 @@ public partial class MainViewModel
         profile.IsLatencyTesting = true;
         profile.ResetLatencyResult();
 
-        var isConnectionPing = profile.SupportsConnectionPing;
-        ProfileQuickActionsStatusText = isConnectionPing
+        // V2Ray/Xray must use real delay. Copying the server TCP/TLS result here is what made
+        // dead configs (v2rayN real delay fails) look healthy before connect.
+        var useRealDelay = profile.TunnelType == TunnelType.V2Ray;
+        ProfileQuickActionsStatusText = useRealDelay
             ? LocalizationService.Instance.Format("در حال تست «{0}»...", profile.Name)
             : LocalizationService.Instance.Format("پینگ سرور «{0}»...", profile.Name);
 
         try
         {
-            if (isConnectionPing)
+            if (useRealDelay)
             {
                 await MeasureProfileLatencyAsync(profile, ct);
             }
@@ -311,8 +313,14 @@ public partial class MainViewModel
             }
 
             ProfileQuickActionsStatusText = profile.LastLatencyMs.HasValue
-                ? LocalizationService.Instance.Format("«{0}»: {1} {2} ms", profile.Name, profile.LastLatencyLabel, profile.LastLatencyMs)
+                ? string.IsNullOrWhiteSpace(profile.LastLatencyLabel)
+                    ? LocalizationService.Instance.Format("«{0}»: {1} ms", profile.Name, profile.LastLatencyMs)
+                    : LocalizationService.Instance.Format("«{0}»: {1} {2} ms", profile.Name, profile.LastLatencyLabel, profile.LastLatencyMs)
                 : LocalizationService.Instance.Format("«{0}»: {1}", profile.Name, profile.LastLatencyError);
+        }
+        catch (OperationCanceledException)
+        {
+            ProfileQuickActionsStatusText = LocalizationService.Instance.T("تست پینگ متوقف شد");
         }
         finally
         {
@@ -460,7 +468,7 @@ public partial class MainViewModel
     {
         try
         {
-            if (profile.TunnelType != TunnelType.V2Ray || !ConnectionPingSupport.SupportsProfile(profile))
+            if (profile.TunnelType != TunnelType.V2Ray)
             {
                 profile.LastLatencyError = LocalizationService.Instance.T("تست پینگ اتصال برای این کانفیگ پشتیبانی نمی‌شود");
                 return;
@@ -479,7 +487,8 @@ public partial class MainViewModel
         }
         catch (Exception ex)
         {
-            profile.LastLatencyError = ex.Message;
+            Logger.Warning($"[PING] real-delay failed: {ex}");
+            profile.LastLatencyError = LocalizationService.Instance.T(ex.Message);
         }
     }
 
@@ -533,34 +542,24 @@ public partial class MainViewModel
             return;
         }
 
-        if (TunnelProviderFactory.RequiresXray(config) || config.StartsWith('{'))
+        var mode = PreConnectLatencyPlan.ForV2RayConfig(config);
+        if (mode == PreConnectLatencyMode.Unsupported)
         {
-            profile.LastLatencyError = LocalizationService.Instance.T("تست پینگ اتصال برای JSON/Xray پشتیبانی نمی‌شود");
+            profile.LastLatencyError = config.StartsWith('{')
+                ? LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود")
+                : LocalizationService.Instance.T("تست پینگ اتصال برای این کانفیگ پشتیبانی نمی‌شود");
             return;
         }
 
         var (probeHost, probePort) = ResolveConnectionPingProbeTarget();
-        var provider = new V2RayTunnelProvider();
-        try
-        {
-            using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            probeCts.CancelAfter(TimeSpan.FromSeconds(25));
-            profile.LastLatencyLabel = "";
-            profile.LastLatencyMs = await provider.ProbeMixedProxyLatencyAsync(
-                config, probeCts.Token, probeHost, probePort);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            profile.LastLatencyError = LocalizationService.Instance.T("مهلت تست تمام شد");
-        }
-        catch (Exception ex)
-        {
-            profile.LastLatencyError = ex.Message;
-        }
+        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        // Core startup is capped at 6s and the request at 10s. This bound stops a stuck core
+        // from leaving the button spinning after those limits.
+        probeCts.CancelAfter(TimeSpan.FromSeconds(20));
+        profile.LastLatencyLabel = "";
+        profile.LastLatencyMs = mode == PreConnectLatencyMode.RealDelayXray
+            ? await new XrayTunnelProvider().ProbeSocksLatencyAsync(config, probeCts.Token, probeHost, probePort)
+            : await new V2RayTunnelProvider().ProbeMixedProxyLatencyAsync(config, probeCts.Token, probeHost, probePort);
     }
 
     /// <summary>

@@ -292,16 +292,16 @@ public class ConnectionProfile : INotifyPropertyChanged
     public bool SupportsServerPing => IsReady;
 
     [JsonIgnore]
-    public bool ShowsServerPingButton => SupportsConnectionPing;
+    public bool ShowsServerPingButton => TunnelType == TunnelType.V2Ray && IsReady;
 
     [JsonIgnore]
-    public string PingButtonToolTipText => SupportsConnectionPing
-        ? LocalizationService.Instance.T("پینگ اتصال: google (یا مقصد پینگ) از مسیر کامل کانفیگ — فقط sing-box share link")
-        : LocalizationService.Instance.T("پینگ سرور: رسیدن به IP/پورت سرور (TCP/TLS/ICMP)");
+    public string PingButtonToolTipText => TunnelType == TunnelType.V2Ray
+        ? LocalizationService.Instance.T("پینگ اتصال: تأخیر واقعی تا مقصد پینگ از مسیر کانفیگ (V2Ray/Xray). اگر نتیجه بیاید کانفیگ کار می‌کند")
+        : LocalizationService.Instance.T("پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
 
     [JsonIgnore]
-    public string PingResultToolTipText => SupportsConnectionPing
-        ? LocalizationService.Instance.T("نتیجه پینگ اتصال از مسیر کانفیگ")
+    public string PingResultToolTipText => TunnelType == TunnelType.V2Ray
+        ? LocalizationService.Instance.T("نتیجه تأخیر واقعی از مسیر کانفیگ")
         : LocalizationService.Instance.T("نتیجه پینگ سرور (بدون عبور از تونل)");
 
     [JsonIgnore]
