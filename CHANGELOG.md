@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.0 - 2026-09-26
+
 ### English
 
 - Fixed SOCKS5 and HTTP proxy connects that failed while sing-box decoded the config (`outbounds[0].users: unknown field "users"`). Proxy credentials are now written as outbound `username` and `password`.
@@ -61,7 +63,6 @@
 - В настройках можно сохранить логин/пароль локального SOCKS/HTTP прокси по умолчанию (шифрование DPAPI). Встроенный listener использует их, если у профиля нет MixedProxy credentials; пустой логин означает без аутентификации.
 - Встроенная справка охватывает WireGuard, импорт подписки, latency перед подключением и defaults auth локального прокси; troubleshooting упоминает установку WireGuard; подсказки ping включают Hysteria. Строки FA/EN/RU для этих разделов заполнены.
 - UX: более широкие окна на больших экранах, аккуратнее RTL-ряды настроек, мягкая прокрутка колёсиком (GentleWheelScroll).
-
 
 ## 2.1.2 - 2026-05-30
 
@@ -358,6 +359,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
