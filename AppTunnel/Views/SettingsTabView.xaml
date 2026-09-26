@@ -49,6 +49,62 @@
                 </StackPanel>
             </Border>
 
+            <!-- Connection health check -->
+            <Border Style="{StaticResource CardPanel}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionHeader}"
+                               Text="{Binding HealthCheckSectionTitleText}"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding HealthCheckEndpointsLabelText}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{Binding HealthCheckEndpointsHintText}"
+                               FontSize="10"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,2,0,6"/>
+                    <TextBox Style="{StaticResource ModernTextBox}"
+                             Text="{Binding HealthCheckEndpointsText, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="{Binding HealthCheckEndpointsPlaceholderText}"
+                             AcceptsReturn="True"
+                             MinHeight="72"
+                             MaxHeight="140"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             FlowDirection="LeftToRight"
+                             VerticalScrollBarVisibility="Auto"
+                             TextWrapping="Wrap"
+                             VerticalContentAlignment="Top"/>
+                    <TextBlock Text="{Binding HealthCheckEndpointsStatusText}"
+                               FontSize="10"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"/>
+
+                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsTitleText}"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsDescriptionText}"
+                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IncludeDefaultHealthCheckEndpoints, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- Performance Tuning -->
             <Border Style="{StaticResource CardPanel}">
                 <StackPanel>

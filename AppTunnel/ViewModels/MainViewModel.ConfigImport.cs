@@ -563,20 +563,20 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// Same target as the connected ping field (default www.google.com:443).
+    /// Same target as the connected ping field. Defaults to www.google.com:443, or the
+    /// first custom health-check target when that field is still following Settings.
     /// </summary>
     private (string Host, int Port) ResolveConnectionPingProbeTarget()
     {
         var raw = PingTarget?.Trim() ?? "";
-        if (string.IsNullOrWhiteSpace(raw))
-            return (Socks5LatencyProbe.DefaultProbeHost, Socks5LatencyProbe.DefaultProbePort);
+        if (HealthCheckTargets.TryParse(raw, out var endpoint))
+            return (endpoint.Host, endpoint.Port);
 
-        var host = raw.Contains(':') ? raw.Split(':')[0] : raw;
-        var port = Socks5LatencyProbe.DefaultProbePort;
-        if (raw.Contains(':') && int.TryParse(raw.Split(':')[^1], out var parsedPort))
-            port = parsedPort;
+        var suggested = GetHealthCheckPlan().SuggestedPingTarget;
+        if (HealthCheckTargets.TryParse(suggested, out var fallback))
+            return (fallback.Host, fallback.Port);
 
-        return (host.Trim(), port);
+        return (Socks5LatencyProbe.DefaultProbeHost, Socks5LatencyProbe.DefaultProbePort);
     }
 
     private async Task MeasureV2RayProfileServerPingAsync(ConnectionProfile profile, CancellationToken ct)

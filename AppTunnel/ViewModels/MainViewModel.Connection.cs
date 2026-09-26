@@ -638,6 +638,18 @@ public partial class MainViewModel
         _trafficRouter.EnableDnsRedirect = CurrentTunnelType != TunnelType.WireGuard ||
             !string.IsNullOrWhiteSpace(snap.DnsRedirectIp);
         _trafficRouter.EnableGameMode = IsGameModeEnabled;
+        var healthPlan = GetHealthCheckPlan();
+        string? customHealthHost = null;
+        var customHealthPort = 443;
+        if (healthPlan.HasCustomEndpoints && !healthPlan.IncludesDefaultPublicEndpoints)
+        {
+            customHealthHost = healthPlan.CustomEndpoints[0].Host;
+            customHealthPort = healthPlan.CustomEndpoints[0].Port;
+        }
+        _trafficRouter.ConfigureHealthConnectivity(
+            healthPlan.IncludesDefaultPublicEndpoints,
+            customHealthHost,
+            customHealthPort);
 
         // Apply lists before Start so RefreshDestinationLists (async in Start) does not
         // hold _destinationListLock while we block connect on route.exe purge per IP.
@@ -780,12 +792,6 @@ public partial class MainViewModel
         }
     }
 
-    private static readonly (string Host, int Port)[] TunnelVerifyProbeTargets =
-    [
-        ("google.com", 443),
-        ("cloudflare.com", 443)
-    ];
-
     private const int V2RayVerifyWarmupMs = 2500;
     private const int V2RayVerifyProbeTimeoutMs = 12000;
     private const int DefaultVerifyProbeTimeoutMs = 8000;
@@ -920,6 +926,14 @@ public partial class MainViewModel
         uiLines.Add(loc.T("در حال پینگ از داخل تونل..."));
         await ReportVerifyActiveAsync(JoinVerifyLines(uiLines));
 
+        var healthPlan = GetHealthCheckPlan();
+        var probeTargets = healthPlan.Targets;
+        // Custom lists are fallbacks: the first success is enough. The built-in pair is
+        // still probed fully so the default per-host latency lines stay the same.
+        var stopAfterFirstSuccess = healthPlan.HasCustomEndpoints;
+        Logger.Info(
+            $"[CONN-VERIFY] Health targets [{string.Join(", ", probeTargets)}] publicDefaults={healthPlan.IncludesDefaultPublicEndpoints}");
+
         var probeSuccesses = 0;
         var pingResultLines = new List<string>();
 
@@ -928,22 +942,27 @@ public partial class MainViewModel
             ct.ThrowIfCancellationRequested();
             if (round > 1)
             {
-                Logger.Info("[CONN-VERIFY] Retrying international probes");
+                Logger.Info(healthPlan.HasCustomEndpoints
+                    ? "[CONN-VERIFY] Retrying health-check probes"
+                    : "[CONN-VERIFY] Retrying international probes");
                 pingResultLines.Add(loc.T("تلاش دوباره پینگ..."));
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
                 await Task.Delay(1500, ct);
             }
 
-            foreach (var (host, port) in TunnelVerifyProbeTargets)
+            foreach (var target in probeTargets)
             {
-                pingResultLines.Add(loc.Format("در حال پینگ {0}...", TextHelper.EmbedLtr(host)));
+                var host = target.Host;
+                var port = target.Port;
+                pingResultLines.Add(loc.Format("در حال پینگ {0}...", TextHelper.EmbedLtr(target.Display)));
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
 
-                var (probeHost, ok, ms, error, usedPort) = await ProbeTunnelTargetOnAnyPortAsync(
+                var (_, ok, ms, error, usedPort) = await ProbeTunnelTargetOnAnyPortAsync(
                     host, port, probePorts, ct, probeTimeoutMs);
+                var shownTarget = TextHelper.EmbedLtr(target.Display);
                 pingResultLines[^1] = ok
-                    ? loc.Format("پینگ {0} (از مسیر پروکسی): {1} میلی‌ثانیه ✓", TextHelper.EmbedLtr(probeHost), ms)
-                    : loc.Format("پینگ {0}: بدون پاسخ", TextHelper.EmbedLtr(probeHost));
+                    ? loc.Format("پینگ {0} (از مسیر پروکسی): {1} میلی‌ثانیه ✓", shownTarget, ms)
+                    : loc.Format("پینگ {0}: بدون پاسخ", shownTarget);
 
                 await ReportVerifyActiveAsync(JoinVerifyLines(uiLines.Concat(pingResultLines)));
 
@@ -951,6 +970,8 @@ public partial class MainViewModel
                 {
                     probeSuccesses++;
                     Logger.Info($"[CONN-VERIFY] {host}:{port} OK ({ms}ms, round {round}, port {usedPort})");
+                    if (stopAfterFirstSuccess)
+                        break;
                 }
                 else
                 {
@@ -969,13 +990,16 @@ public partial class MainViewModel
                 "بررسی سلامت اتصال",
                 failDetail);
             await PumpConnectionProgressUiAsync();
-            return (false, loc.T("تونل روی سیستم بالا آمد، اما از طریق سرور به اینترنت بین‌الملل دسترسی ندارید. کانفیگ، سهمیه حجم یا تاریخ انقضا را بررسی کنید."));
+            var failMessage = healthPlan.IncludesDefaultPublicEndpoints
+                ? loc.T("تونل روی سیستم بالا آمد، اما از طریق سرور به اینترنت بین‌الملل دسترسی ندارید. کانفیگ، سهمیه حجم یا تاریخ انقضا را بررسی کنید.")
+                : loc.T("تونل روی سیستم بالا آمد، اما هیچ‌کدام از مقصدهای بررسی سلامت پاسخ ندادند. آدرس‌های تنظیم‌شده را بررسی کنید.");
+            return (false, failMessage);
         }
 
         var summary = loc.Format(
             "بررسی سلامت موفق — پینگ {0} از {1} مقصد",
             probeSuccesses,
-            TunnelVerifyProbeTargets.Length);
+            probeTargets.Count);
         var completeDetail = JoinVerifyLines(uiLines.Concat(pingResultLines).Append(summary));
         ConnectionProgressService.Report(
             "verify",
@@ -2170,9 +2194,7 @@ public partial class MainViewModel
         }
 
         var raw = PingTarget?.Trim() ?? "";
-        // Accept IP or hostname:port — extract host for route installation
-        var host = raw.Contains(':') ? raw.Split(':')[0] : raw;
-        if (string.IsNullOrWhiteSpace(host))
+        if (!HealthCheckTargets.TryParse(raw, out var pingEndpoint))
         {
             SetPingResult("آدرس نامعتبر");
             return;
@@ -2199,7 +2221,7 @@ public partial class MainViewModel
             return;
         }
 
-        _ = RunPingLoopAsync(host, raw, pingProxyPort, _pingCts.Token);
+        _ = RunPingLoopAsync(pingEndpoint.Host, pingEndpoint.Port, pingProxyPort, _pingCts.Token);
     }
 
     /// <summary>
@@ -2212,15 +2234,10 @@ public partial class MainViewModel
     ///     immediately (1-2 ms) before the remote connection is established.
     ///   • L2TP mode  → TunnelX built-in SOCKS5 (port 1080), bound to VPN IP.
     ///     Packets route through the real PPP adapter; no fake local handshake.
-    /// Format of <paramref name="target"/>: "host" or "host:port" (default port 443).
+    /// Port defaults to 443 when the ping box has a bare hostname. URLs and host:port use the shared parser.
     /// </summary>
-    private async Task RunPingLoopAsync(string host, string target, int proxyPort, CancellationToken ct)
+    private async Task RunPingLoopAsync(string host, int port, int proxyPort, CancellationToken ct)
     {
-        // Parse optional port from "host:port"
-        int port = 443;
-        if (target.Contains(':') && int.TryParse(target.Split(':')[^1], out var p))
-            port = p;
-
         int socks5Port = proxyPort;
 
         int sent = 0, success = 0;

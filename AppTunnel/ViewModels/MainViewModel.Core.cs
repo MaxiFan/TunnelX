@@ -343,7 +343,136 @@ public partial class MainViewModel : INotifyPropertyChanged
         LocalizationService.Instance.T("نمایش اعلان‌های وضعیت اتصال و برنامه. اعلان‌های تبلیغ/به‌روزرسانی با دکمه ✕ بسته می‌شوند.");
 
     public string HelpSettingsTabBodyText =>
-        LocalizationService.Instance.T("پورت پراکسی محلی، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
+        LocalizationService.Instance.T("پورت پراکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
+
+    private string _healthCheckEndpointsText = "";
+    public string HealthCheckEndpointsText
+    {
+        get => _healthCheckEndpointsText;
+        set
+        {
+            var next = value ?? "";
+            if (_healthCheckEndpointsText == next) return;
+            _healthCheckEndpointsText = next;
+            OnPropertyChanged();
+            PersistHealthCheckSettings();
+        }
+    }
+
+    private bool _includeDefaultHealthCheckEndpoints = true;
+    public bool IncludeDefaultHealthCheckEndpoints
+    {
+        get => _includeDefaultHealthCheckEndpoints;
+        set
+        {
+            if (_includeDefaultHealthCheckEndpoints == value) return;
+            _includeDefaultHealthCheckEndpoints = value;
+            OnPropertyChanged();
+            PersistHealthCheckSettings();
+        }
+    }
+
+    private string _healthCheckEndpointsStatusText = "";
+    public string HealthCheckEndpointsStatusText
+    {
+        get => _healthCheckEndpointsStatusText;
+        private set
+        {
+            if (_healthCheckEndpointsStatusText == value) return;
+            _healthCheckEndpointsStatusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string HealthCheckSectionTitleText =>
+        LocalizationService.Instance.T("🩺 بررسی سلامت اتصال");
+
+    public string HealthCheckEndpointsLabelText =>
+        LocalizationService.Instance.T("مقصدهای سفارشی");
+
+    public string HealthCheckEndpointsHintText =>
+        LocalizationService.Instance.T("هر خط یک آدرس (URL، دامنه یا IP). اگر خالی بماند، google.com و cloudflare.com بررسی می‌شوند.");
+
+    public string HealthCheckEndpointsPlaceholderText =>
+        "https://intranet.company.com";
+
+    public string IncludeDefaultHealthCheckEndpointsTitleText =>
+        LocalizationService.Instance.T("مقصدهای عمومی پیش‌فرض");
+
+    public string IncludeDefaultHealthCheckEndpointsDescriptionText =>
+        LocalizationService.Instance.T("google.com و cloudflare.com هم بررسی می‌شوند. با خاموش کردن این گزینه، فقط مقصدهای سفارشی معتبر استفاده می‌شوند.");
+
+    private void PersistHealthCheckSettings()
+    {
+        RefreshHealthCheckStatus();
+        SyncPingTargetWithHealthChecks();
+        _appSettings.HealthCheckEndpoints = _healthCheckEndpointsText;
+        _appSettings.IncludeDefaultHealthCheckEndpoints = _includeDefaultHealthCheckEndpoints;
+        _profileService.SaveAppSettings(_appSettings);
+    }
+
+    private HealthCheckPlan GetHealthCheckPlan()
+        => HealthCheckTargets.Resolve(_healthCheckEndpointsText, _includeDefaultHealthCheckEndpoints);
+
+    private void RefreshHealthCheckStatus()
+    {
+        var plan = GetHealthCheckPlan();
+        var loc = LocalizationService.Instance;
+        var parts = new List<string>();
+        if (plan.FellBackToDefaults)
+        {
+            parts.Add(loc.T("مقصد سفارشی معتبری نیست؛ بررسی سلامت با google.com و cloudflare.com ادامه پیدا می‌کند."));
+        }
+        else if (!plan.HasCustomEndpoints)
+        {
+            parts.Add(loc.T("پیش‌فرض: google.com:443 و cloudflare.com:443"));
+        }
+        else
+        {
+            parts.Add(loc.Format(
+                "مقصدهای فعال: {0}",
+                string.Join(" ، ", plan.Targets.Select(t => t.ToString()))));
+        }
+
+        if (plan.InvalidEntries.Count > 0)
+        {
+            parts.Add(loc.Format(
+                "این خطوط نادیده گرفته شد: {0}",
+                string.Join(" ، ", plan.InvalidEntries)));
+        }
+
+        if (plan.IgnoredExtraEntries.Count > 0)
+        {
+            parts.Add(loc.Format(
+                "بیش از {0} مقصد سفارشی نادیده گرفته شد.",
+                HealthCheckTargets.MaxCustomEndpoints));
+        }
+
+        HealthCheckEndpointsStatusText = string.Join(" ", parts);
+    }
+
+    private bool _pingTargetFollowsHealthCheck = true;
+    private bool _settingPingTargetFromHealthCheck;
+
+    private void SyncPingTargetWithHealthChecks()
+    {
+        if (!_pingTargetFollowsHealthCheck)
+            return;
+
+        var next = GetHealthCheckPlan().SuggestedPingTarget;
+        if (string.Equals(_pingTarget, next, StringComparison.Ordinal))
+            return;
+
+        _settingPingTargetFromHealthCheck = true;
+        try
+        {
+            PingTarget = next;
+        }
+        finally
+        {
+            _settingPingTargetFromHealthCheck = false;
+        }
+    }
 
     public string? LastActiveProfileId
     {
@@ -1482,11 +1611,19 @@ public partial class MainViewModel : INotifyPropertyChanged
         set { _directTraffic = value; OnPropertyChanged(); }
     }
 
-    private string _pingTarget = "www.google.com";
+    private string _pingTarget = HealthCheckTargets.DefaultPingTarget;
     public string PingTarget
     {
         get => _pingTarget;
-        set { _pingTarget = value; OnPropertyChanged(); }
+        set
+        {
+            var next = value ?? "";
+            if (_pingTarget == next) return;
+            _pingTarget = next;
+            if (!_settingPingTargetFromHealthCheck)
+                _pingTargetFollowsHealthCheck = false;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isPinging;
@@ -2491,11 +2628,22 @@ public partial class MainViewModel : INotifyPropertyChanged
         SyncStartupRegistryFromSettings();
         _autoConnectOnStartup = _appSettings.AutoConnectOnStartup;
         _enableInformationalNotifications = _appSettings.EnableInformationalNotifications;
+        _healthCheckEndpointsText = _appSettings.HealthCheckEndpoints ?? "";
+        _includeDefaultHealthCheckEndpoints = _appSettings.IncludeDefaultHealthCheckEndpoints;
         _githubInstallCount = _appSettings.GitHubAppDownloadCount;
         AppNotificationService.Configure(() => _enableInformationalNotifications);
         OnPropertyChanged(nameof(StartWithWindows));
         OnPropertyChanged(nameof(AutoConnectOnStartup));
         OnPropertyChanged(nameof(EnableInformationalNotifications));
+        OnPropertyChanged(nameof(HealthCheckEndpointsText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpoints));
+        RefreshHealthCheckStatus();
+        SyncPingTargetWithHealthChecks();
+        OnPropertyChanged(nameof(HealthCheckSectionTitleText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsLabelText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
         OnPropertyChanged(nameof(InformationalNotificationsSectionTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsDescriptionText));
@@ -2559,6 +2707,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(InformationalNotificationsTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsDescriptionText));
         OnPropertyChanged(nameof(HelpSettingsTabBodyText));
+        OnPropertyChanged(nameof(HealthCheckSectionTitleText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsLabelText));
+        OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
+        OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
+        RefreshHealthCheckStatus();
         OnPropertyChanged(nameof(OpenVpnPrerequisiteText));
         OnPropertyChanged(nameof(OpenVpnIntroText));
         OnPropertyChanged(nameof(OpenVpnInstallGuideText));

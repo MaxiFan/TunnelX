@@ -50,7 +50,7 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 - Local SOCKS5 proxy for tools that need `127.0.0.1`
 - DNS redirect, IPv6 blocking, leak guard, route diagnostics, and traffic history
 - Multiple profiles, duplicate/edit flows, server tests, public exit IP detection, and release update checks
-- **Connection health check** before the connected screen: end-to-end TCP probes to `google.com` and `cloudflare.com` through the tunnel SOCKS path, with live per-host latency during the verify step
+- **Connection health check** before the connected screen: end-to-end TCP probes through the tunnel SOCKS path, with live per-host latency during the verify step. Defaults are `google.com` and `cloudflare.com`. Settings can add custom URLs, hostnames, or IPs and can turn the public defaults off
 - Connected dashboard: **exit IP** with country name and flag image (geo and flag PNG fetched through the tunnel, not direct from the local network)
 - Windows tray notifications with clearer error guidance, optional release-notes action on update cards, and scheduled update check after connect
 - Persian and English desktop UI with automatic language detection, manual language switching, and correct RTL/LTR layout behavior
@@ -66,6 +66,29 @@ If Telegram is installed on Windows, the in-app button opens the channel directl
 6. Add include or exclude destinations when needed, connect, and check the traffic health cards for DNS, IPv6, leaks, and route status.
 
 After you connect, TunnelX runs a short **health verify** step (adapter/route checks plus real tunnel probes). The connected dashboard appears only when at least one end-to-end probe succeeds. Expired or quota-exhausted proxy configs should fail here instead of showing a false “connected” state.
+
+### Health-check targets
+
+Open **Settings** and use **Connection Health Check**. Leave the list empty to keep probing `google.com:443` and `cloudflare.com:443`. Add one target per line when the tunnel should be judged by a private network instead of the public internet, for example:
+
+```
+https://intranet.company.com
+internal-api.company.local
+10.0.0.1
+```
+
+`https://` uses port 443, `http://` uses port 80, and `host:port` sets an explicit port. Custom targets are tried first. With **Default public targets** left on, `google.com` and `cloudflare.com` are still used as fallback. Turn that switch off to probe only the custom list. If the switch is off and nothing valid is entered, the public defaults stay in use.
+
+The same list is stored in `%LOCALAPPDATA%\TunnelX\appsettings.json`:
+
+```json
+{
+  "healthCheckEndpoints": "https://intranet.company.com\ninternal-api.company.local\n10.0.0.1",
+  "includeDefaultHealthCheckEndpoints": false
+}
+```
+
+The connected ping field follows the first custom target until you edit it. Split and full routing still send these probes through the tunnel SOCKS path. Private addresses are not given a temporary VPN host route.
 
 ## Exit IP and Country Flag
 

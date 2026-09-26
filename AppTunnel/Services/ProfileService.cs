@@ -94,6 +94,18 @@ public class ProfileService
         public long? GitHubAppDownloadCount { get; set; } = null;
         /// <summary>Tray toasts for connection/app status (not updates or Telegram promos).</summary>
         public bool EnableInformationalNotifications { get; set; } = true;
+
+        /// <summary>
+        /// Custom connection health-check targets, one URL, hostname, or IP per line.
+        /// Empty keeps the built-in google.com and cloudflare.com probes.
+        /// </summary>
+        public string HealthCheckEndpoints { get; set; } = "";
+
+        /// <summary>
+        /// When false, google.com and cloudflare.com are not probed.
+        /// Ignored when no valid custom target is configured, so health checks still have a destination.
+        /// </summary>
+        public bool IncludeDefaultHealthCheckEndpoints { get; set; } = true;
     }
 
     /// <summary>

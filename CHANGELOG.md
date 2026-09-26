@@ -8,6 +8,7 @@
 - Fixed per-app / split-route sessions marking Wi-Fi as "Connected, no internet" after a long run. Windows connectivity probes stay on the physical NIC, and route-table updates no longer run on the packet path that every outbound packet has to pass through.
 - Pre-connect ping for V2Ray/Xray configs no longer succeeds just because the server port accepts TCP. Like v2rayN "test real delay", a latency value is shown only when a request through the config reaches the target. A closed connection is a failure, not a successful ping.
 - Delete many configs at once from the list, with multi-select, Select all, and one confirmation that states how many will be removed.
+- Custom connection health-check targets in Settings (URL, hostname, or IP). With nothing configured, `google.com` and `cloudflare.com` are still used. The default public targets can be turned off.
 
 ### فارسی
 
@@ -17,6 +18,7 @@
 - رفع مشکلی که در حالت per-app / اسپلیت، بعد از مدتی طولانی وای‌فای را «Connected - No Internet» نشان می‌داد. بررسی اتصال ویندوز روی کارت شبکه فیزیکی می‌ماند و تغییر جدول مسیر دیگر روی مسیر بسته‌ها انجام نمی‌شود.
 - پینگ قبل از اتصال برای کانفیگ‌های V2Ray/Xray دیگر با باز بودن پورت سرور موفق حساب نمی‌شود. مثل «test real delay» در v2rayN، عدد پینگ فقط وقتی نشان داده می‌شود که درخواست واقعاً از داخل کانفیگ به مقصد برسد. قطع شدن اتصال به‌جای پینگ موفق ثبت نمی‌شود.
 - حذف چند کانفیگ با هم از لیست: تیک چندتایی، انتخاب همه، و یک تأیید که تعداد حذف را می‌گوید.
+- مقصدهای سفارشی برای بررسی سلامت اتصال در تنظیمات (URL، دامنه یا IP). اگر چیزی تنظیم نشود، `google.com` و `cloudflare.com` مثل قبل بررسی می‌شوند. می‌توان مقصدهای عمومی پیش‌فرض را خاموش کرد.
 
 </div>
 
