@@ -7,6 +7,42 @@
                   HorizontalScrollBarVisibility="Disabled">
         <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,4">
 
+            <!-- Language -->
+            <Border Style="{StaticResource CardPanel}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="190"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 زبان"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock Text="زبان رابط کاربری"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="در حالت خودکار TunnelX زبان ویندوز را دنبال می‌کند. می‌توانید فارسی، انگلیسی یا روسی را دستی انتخاب کنید."
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <ComboBox Grid.Column="2"
+                              Style="{StaticResource DarkComboBox}"
+                              SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
+                              SelectedValuePath="Tag"
+                              VerticalAlignment="Center"
+                              FontSize="12"
+                              Padding="8,6">
+                        <ComboBoxItem Content="خودکار" Tag="auto"/>
+                        <ComboBoxItem Content="فارسی" Tag="fa-IR"/>
+                        <ComboBoxItem Content="English" Tag="en-US"/>
+                        <ComboBoxItem Content="Русский" Tag="ru-RU"/>
+                    </ComboBox>
+                </Grid>
+            </Border>
+
             <!-- Local Proxy Settings -->
             <Border Style="{StaticResource CardPanel}">
                 <StackPanel>

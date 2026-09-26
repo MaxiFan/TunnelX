@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+- رابط کاربری روسی و انتخاب زبان در تنظیمات: خودکار، فارسی، انگلیسی یا روسی
+
+</div>
+
+### English
+
+- Russian UI, with Auto, Persian, English, or Russian selectable in Settings
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی
