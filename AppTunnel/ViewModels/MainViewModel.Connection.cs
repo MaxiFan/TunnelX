@@ -118,6 +118,17 @@ public partial class MainViewModel
             ConfigValidationText = openVpnProfileError;
             return;
         }
+        if (tunnelType == TunnelType.OpenVpn &&
+            OpenVpnUpstreamProxy.TryGetConnectError(
+                CurrentUpstreamProxySettings(),
+                _selectedProfile?.OpenVpnConfig ?? SelectedOpenVpnConfig,
+                out var upstreamProxyError))
+        {
+            Logger.Warning($"ConnectAsync: OpenVPN upstream proxy invalid: {upstreamProxyError}");
+            StatusText = upstreamProxyError;
+            ConfigValidationText = upstreamProxyError;
+            return;
+        }
         if (tunnelType == TunnelType.WireGuard && !WireGuardConfigParser.TryParse(_selectedProfile?.WireGuardConfig ?? SelectedWireGuardConfig, out _, out var wireGuardError))
         {
             Logger.Warning($"ConnectAsync: WireGuard config invalid: {wireGuardError}");
@@ -151,6 +162,11 @@ public partial class MainViewModel
             OpenVpnUsername = OpenVpnUsername,
             OpenVpnPassword = OpenVpnPassword,
             OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword,
+            OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword,
             WireGuardConfig = SelectedWireGuardConfig,
             WireGuardConfigPath = SelectedWireGuardConfigPath,
             ProxyProtocol = ProxyProtocol,

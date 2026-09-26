@@ -76,6 +76,7 @@ public partial class MainViewModel
     public event Action<string, string>? PasswordChanged;
     public event Action<string>? OpenVpnPasswordChanged;
     public event Action<string>? OpenVpnPrivateKeyPasswordChanged;
+    public event Action<string>? OpenVpnUpstreamProxyPasswordChanged;
     public event Action<string>? ProxyPasswordChanged;
 
     private void LoadProfiles()
@@ -164,6 +165,11 @@ public partial class MainViewModel
         _selectedProfile.OpenVpnUsername = OpenVpnUsername;
         _selectedProfile.OpenVpnPassword = OpenVpnPassword;
         _selectedProfile.OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword;
+        _selectedProfile.OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind;
+        _selectedProfile.OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost;
+        _selectedProfile.OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort;
+        _selectedProfile.OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername;
+        _selectedProfile.OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword;
         _selectedProfile.WireGuardConfig = SelectedWireGuardConfig;
         _selectedProfile.WireGuardConfigPath = SelectedWireGuardConfigPath;
         _selectedProfile.ProxyProtocol = ProxyProtocol;
@@ -235,6 +241,11 @@ public partial class MainViewModel
             _openVpnUsername = profile.OpenVpnUsername;
             _openVpnPassword = profile.OpenVpnPassword;
             _openVpnPrivateKeyPassword = profile.OpenVpnPrivateKeyPassword;
+            _openVpnUpstreamProxyKind = profile.OpenVpnUpstreamProxyKind;
+            _openVpnUpstreamProxyHost = profile.OpenVpnUpstreamProxyHost;
+            _openVpnUpstreamProxyPort = profile.OpenVpnUpstreamProxyPort;
+            _openVpnUpstreamProxyUsername = profile.OpenVpnUpstreamProxyUsername;
+            _openVpnUpstreamProxyPassword = profile.OpenVpnUpstreamProxyPassword;
             _proxyProtocol = profile.ProxyProtocol;
             _proxyServerAddress = profile.ProxyServerAddress;
             _proxyPort = profile.ProxyPort > 0 ? profile.ProxyPort : 1080;
@@ -249,6 +260,12 @@ public partial class MainViewModel
             OnPropertyChanged(nameof(SelectedWireGuardConfigPath));
             OnPropertyChanged(nameof(OpenVpnUsername));
             OnPropertyChanged(nameof(OpenVpnPrivateKeyPassword));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyKind));
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyHost));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPort));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPortText));
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyUsername));
             OnPropertyChanged(nameof(ProxyProtocol));
             OnPropertyChanged(nameof(ProxyServerAddress));
             OnPropertyChanged(nameof(ProxyPort));
@@ -260,6 +277,7 @@ public partial class MainViewModel
             PasswordChanged?.Invoke(profile.Password, profile.PreSharedKey);
             OpenVpnPasswordChanged?.Invoke(profile.OpenVpnPassword);
             OpenVpnPrivateKeyPasswordChanged?.Invoke(profile.OpenVpnPrivateKeyPassword);
+            OpenVpnUpstreamProxyPasswordChanged?.Invoke(profile.OpenVpnUpstreamProxyPassword);
             ProxyPasswordChanged?.Invoke(profile.ProxyPassword);
         }
         finally
@@ -366,6 +384,11 @@ public partial class MainViewModel
         OpenVpnUsername = source.OpenVpnUsername,
         OpenVpnPassword = source.OpenVpnPassword,
         OpenVpnPrivateKeyPassword = source.OpenVpnPrivateKeyPassword,
+        OpenVpnUpstreamProxyKind = source.OpenVpnUpstreamProxyKind,
+        OpenVpnUpstreamProxyHost = source.OpenVpnUpstreamProxyHost,
+        OpenVpnUpstreamProxyPort = source.OpenVpnUpstreamProxyPort,
+        OpenVpnUpstreamProxyUsername = source.OpenVpnUpstreamProxyUsername,
+        OpenVpnUpstreamProxyPassword = source.OpenVpnUpstreamProxyPassword,
         WireGuardConfig = source.WireGuardConfig,
         WireGuardConfigPath = source.WireGuardConfigPath,
         ProxyProtocol = source.ProxyProtocol,
@@ -393,6 +416,11 @@ public partial class MainViewModel
         target.OpenVpnUsername = source.OpenVpnUsername;
         target.OpenVpnPassword = source.OpenVpnPassword;
         target.OpenVpnPrivateKeyPassword = source.OpenVpnPrivateKeyPassword;
+        target.OpenVpnUpstreamProxyKind = source.OpenVpnUpstreamProxyKind;
+        target.OpenVpnUpstreamProxyHost = source.OpenVpnUpstreamProxyHost;
+        target.OpenVpnUpstreamProxyPort = source.OpenVpnUpstreamProxyPort;
+        target.OpenVpnUpstreamProxyUsername = source.OpenVpnUpstreamProxyUsername;
+        target.OpenVpnUpstreamProxyPassword = source.OpenVpnUpstreamProxyPassword;
         target.WireGuardConfig = source.WireGuardConfig;
         target.WireGuardConfigPath = source.WireGuardConfigPath;
         target.ProxyProtocol = source.ProxyProtocol;

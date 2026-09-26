@@ -825,6 +825,69 @@
                         </StackPanel>
                     </Grid>
 
+                    <Border Background="#11FFFFFF" CornerRadius="8" Padding="10,8" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding OpenVpnUpstreamProxyIntroText}"
+                                       TextWrapping="Wrap"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextAlignment="{Binding AppTextAlignment}"/>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="پراکسی بالادستی"/>
+                                    <ComboBox Style="{StaticResource DarkComboBox}"
+                                              SelectedValue="{Binding OpenVpnUpstreamProxyKind, Mode=TwoWay}"
+                                              SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="بدون پراکسی"
+                                                      Tag="{x:Static models:OpenVpnUpstreamProxyKind.None}"/>
+                                        <ComboBoxItem Content="HTTP"
+                                                      Tag="{x:Static models:OpenVpnUpstreamProxyKind.Http}"/>
+                                        <ComboBoxItem Content="SOCKS5"
+                                                      Tag="{x:Static models:OpenVpnUpstreamProxyKind.Socks}"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2"
+                                            Visibility="{Binding IsOpenVpnUpstreamProxyEnabled, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="پورت"/>
+                                    <TextBox Style="{StaticResource ModernTextBox}"
+                                             Text="{Binding OpenVpnUpstreamProxyPortText, UpdateSourceTrigger=PropertyChanged}"
+                                             FlowDirection="LeftToRight"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Margin="0,6,0,0"
+                                        Visibility="{Binding IsOpenVpnUpstreamProxyEnabled, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="آدرس پراکسی"/>
+                                <TextBox Style="{StaticResource ModernTextBox}"
+                                         Text="{Binding OpenVpnUpstreamProxyHost, UpdateSourceTrigger=PropertyChanged}"
+                                         FlowDirection="LeftToRight"/>
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="نام کاربری پراکسی (اختیاری)"/>
+                                        <TextBox Style="{StaticResource ModernTextBox}"
+                                                 Text="{Binding OpenVpnUpstreamProxyUsername, UpdateSourceTrigger=PropertyChanged}"
+                                                 FlowDirection="LeftToRight"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="رمز پراکسی (اختیاری)"/>
+                                        <PasswordBox x:Name="OpenVpnUpstreamProxyPasswordField"
+                                                     Style="{StaticResource ModernPasswordBox}"
+                                                     FlowDirection="LeftToRight"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="{Binding ConfigValidationText}"
                                FontSize="10"
                                Foreground="{StaticResource TextSecondaryBrush}"

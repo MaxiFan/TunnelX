@@ -44,6 +44,11 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _openVpnUsername = "";
     private string _openVpnPassword = "";
     private string _openVpnPrivateKeyPassword = "";
+    private OpenVpnUpstreamProxyKind _openVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind.None;
+    private string _openVpnUpstreamProxyHost = "";
+    private int _openVpnUpstreamProxyPort;
+    private string _openVpnUpstreamProxyUsername = "";
+    private string _openVpnUpstreamProxyPassword = "";
     private string _wireGuardConfig = "";
     private string _wireGuardConfigPath = "";
     private ProxyProtocol _proxyProtocol = ProxyProtocol.Socks5;
@@ -188,6 +193,66 @@ public class ConnectionProfile : INotifyPropertyChanged
         get => _openVpnPrivateKeyPassword;
         set => SetField(ref _openVpnPrivateKeyPassword, value);
     }
+
+    public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind
+    {
+        get => _openVpnUpstreamProxyKind;
+        set
+        {
+            if (!SetField(ref _openVpnUpstreamProxyKind, value))
+                return;
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+        }
+    }
+
+    public string OpenVpnUpstreamProxyHost
+    {
+        get => _openVpnUpstreamProxyHost;
+        set => SetField(ref _openVpnUpstreamProxyHost, value);
+    }
+
+    public int OpenVpnUpstreamProxyPort
+    {
+        get => _openVpnUpstreamProxyPort;
+        set => SetField(ref _openVpnUpstreamProxyPort, value);
+    }
+
+    public string OpenVpnUpstreamProxyUsername
+    {
+        get => _openVpnUpstreamProxyUsername;
+        set => SetField(ref _openVpnUpstreamProxyUsername, value);
+    }
+
+    public string OpenVpnUpstreamProxyPassword
+    {
+        get => _openVpnUpstreamProxyPassword;
+        set => SetField(ref _openVpnUpstreamProxyPassword, value);
+    }
+
+    [JsonIgnore]
+    public bool IsOpenVpnUpstreamProxyEnabled =>
+        OpenVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None;
+
+    public void ApplyParsedUpstreamProxy(OpenVpnParsedUpstreamProxy parsed)
+    {
+        OpenVpnUpstreamProxyHost = parsed.Host;
+        OpenVpnUpstreamProxyPort = parsed.Port;
+        if (parsed.HasInlineCredentials)
+        {
+            OpenVpnUpstreamProxyUsername = parsed.Username;
+            OpenVpnUpstreamProxyPassword = parsed.Password;
+        }
+
+        OpenVpnUpstreamProxyKind = parsed.Kind;
+    }
+
+    public OpenVpnUpstreamProxySettings ToUpstreamProxySettings() =>
+        OpenVpnUpstreamProxySettings.From(
+            OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword);
 
     public string WireGuardConfig
     {
@@ -551,6 +616,11 @@ public class ConnectionProfile : INotifyPropertyChanged
         OpenVpnUsername = OpenVpnUsername,
         OpenVpnPassword = OpenVpnPassword,
         OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPassword,
+        OpenVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind,
+        OpenVpnUpstreamProxyHost = OpenVpnUpstreamProxyHost,
+        OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxyPort,
+        OpenVpnUpstreamProxyUsername = OpenVpnUpstreamProxyUsername,
+        OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPassword,
         WireGuardConfig = WireGuardConfig,
         WireGuardConfigPath = WireGuardConfigPath,
         ProxyProtocol = ProxyProtocol,

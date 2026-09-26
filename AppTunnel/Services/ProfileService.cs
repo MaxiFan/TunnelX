@@ -129,6 +129,11 @@ public class ProfileService
                 OpenVpnUsername = s.OpenVpnUsername,
                 OpenVpnPassword = DecryptString(s.EncryptedOpenVpnPassword),
                 OpenVpnPrivateKeyPassword = DecryptString(s.EncryptedOpenVpnPrivateKeyPassword),
+                OpenVpnUpstreamProxyKind = s.OpenVpnUpstreamProxyKind,
+                OpenVpnUpstreamProxyHost = s.OpenVpnUpstreamProxyHost,
+                OpenVpnUpstreamProxyPort = s.OpenVpnUpstreamProxyPort,
+                OpenVpnUpstreamProxyUsername = s.OpenVpnUpstreamProxyUsername,
+                OpenVpnUpstreamProxyPassword = DecryptString(s.EncryptedOpenVpnUpstreamProxyPassword),
                 WireGuardConfig = s.WireGuardConfig,
                 WireGuardConfigPath = s.WireGuardConfigPath,
                 ProxyProtocol = s.ProxyProtocol,
@@ -173,6 +178,11 @@ public class ProfileService
             OpenVpnUsername = p.OpenVpnUsername,
             EncryptedOpenVpnPassword = EncryptString(p.OpenVpnPassword),
             EncryptedOpenVpnPrivateKeyPassword = EncryptString(p.OpenVpnPrivateKeyPassword),
+            OpenVpnUpstreamProxyKind = p.OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost = p.OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort = p.OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername = p.OpenVpnUpstreamProxyUsername,
+            EncryptedOpenVpnUpstreamProxyPassword = EncryptString(p.OpenVpnUpstreamProxyPassword),
             WireGuardConfig = p.WireGuardConfig,
             WireGuardConfigPath = p.WireGuardConfigPath,
             ProxyProtocol = p.ProxyProtocol,
@@ -244,6 +254,11 @@ public class ProfileService
         public string OpenVpnUsername { get; set; } = "";
         public string EncryptedOpenVpnPassword { get; set; } = "";
         public string EncryptedOpenVpnPrivateKeyPassword { get; set; } = "";
+        public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind { get; set; } = OpenVpnUpstreamProxyKind.None;
+        public string OpenVpnUpstreamProxyHost { get; set; } = "";
+        public int OpenVpnUpstreamProxyPort { get; set; }
+        public string OpenVpnUpstreamProxyUsername { get; set; } = "";
+        public string EncryptedOpenVpnUpstreamProxyPassword { get; set; } = "";
         public string WireGuardConfig { get; set; } = "";
         public string WireGuardConfigPath { get; set; } = "";
         public ProxyProtocol ProxyProtocol { get; set; } = ProxyProtocol.Socks5;

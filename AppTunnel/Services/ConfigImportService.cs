@@ -69,12 +69,7 @@ public static class ConfigImportService
             TunnelType = TunnelType.V2Ray,
             V2RayConfig = draft.ConfigText
         },
-        TunnelType.OpenVpn => new ConnectionProfile
-        {
-            Name = draft.SuggestedName,
-            TunnelType = TunnelType.OpenVpn,
-            OpenVpnConfig = draft.ConfigText
-        },
+        TunnelType.OpenVpn => CreateOpenVpnProfile(draft),
         TunnelType.WireGuard => new ConnectionProfile
         {
             Name = draft.SuggestedName,
@@ -108,6 +103,19 @@ public static class ConfigImportService
         TunnelType.L2tpIpsec => $"{profile.ServerAddress}|{profile.Username}",
         _ => profile.Name.Trim()
     };
+
+    private static ConnectionProfile CreateOpenVpnProfile(ImportedConfigDraft draft)
+    {
+        var profile = new ConnectionProfile
+        {
+            Name = draft.SuggestedName,
+            TunnelType = TunnelType.OpenVpn,
+            OpenVpnConfig = draft.ConfigText
+        };
+        if (OpenVpnUpstreamProxy.TryParse(draft.ConfigText, out var parsed))
+            profile.ApplyParsedUpstreamProxy(parsed);
+        return profile;
+    }
 
     private static ConnectionProfile CreateSocksProfile(ImportedConfigDraft draft)
     {

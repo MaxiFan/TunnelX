@@ -128,6 +128,21 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                 return false;
             }
 
+            var upstreamProxy = OpenVpnUpstreamProxySettings.From(
+                config.OpenVpnUpstreamProxyKind,
+                config.OpenVpnUpstreamProxyHost,
+                config.OpenVpnUpstreamProxyPort,
+                config.OpenVpnUpstreamProxyUsername,
+                config.OpenVpnUpstreamProxyPassword);
+            if (OpenVpnUpstreamProxy.TryGetConnectError(upstreamProxy, config.OpenVpnConfig, out var proxyErrorKey))
+            {
+                Status.State = ConnectionState.Error;
+                Status.Message = LocalizationService.Instance.T(proxyErrorKey);
+                Logger.Error($"[OpenVPN] Upstream proxy rejected: {proxyErrorKey}");
+                ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Fail, Status.Message);
+                return false;
+            }
+
             await KillStaleTunnelXOpenVpnProcessAsync();
 
             ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Active, "راه‌اندازی OpenVPN");
@@ -136,7 +151,8 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                 config.OpenVpnConfig,
                 config.OpenVpnUsername,
                 config.OpenVpnPassword,
-                config.OpenVpnPrivateKeyPassword);
+                config.OpenVpnPrivateKeyPassword,
+                upstreamProxy);
             var preparedRemotes = ExtractRemoteCandidates(File.ReadAllText(preparedConfigPath)).ToList();
             if (preparedRemotes.Count == 0)
             {
@@ -504,7 +520,8 @@ public class OpenVpnTunnelProvider : ITunnelProvider
         string originalConfig,
         string username,
         string password,
-        string privateKeyPassword)
+        string privateKeyPassword,
+        OpenVpnUpstreamProxySettings upstreamProxy)
     {
         var dir = OpenVpnWorkDir;
         Directory.CreateDirectory(dir);
@@ -512,6 +529,8 @@ public class OpenVpnTunnelProvider : ITunnelProvider
         var path = Path.Combine(dir, "tunnelx-split.ovpn");
         var authPath = Path.Combine(dir, "tunnelx-auth.txt");
         var askpassPath = Path.Combine(dir, "tunnelx-askpass.txt");
+        var proxyAuthPath = Path.Combine(dir, "tunnelx-proxy-auth.txt");
+        var globalProto = OpenVpnUpstreamProxy.DetectGlobalProto(originalConfig);
         var analysis = OpenVpnProfileAnalyzer.Analyze(originalConfig);
         var dataCipherCompat = OpenVpnProfileAnalyzer.GetDataCipherCompatLines(originalConfig);
         var builder = new StringBuilder();
@@ -574,6 +593,29 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                 builder.AppendLine($"askpass {QuoteOpenVpnPath(askpassPath)}");
             }
 
+            if (upstreamProxy.IsEnabled)
+            {
+                string? quotedProxyAuth = null;
+                if (upstreamProxy.HasCredentials)
+                {
+                    File.WriteAllText(
+                        proxyAuthPath,
+                        OpenVpnUpstreamProxy.BuildAuthFileBody(upstreamProxy.Username, upstreamProxy.Password),
+                        Utf8NoBom);
+                    quotedProxyAuth = QuoteOpenVpnPath(proxyAuthPath);
+                }
+                else
+                    TryDeleteProxyAuthFile(proxyAuthPath);
+
+                foreach (var proxyLine in OpenVpnUpstreamProxy.BuildConfigLines(upstreamProxy, quotedProxyAuth))
+                    builder.AppendLine(proxyLine);
+
+                Logger.Info(
+                    $"[OpenVPN] Upstream {upstreamProxy.Kind} proxy {upstreamProxy.Host.Trim()}:{upstreamProxy.Port} auth={(upstreamProxy.HasCredentials ? "yes" : "no")}");
+            }
+            else
+                TryDeleteProxyAuthFile(proxyAuthPath);
+
             builder.AppendLine();
         }
 
@@ -581,6 +623,17 @@ public class OpenVpnTunnelProvider : ITunnelProvider
         {
             var raw = lines[i].TrimEnd('\r');
             var trimmed = raw.TrimStart();
+            if (upstreamProxy.IsEnabled &&
+                trimmed.StartsWith("<http-proxy-user-pass>", StringComparison.OrdinalIgnoreCase))
+            {
+                while (++i < lines.Length &&
+                       !lines[i].Trim().StartsWith("</http-proxy-user-pass>", StringComparison.OrdinalIgnoreCase))
+                {
+                }
+
+                continue;
+            }
+
             if (trimmed.StartsWith("auth-user-pass", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("askpass", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("redirect-gateway", StringComparison.OrdinalIgnoreCase) ||
@@ -622,6 +675,17 @@ public class OpenVpnTunnelProvider : ITunnelProvider
                         break;
                 }
 
+                if (upstreamProxy.IsEnabled)
+                {
+                    if (!OpenVpnUpstreamProxy.TryKeepTcpConnectionBlock(block, globalProto, out var tcpBlock))
+                    {
+                        Logger.Info("[OpenVPN] Skipping connection block because upstream proxy requires TCP");
+                        continue;
+                    }
+
+                    block = tcpBlock;
+                }
+
                 var blockRemote = ExtractRemoteFromLines(block);
                 if (!blockRemote.HasValue)
                     continue;
@@ -640,6 +704,12 @@ public class OpenVpnTunnelProvider : ITunnelProvider
 
             if (trimmed.StartsWith("remote ", StringComparison.OrdinalIgnoreCase))
             {
+                if (upstreamProxy.IsEnabled && !OpenVpnUpstreamProxy.RemoteLineUsesTcp(raw, globalProto))
+                {
+                    Logger.Info($"[OpenVPN] Skipping non-TCP remote because upstream proxy requires TCP: {trimmed}");
+                    continue;
+                }
+
                 var remote = ExtractRemoteFromLines(new[] { raw });
                 if (remote.HasValue && ShouldSkipRemoteEntry(remote.Value.host))
                 {
@@ -670,6 +740,19 @@ public class OpenVpnTunnelProvider : ITunnelProvider
     }
 
     private static string QuoteOpenVpnPath(string path) => $"\"{path.Replace('\\', '/')}\"";
+
+    private static void TryDeleteProxyAuthFile(string proxyAuthPath)
+    {
+        try
+        {
+            if (File.Exists(proxyAuthPath))
+                File.Delete(proxyAuthPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[OpenVPN] Could not remove unused proxy auth file: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// RouterOS/OpenVPN Connect exports proto udp-client; OpenVPN Community on Windows expects proto udp.

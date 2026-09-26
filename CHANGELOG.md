@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+#### قابلیت‌های جدید
+- پراکسی بالادستی HTTP یا SOCKS5 برای اتصال OpenVPN؛ آدرس، پورت و نام کاربری/رمز اختیاری در پروفایل ذخیره می‌شود و هنگام اتصال در کانفیگ OpenVPN نوشته می‌شود
+
+</div>
+
+### English
+
+#### Added
+- Upstream HTTP or SOCKS5 proxy for OpenVPN connections. Host, port, and optional username/password are saved on the profile and written into the OpenVPN config as `http-proxy` or `socks-proxy` when connecting
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی
