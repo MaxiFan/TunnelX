@@ -985,22 +985,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             ["version"]     = "5"
         };
 
-        if (!string.IsNullOrEmpty(u.UserInfo))
-        {
-            var userInfo = Uri.UnescapeDataString(u.UserInfo);
-            var colonIdx = userInfo.IndexOf(':');
-            if (colonIdx >= 0)
-            {
-                outbound["users"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["username"] = userInfo[..colonIdx],
-                        ["password"] = userInfo[(colonIdx + 1)..]
-                    }
-                };
-            }
-        }
+        ApplySingBoxProxyCredentials(outbound, u.UserInfo);
 
         return (outbound, tag);
     }
@@ -1019,24 +1004,31 @@ public class V2RayTunnelProvider : ITunnelProvider
             ["server_port"] = u.Port > 0 ? u.Port : 3128
         };
 
-        if (!string.IsNullOrEmpty(u.UserInfo))
-        {
-            var userInfo = Uri.UnescapeDataString(u.UserInfo);
-            var colonIdx = userInfo.IndexOf(':');
-            if (colonIdx >= 0)
-            {
-                outbound["users"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["username"] = userInfo[..colonIdx],
-                        ["password"] = userInfo[(colonIdx + 1)..]
-                    }
-                };
-            }
-        }
+        ApplySingBoxProxyCredentials(outbound, u.UserInfo);
 
         return (outbound, tag);
+    }
+
+    /// <summary>
+    /// sing-box SOCKS and HTTP outbounds authenticate with top-level <c>username</c> and <c>password</c>.
+    /// The inbound <c>users</c> array is rejected during config decode (<c>outbounds[0].users: unknown field</c>).
+    /// </summary>
+    private static void ApplySingBoxProxyCredentials(JsonObject outbound, string? userInfo)
+    {
+        if (string.IsNullOrEmpty(userInfo))
+            return;
+
+        var decoded = Uri.UnescapeDataString(userInfo);
+        var colonIdx = decoded.IndexOf(':');
+        if (colonIdx < 0)
+            return;
+
+        var username = decoded[..colonIdx];
+        var password = decoded[(colonIdx + 1)..];
+        if (username.Length > 0)
+            outbound["username"] = username;
+        if (password.Length > 0)
+            outbound["password"] = password;
     }
 
     // =========================================================================

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### English
+
+- Fixed SOCKS5 and HTTP proxy connects that failed while sing-box decoded the config (`outbounds[0].users: unknown field "users"`). Proxy credentials are now written as outbound `username` and `password`.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- اتصال پراکسی SOCKS5 و HTTP که هنگام خواندن کانفیگ sing-box با خطای `unknown field "users"` قطع می‌شد اصلاح شد. نام کاربری و رمز اکنون در فیلدهای خروجی `username` و `password` نوشته می‌شوند.
+
+</div>
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی
