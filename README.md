@@ -111,20 +111,29 @@ Enter the server address, username, password, and pre-shared key. TunnelX create
 
 Paste a V2Ray/Xray link or JSON config into the profile. TunnelX uses sing-box for regular configs and switches to Xray-core for configs that require Xray-specific behavior such as `xhttp`.
 
+Hysteria uses the bundled sing-box 1.12 core (Xray has no Hysteria outbound):
+
+- **Hysteria 2:** `hysteria2://` and `hy2://`. Auth can be the URI userinfo or the `auth` / `password` query. Optional `sni`, `insecure`, `obfs=salamander` with `obfs-password`, `mport` port hopping (`20000-50000`), and `upmbps` / `downmbps` when Brutal bandwidth is set.
+- **Hysteria 1:** `hysteria://` over UDP (`auth`, `peer` or `sni`, `insecure`, `obfsParam`, `upmbps` / `downmbps`). `faketcp` and `wechat-video` are not supported. Missing bandwidth defaults to 100/100 Mbps.
+- **sing-box JSON:** a full config that already has inbounds is used as-is. A bare outbound, or a document whose only proxy outbound is `hysteria` / `hysteria2` and which has no inbounds, is wrapped with the TunnelX TUN and mixed inbound. See `examples/singbox-hysteria2.example.json`.
+
+`pinSHA256` is ignored on this sing-box build (no certificate-pin field). Connection ping goes through sing-box. The server button uses ICMP because Hysteria is QUIC/UDP.
+
 ### Subscription links
 
-On the connection tab, **Add subscription** takes an `http://` or `https://` URL that returns a config list. TunnelX fetches it directly from that host (the URL is stored locally and can contain an access token), imports each config as a profile, and can refresh the same link later. Refresh adds new nodes, updates existing ones, and removes nodes that disappeared. A failed or empty fetch does not delete profiles already imported from that link.
+On the Connection tab, **Add subscription** takes an `http://` or `https://` URL that returns a list of configs. TunnelX fetches it directly from that host (the URL is stored locally and may include access tokens), imports each config as a profile, and can refresh the same link later. A refresh adds new nodes, updates existing ones, and removes nodes that disappeared from the list. Failed or empty fetches leave the previous subscription profiles in place.
 
-Pasting a subscription URL on the connection tab (Ctrl+V) starts the same fetch. A bare `http://host:port` proxy address is still imported as an HTTP proxy profile.
+Pasting the subscription URL itself into the Connection tab (`Ctrl+V`) starts the same fetch. A bare `http://host:port` endpoint is still imported as an HTTP proxy profile.
 
-Supported subscription bodies:
+Supported bodies:
 
-- Base64-encoded lists of share links (`vmess://`, `vless://`, `trojan://`, `ss://`, `socks://`, `http://`), including line-wrapped and double-encoded payloads
-- The same share links as plain text, or a JSON array of those strings
-- sing-box / V2Ray JSON with an `outbounds` array
-- OpenVPN and WireGuard text when the body contains those configs
+- base64 lists of `vmess://`, `vless://`, `trojan://`, `ss://`, `socks://`, and `http://` share links (including multi-line and double-wrapped base64)
+- the same share links as plain text, or a JSON array of strings
+- sing-box / V2Ray JSON that contains `outbounds`
+- OpenVPN and WireGuard text if present in the response
 
-Not supported: Clash YAML/JSON (`proxies:`), SIP008, and share links the importer does not already understand (for example `hy2://`). If the server chooses the format from the User-Agent, TunnelX sends `TunnelX/<version>`, which most v2ray panels answer with a base64 link list. The optional `profile-title` and `subscription-userinfo` response headers set the subscription name and usage line.
+Not supported: Clash YAML/JSON (`proxies` key), SIP008, and share schemes the importer does not already understand. Optional `profile-title` and `subscription-userinfo` response headers set the subscription name and usage line.
+
 
 ### SOCKS5/HTTP Proxy
 

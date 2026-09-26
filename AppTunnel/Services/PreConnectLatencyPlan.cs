@@ -29,6 +29,10 @@ internal static class PreConnectLatencyPlan
         config = config.Trim();
         if (config.StartsWith('{'))
         {
+            // Bare hysteria outbounds can be wrapped for a sing-box real-delay probe.
+            if (HysteriaShareLink.TryCreateOutbound(config, out _, out _))
+                return PreConnectLatencyMode.RealDelaySingBox;
+
             // Xray JSON can be started as a SOCKS probe. Other full documents (sing-box JSON)
             // cannot, and must not fall back to pinging the server IP.
             return V2RayCoreSelector.RequiresXray(config)
@@ -53,6 +57,9 @@ internal static class PreConnectLatencyPlan
 
     private static bool IsSingBoxShareLink(string config)
     {
+        if (HysteriaShareLink.IsShareLink(config))
+            return true;
+
         return config.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("trojan://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("ss://", StringComparison.OrdinalIgnoreCase)

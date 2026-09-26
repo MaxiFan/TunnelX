@@ -68,6 +68,14 @@
 
 لینک یا کانفیگ <span dir="ltr">V2Ray/Xray</span> را در پروفایل وارد کنید. برنامه برای کانفیگ‌های معمول از <span dir="ltr">sing-box</span> استفاده می‌کند و برای کانفیگ‌هایی که به قابلیت‌های خاص <span dir="ltr">Xray</span> مثل <span dir="ltr">xhttp</span> نیاز دارند، <span dir="ltr">Xray-core</span> را انتخاب می‌کند.
 
+<span dir="ltr">Hysteria</span> با هسته <span dir="ltr">sing-box 1.12</span> همراه برنامه اجرا می‌شود (<span dir="ltr">Xray</span> خروجی <span dir="ltr">Hysteria</span> ندارد):
+
+- **هیستوریا ۲:** <span dir="ltr">`hysteria2://`</span> و <span dir="ltr">`hy2://`</span>. رمز در بخش userinfo یا پارامتر <span dir="ltr">`auth`</span> / <span dir="ltr">`password`</span>. پارامترهای اختیاری: <span dir="ltr">`sni`</span>، <span dir="ltr">`insecure`</span>، <span dir="ltr">`obfs=salamander`</span> با <span dir="ltr">`obfs-password`</span>، پرش پورت <span dir="ltr">`mport`</span>، و <span dir="ltr">`upmbps`</span> / <span dir="ltr">`downmbps`</span> فقط وقتی پهنای باند Brutal تنظیم شده باشد.
+- **هیستوریا ۱:** <span dir="ltr">`hysteria://`</span> فقط روی <span dir="ltr">UDP</span> (<span dir="ltr">`auth`</span>، <span dir="ltr">`peer`</span> یا <span dir="ltr">`sni`</span>، <span dir="ltr">`insecure`</span>، <span dir="ltr">`obfsParam`</span>، <span dir="ltr">`upmbps`</span> / <span dir="ltr">`downmbps`</span>). <span dir="ltr">`faketcp`</span> و <span dir="ltr">`wechat-video`</span> پشتیبانی نمی‌شوند. اگر پهنای باند نباشد، پیش‌فرض ۱۰۰/۱۰۰ مگابیت است.
+- **JSON سینگ‌باکس:** اگر کانفیگ از قبل <span dir="ltr">inbounds</span> داشته باشد همان‌طور استفاده می‌شود. outbound تنها، یا سندی که inbound ندارد و خروجی‌اش <span dir="ltr">`hysteria`</span> / <span dir="ltr">`hysteria2`</span> است، با <span dir="ltr">TUN</span> و ورودی mixed برنامه پیچیده می‌شود. نمونه: <span dir="ltr">`examples/singbox-hysteria2.example.json`</span>.
+
+<span dir="ltr">`pinSHA256`</span> در این نسخه <span dir="ltr">sing-box</span> اعمال نمی‌شود. پینگ اتصال از مسیر <span dir="ltr">sing-box</span> است و دکمه سرور به خاطر <span dir="ltr">QUIC/UDP</span> بودن پروتکل، <span dir="ltr">ICMP</span> می‌زند.
+
 ### لینک اشتراک
 
 در تب اتصال، **افزودن اشتراک** یک آدرس <span dir="ltr">http://</span> یا <span dir="ltr">https://</span> می‌گیرد که لیست کانفیگ برمی‌گرداند. برنامه همان را مستقیم از همان سرور دریافت می‌کند (آدرس روی دستگاه ذخیره می‌شود و ممکن است توکن دسترسی داشته باشد)، هر کانفیگ را به یک پروفایل تبدیل می‌کند و بعداً می‌توان همان لینک را به‌روز کرد. به‌روزرسانی، کانفیگ تازه را اضافه، کانفیگ موجود را عوض، و کانفیگی که از لیست حذف شده را برمی‌دارد. اگر دریافت خطا بدهد یا خالی باشد، پروفایل‌های قبلی آن اشتراک پاک نمی‌شوند.
@@ -81,7 +89,8 @@
 - <span dir="ltr">JSON</span> مربوط به <span dir="ltr">sing-box / V2Ray</span> که <span dir="ltr">outbounds</span> دارد
 - متن <span dir="ltr">OpenVPN</span> و <span dir="ltr">WireGuard</span> اگر داخل پاسخ باشد
 
-پشتیبانی نمی‌شود: <span dir="ltr">Clash YAML/JSON</span> (کلید <span dir="ltr">proxies</span>)، <span dir="ltr">SIP008</span>، و لینک‌هایی که واردکننده از قبل نمی‌شناسد (مثل <span dir="ltr">hy2://</span>). هدرهای اختیاری <span dir="ltr">profile-title</span> و <span dir="ltr">subscription-userinfo</span> نام اشتراک و خط مصرف را تنظیم می‌کنند.
+پشتیبانی نمی‌شود: <span dir="ltr">Clash YAML/JSON</span> (کلید <span dir="ltr">proxies</span>)، <span dir="ltr">SIP008</span>، و لینک‌هایی که واردکننده از قبل نمی‌شناسد. هدرهای اختیاری <span dir="ltr">profile-title</span> و <span dir="ltr">subscription-userinfo</span> نام اشتراک و خط مصرف را تنظیم می‌کنند.
+
 
 ### <span dir="ltr">SOCKS5/HTTP Proxy</span>
 

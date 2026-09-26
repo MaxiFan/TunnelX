@@ -13,6 +13,7 @@
 - Russian UI, with Auto, Persian, English, or Russian selectable in Settings.
 - Local proxy disconnect and reconnect are announced as `127.0.0.1:port is now disconnected` / `connected`. Active sessions on the built-in listener are reset so clients such as Telethon `run_until_disconnected()` wake up. See `docs/PROXY_LIFECYCLE.md`.
 - Upstream HTTP or SOCKS5 proxy for OpenVPN connections. Host, port, and optional username/password are saved on the profile and written into the OpenVPN config as `http-proxy` or `socks-proxy` when connecting.
+- Hysteria 1 (`hysteria://`) and Hysteria 2 (`hysteria2://` / `hy2://`) on the bundled sing-box path, including bare outbound JSON wrapping.
 
 ### فارسی
 
@@ -27,6 +28,7 @@
 - رابط کاربری روسی و انتخاب زبان در تنظیمات: خودکار، فارسی، انگلیسی یا روسی.
 - قطع و وصل پراکسی محلی (`127.0.0.1:port`) اعلام می‌شود و اتصال‌های فعال آن ریست می‌شوند تا کلاینت‌هایی مثل Telethon از `run_until_disconnected()` باخبر شوند. جزئیات در `docs/PROXY_LIFECYCLE.md`.
 - پراکسی بالادستی HTTP یا SOCKS5 برای اتصال OpenVPN؛ آدرس، پورت و نام کاربری/رمز اختیاری در پروفایل ذخیره می‌شود و هنگام اتصال در کانفیگ OpenVPN نوشته می‌شود.
+- پشتیبانی از Hysteria 1 (`hysteria://`) و Hysteria 2 (`hysteria2://` / `hy2://`) روی مسیر sing-box همراه برنامه، شامل wrapping برای JSON outbound خام.
 
 </div>
 

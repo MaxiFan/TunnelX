@@ -77,6 +77,9 @@
       <Link>wintun.dll</Link>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AppTunnel.Tests" />
+  </ItemGroup>
   <!-- Embedded Persian Font -->
   <ItemGroup>
     <Resource Include="Fonts\Vazirmatn-Regular.ttf" />

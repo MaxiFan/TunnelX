@@ -10,7 +10,7 @@ using AppTunnel.Models;
 namespace AppTunnel.Services;
 
 /// <summary>
-/// ITunnelProvider implementation for V2Ray/sing-box (vmess, vless, trojan, shadowsocks, raw JSON).
+/// ITunnelProvider implementation for V2Ray/sing-box (vmess, vless, trojan, shadowsocks, hysteria, raw JSON).
 /// Starts sing-box as a child process with a TUN inbound called "TunnelX-V2Ray".
 /// WinDivert in TrafficRouterService handles per-app routing into that interface.
 /// </summary>
@@ -118,7 +118,7 @@ public class V2RayTunnelProvider : ITunnelProvider
                     string serverHost = ExtractServerHost(config.V2RayConfig);
                     tunMtu = await TunnelPerformanceTuner.GetRecommendedTunMtuAsync(
                         serverHost,
-                        highOverheadTransport: false,
+                        highOverheadTransport: HysteriaShareLink.IsHysteria(config.V2RayConfig),
                         ct);
                     Logger.Info($"[MTU] Auto-tuned TUN MTU={tunMtu} (server={serverHost})");
                 }
@@ -134,7 +134,9 @@ public class V2RayTunnelProvider : ITunnelProvider
             {
                 mixedProxyPortReservation.Dispose();
                 Status.State   = ConnectionState.Error;
-                Status.Message = LocalizationService.Instance.Format("خطا در پارس کانفیگ: {0}", ex.Message);
+                Status.Message = LocalizationService.Instance.Format(
+                    "خطا در پارس کانفیگ: {0}",
+                    LocalizationService.Instance.T(ex.Message));
                 Logger.Error("V2Ray config parse error", ex);
                 return false;
             }
@@ -369,26 +371,36 @@ public class V2RayTunnelProvider : ITunnelProvider
     // Config builder
     // =========================================================================
 
-    private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort)
+    private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort) =>
+        BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: true, tunMtu, enableDnsOptimization);
+
+    internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true) =>
+        BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: false, DefaultTunMtu, enableDnsOptimization);
+
+    internal static string BuildSingBoxDocument(
+        string userConfig,
+        int mixedProxyPort,
+        bool includeTun,
+        int tunMtu,
+        bool enableDnsOptimization)
     {
         userConfig = userConfig.Trim();
-        if (userConfig.StartsWith("{"))
-            return userConfig;
+        if (userConfig.StartsWith('{'))
+        {
+            if (!HysteriaShareLink.TryCreateOutbound(userConfig, out var bareOutbound, out var bareTag))
+            {
+                if (!includeTun)
+                    throw new InvalidOperationException(LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"));
+                return userConfig;
+            }
+
+            ApplyServerPreResolve(bareOutbound, enableDnsOptimization);
+            return SerializeSingBoxDocument(bareOutbound, bareTag, mixedProxyPort, includeTun, tunMtu);
+        }
 
         var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
         ApplyServerPreResolve(outbound, enableDnsOptimization);
-        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: true, tunMtu);
-    }
-
-    internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true)
-    {
-        userConfig = userConfig.Trim();
-        if (userConfig.StartsWith("{"))
-            throw new InvalidOperationException(LocalizationService.Instance.T("تست Real Delay برای JSON کامل پشتیبانی نمی‌شود"));
-
-        var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
-        ApplyServerPreResolve(outbound, enableDnsOptimization);
-        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun: false, DefaultTunMtu);
+        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun, tunMtu);
     }
 
     internal async Task<long> ProbeMixedProxyLatencyAsync(
@@ -480,8 +492,11 @@ public class V2RayTunnelProvider : ITunnelProvider
         }
     }
 
-    private (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)
+    internal static (JsonObject outbound, string outboundTag) ParseShareLinkOutbound(string userConfig)
     {
+        if (HysteriaShareLink.IsShareLink(userConfig))
+            return HysteriaShareLink.Parse(userConfig);
+
         if (userConfig.StartsWith("vmess://"))
         {
             var parsed = ParseVmess(userConfig);
@@ -501,7 +516,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             return ParseHttp(userConfig);
 
         throw new InvalidOperationException(
-            "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد");
+            "کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// باشد");
     }
 
     private static void ApplyServerPreResolve(JsonObject outbound, bool enableDnsOptimization)

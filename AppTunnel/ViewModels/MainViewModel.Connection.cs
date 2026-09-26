@@ -903,7 +903,15 @@ public partial class MainViewModel
 
             var serverHost = _vpnService.Status.VpnServerHost;
             var serverPort = _vpnService.Status.VpnServerPort;
-            if (!string.IsNullOrWhiteSpace(serverHost) && serverPort > 0)
+            var hysteriaUdp = tunnelType == TunnelType.V2Ray &&
+                              HysteriaShareLink.IsHysteria(SelectedV2RayConfig);
+            if (hysteriaUdp)
+            {
+                Logger.Info("[CONN-VERIFY] Hysteria is QUIC/UDP; skipping direct TCP port check");
+                uiLines.Add(loc.T("هیستوریا روی UDP است؛ بررسی سلامت از مسیر تونل انجام می‌شود"));
+                await ReportVerifyActiveAsync(JoinVerifyLines(uiLines));
+            }
+            else if (!string.IsNullOrWhiteSpace(serverHost) && serverPort > 0)
             {
                 var (outcome, portError) = await TryQuickProxyServerPortCheckAsync(serverHost, serverPort, ct);
                 switch (outcome)
@@ -1768,6 +1776,13 @@ public partial class MainViewModel
             }
 
             var rawConfig = SelectedV2RayConfig.Trim();
+            if (HysteriaShareLink.IsHysteria(rawConfig))
+            {
+                var hyMs = await MeasureHysteriaServerPingAsync(rawConfig, CancellationToken.None);
+                SetServerPingResult("ICMP {0} ms", hyMs);
+                return;
+            }
+
             if (!TryExtractProxyEndpointDetails(rawConfig, out var endpoint, out var error))
             {
                 SetServerPingResult(error);
@@ -1892,7 +1907,15 @@ public partial class MainViewModel
                 return;
             }
 
-            if (!TryExtractProxyEndpointDetails(SelectedV2RayConfig.Trim(), out var endpoint, out var error))
+            var connectedConfig = SelectedV2RayConfig.Trim();
+            if (HysteriaShareLink.IsHysteria(connectedConfig))
+            {
+                var hyMs = await MeasureHysteriaServerPingAsync(connectedConfig, CancellationToken.None);
+                SetPingResult("ICMP {0} ms", hyMs);
+                return;
+            }
+
+            if (!TryExtractProxyEndpointDetails(connectedConfig, out var endpoint, out var error))
             {
                 SetPingResult(error);
                 return;
@@ -1919,6 +1942,16 @@ public partial class MainViewModel
 
     private readonly record struct ProxyEndpoint(string Server, int Port, bool UseTls, string? Sni);
     private readonly record struct OpenVpnRemoteEndpoint(string Host, int Port, string Protocol);
+
+    private static async Task<long> MeasureHysteriaServerPingAsync(string config, CancellationToken ct)
+    {
+        if (!V2RayEndpointHelper.TryExtract(config, out var host, out _) || string.IsNullOrWhiteSpace(host))
+            throw new InvalidOperationException(LocalizationService.Instance.T("سرور پیدا نشد"));
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(3));
+        return await MeasureIcmpLatencyAsync(host, cts.Token);
+    }
 
     private static async Task<long> MeasureIcmpLatencyAsync(string host, CancellationToken ct)
     {
@@ -2086,6 +2119,18 @@ public partial class MainViewModel
                 return ValidateEndpoint(endpoint.Server, endpoint.Port, out error);
             }
 
+            if (HysteriaShareLink.IsShareLink(config))
+            {
+                if (!V2RayEndpointHelper.TryExtract(config, out var hyServer, out var hyPort))
+                {
+                    error = "endpoint سرور از کانفیگ تشخیص داده نشد";
+                    return false;
+                }
+
+                endpoint = new ProxyEndpoint(hyServer, hyPort, true, null);
+                return ValidateEndpoint(hyServer, hyPort, out error);
+            }
+
             if (config.StartsWith("{"))
             {
                 var root = JsonNode.Parse(config)?.AsObject();
@@ -2112,6 +2157,13 @@ public partial class MainViewModel
                             return ValidateEndpoint(server, port, out error);
                         }
                     }
+                }
+
+                if (HysteriaShareLink.IsHysteriaType(root?["type"]?.GetValue<string>()) &&
+                    V2RayEndpointHelper.TryExtract(config, out var bareServer, out var barePort))
+                {
+                    endpoint = new ProxyEndpoint(bareServer, barePort, true, null);
+                    return ValidateEndpoint(bareServer, barePort, out error);
                 }
             }
 

@@ -34,7 +34,7 @@ public static class ConnectionFailureInsight
         ["پیش‌نیاز: sing-box.exe پیدا نشد. نسخه standalone TunnelX را دوباره نصب کنید یا لاگ [ENGINE] را برای پشتیبانی ارسال کنید."] = "پیش‌نیاز اتصال آماده نیست",
         ["پیش‌نیاز: wintun.dll برای ساخت آداپتر TunnelX-V2Ray لازم است. TunnelX را با Administrator اجرا کنید؛ VPN/آنتی‌ویروس دیگر را ببندید؛ در ncpa.cpl آداپتر TunnelX-V2Ray گیرکرده را حذف کنید؛ سپس دوباره اتصال بزنید."] = "پیش‌نیاز اتصال آماده نیست",
         ["پیش‌نیاز: این کانفیگ به Xray-core (xhttp) نیاز دارد ولی xray.exe در برنامه موجود نیست. از کانفیگ sing-box (بدون xhttp) استفاده کنید یا نسخه کامل TunnelX را نصب کنید."] = "پیش‌نیاز اتصال آماده نیست",
-        ["کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// باشد"] = "خطا در کانفیگ",
+        ["کانفیگ باید یک sing-box JSON ({…}) یا URI از نوع vmess:// / vless:// / trojan:// / ss:// / hysteria:// / hysteria2:// / hy2:// باشد"] = "خطا در کانفیگ",
     };
 
     public static string GetShortStatus(
