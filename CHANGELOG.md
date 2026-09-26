@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### English
+
+- Fixed per-app / split-route sessions marking Wi-Fi as "Connected, no internet" after a long run. Windows connectivity probes stay on the physical NIC, and route-table updates no longer run on the packet path that every outbound packet has to pass through.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- رفع مشکلی که در حالت per-app / اسپلیت، بعد از مدتی طولانی وای‌فای را «Connected - No Internet» نشان می‌داد. بررسی اتصال ویندوز روی کارت شبکه فیزیکی می‌ماند و تغییر جدول مسیر دیگر روی مسیر بسته‌ها انجام نمی‌شود.
+
+</div>
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

@@ -56,6 +56,7 @@ public partial class TrafficRouterService
             var lastRefresh = DateTime.MinValue;
             int rewriteLogCount = 0;
             int dnsRedirectLogCount = 0;
+            int packetErrorLogs = 0;
 
             while (!ct.IsCancellationRequested)
             {
@@ -66,6 +67,8 @@ public partial class TrafficRouterService
                     continue;
                 }
 
+                try
+                {
                 if (readLen < 20 || _vpnLocalIpBytes == null)
                 {
                     WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
@@ -79,9 +82,7 @@ public partial class TrafficRouterService
                 if (_addedRoutes.ContainsKey(dstNbo))
                 {
                     bool isIncluded = IsIncludedDestination(dstNbo);
-                    bool shouldRoute = _fullRouteEnabled || isIncluded;
                     string? packetProc = null;
-                    bool isBlockedProc = false;
 
                     if (TryParseConnectionTuple(buffer, readLen, out var probeTuple))
                     {
@@ -94,40 +95,37 @@ public partial class TrafficRouterService
                         var packetPid = connCache.GetOwningPid(probeTuple);
                         packetProc = packetPid > 0 ? ResolveTargetOwner(packetPid) : null;
                         packetProc ??= connCache.GetProcessName(probeTuple);
-                        if (packetProc == null)
-                        {
-                            connCache.Refresh();
-                            lastRefresh = DateTime.UtcNow;
-                            packetPid = connCache.GetOwningPid(probeTuple);
-                            packetProc = packetPid > 0 ? ResolveTargetOwner(packetPid) : null;
-                            packetProc ??= connCache.GetProcessName(probeTuple);
-                        }
-
-                        isBlockedProc = !_fullRouteEnabled && IsExecutableBlocked(packetProc);
-                        if (!shouldRoute && !isBlockedProc &&
-                            !string.IsNullOrWhiteSpace(packetProc) &&
-                            IsExecutableTargeted(packetProc))
-                        {
-                            shouldRoute = true;
-                            _ipToProcess[dstNbo] = packetProc;
-                        }
                     }
 
-                    // If this destination is no longer valid for current policy,
-                    // remove stale state and pass through unchanged.
-                    if (IsExcludedDestination(dstNbo) || !shouldRoute || isBlockedProc)
+                    _ipRefCount.TryGetValue(dstNbo, out var ipRefs);
+                    var decision = SplitRouteFastPath.Decide(
+                        fullRoute: _fullRouteEnabled,
+                        probeIp: WindowsConnectivityGuard.IsProbeIpv4(dstNbo),
+                        excluded: IsExcludedDestination(dstNbo),
+                        included: isIncluded,
+                        blockedProc: !_fullRouteEnabled && IsExecutableBlocked(packetProc),
+                        processIsTarget: !string.IsNullOrWhiteSpace(packetProc) && IsExecutableTargeted(packetProc),
+                        ipRefCount: ipRefs);
+
+                    // Non-tunnel packets are reinjected on the physical NIC.
+                    // Route deletion is never done here: route.exe takes the
+                    // Windows routing lock and, after a long per-app session,
+                    // that stall drops NCSI/DHCP/DNS until Wi-Fi shows
+                    // "Connected, no internet".
+                    if (!decision.SendViaVpn)
                     {
-                        _ipToProcess.TryRemove(dstNbo, out _);
-                        _ipRefCount.TryRemove(dstNbo, out _);
-                        _loggedMatchIps.TryRemove(dstNbo, out _);
-                        _loggedExcludedIps.TryRemove(dstNbo, out _);
-                        if (_pendingRouteRemoval.TryRemove(dstNbo, out var pending))
-                        {
-                            try { pending.Cancel(); } catch { }
-                        }
-                        TryRemoveHostRoute(dstNbo);
+                        if (decision.RemoveRouteNow)
+                            ScheduleImmediateHostRouteRemoval(dstNbo);
+                        else if (decision.ScheduleDelayedRemovalIfIdle)
+                            ScheduleDelayedRouteRemovalIfIdle(dstNbo);
+
                         WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
                         continue;
+                    }
+
+                    if (_pendingRouteRemoval.TryRemove(dstNbo, out var pendingKeep))
+                    {
+                        try { pendingKeep.Cancel(); } catch { }
                     }
 
                     if (packetProc != null)
@@ -196,7 +194,10 @@ public partial class TrafficRouterService
                     // response (it came from the "expected" address).
                     bool wireGuardDnsCandidate = _vpnServerIsUdpOnly && tuple2.RemotePort == 53;
                     bool classicDnsCandidate = tuple2.RemotePort == 53 && (isPrivate || IsExcludedDestination(dstNbo));
-                    if (EnableDnsRedirect && (wireGuardDnsCandidate || classicDnsCandidate))
+                    bool connectivityProbeQuery = IsSplitModeConnectivityProbeQuery(buffer, readLen);
+                    bool connectivityProbeIp = !_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(dstNbo);
+                    if (!connectivityProbeQuery && !connectivityProbeIp &&
+                        EnableDnsRedirect && (wireGuardDnsCandidate || classicDnsCandidate))
                     {
                         if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
                         {
@@ -204,12 +205,6 @@ public partial class TrafficRouterService
                             lastRefresh = DateTime.UtcNow;
                         }
                         var dnsProc = ResolveDnsProcessOwner(connCache, tuple2);
-                        if (string.IsNullOrWhiteSpace(dnsProc))
-                        {
-                            connCache.Refresh();
-                            lastRefresh = DateTime.UtcNow;
-                            dnsProc = ResolveDnsProcessOwner(connCache, tuple2);
-                        }
 
                         if (!string.IsNullOrWhiteSpace(dnsProc) && IsExecutableTargeted(dnsProc))
                         {
@@ -233,7 +228,7 @@ public partial class TrafficRouterService
                             var dnsRouteIp = _dnsRedirectIp;
                             Buffer.BlockCopy(_vpnLocalIpBytes!, 0, buffer, 12, 4);
                             addr.IfIdx = (uint)_vpnInterfaceIndex;
-                            EnsureHostRouteViaVpn(publicDnsNbo, dnsRouteIp);
+                            QueueHostRouteViaVpn(publicDnsNbo, dnsRouteIp);
                             _ipToProcess[publicDnsNbo] = dnsProc;
 
                             addr.SubIfIdx = 0;
@@ -262,7 +257,7 @@ public partial class TrafficRouterService
                         }
                     }
 
-                    if (!isPrivate && !IsExcludedDestination(dstNbo))
+                    if (!connectivityProbeIp && !isPrivate && !IsExcludedDestination(dstNbo))
                     {
                         // Check if destination is explicitly included (forced through VPN)
                         bool isIncluded = IsIncludedDestination(dstNbo);
@@ -280,15 +275,6 @@ public partial class TrafficRouterService
                             var pid = connCache.GetOwningPid(tuple2);
                             procName = pid > 0 ? ResolveTargetOwner(pid) : null;
                             procName ??= connCache.GetProcessName(tuple2);
-                            // Force refresh if not found — socket might be brand new
-                            if (procName == null)
-                            {
-                                connCache.Refresh();
-                                lastRefresh = DateTime.UtcNow;
-                                pid = connCache.GetOwningPid(tuple2);
-                                procName = pid > 0 ? ResolveTargetOwner(pid) : null;
-                                procName ??= connCache.GetProcessName(tuple2);
-                            }
 
                             // Check if source app is in target tunnel apps
                             if (!string.IsNullOrWhiteSpace(procName) && IsExecutableTargeted(procName))
@@ -369,12 +355,28 @@ public partial class TrafficRouterService
 
                 Interlocked.Increment(ref _statNetOutPassthrough);
                 WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // One bad packet must not kill the loop. The handle stays
+                    // open and would blackhole every outbound TCP/UDP packet,
+                    // which Windows reports as Wi-Fi with no internet.
+                    if (packetErrorLogs < 5)
+                    {
+                        packetErrorLogs++;
+                        Logger.Warning($"[NET-OUT] Packet handling error; capture loop kept alive: {ex.Message}");
+                    }
+                }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             if (_isRunning) Logger.Error($"[NET-OUT] Error: {ex.Message}");
+        }
+        finally
+        {
+            FailOpenCaptureHandle(ref _networkOutHandle, "NET-OUT");
         }
     }
 
@@ -411,6 +413,7 @@ public partial class TrafficRouterService
             var buffer = new byte[65535];
             var addr = new WinDivertAddress();
             int natLogCount = 0;
+            int packetErrorLogs = 0;
 
             while (!ct.IsCancellationRequested)
             {
@@ -421,6 +424,8 @@ public partial class TrafficRouterService
                     continue;
                 }
 
+                try
+                {
                 if (readLen >= 20)
                     ApplyDnsRuleFromInboundPacket(buffer, readLen);
 
@@ -459,12 +464,29 @@ public partial class TrafficRouterService
                 }
 
                 WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // This handle also diverts every inbound DNS response.
+                    // If the loop dies, Windows loses DNS and marks Wi-Fi
+                    // "Connected, no internet" until the VPN is disconnected.
+                    if (packetErrorLogs < 5)
+                    {
+                        packetErrorLogs++;
+                        Logger.Warning($"[NET-IN] Packet handling error; capture loop kept alive: {ex.Message}");
+                    }
+                    try { WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr); } catch { }
+                }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             if (_isRunning) Logger.Warning($"[NET-IN] Error: {ex.Message}");
+        }
+        finally
+        {
+            FailOpenCaptureHandle(ref _networkInHandle, "NET-IN");
         }
     }
 
@@ -687,7 +709,7 @@ public partial class TrafficRouterService
                     // still applies to normal traffic; target-app DNS is redirected below.
                     bool isTargetDns = IsExecutableTargeted(dnsProc) ||
                                          (!string.IsNullOrWhiteSpace(targetOwner) && IsExecutableTargeted(targetOwner));
-                    if (!isTargetDns)
+                    if (!isTargetDns || IsSplitModeConnectivityProbeQuery(buffer, readLen))
                     {
                         WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
                         continue;
@@ -717,13 +739,12 @@ public partial class TrafficRouterService
                         Buffer.BlockCopy(vpnLocalIpBytes, 0, buffer, 12, 4);
                         addr.IfIdx = (uint)_vpnInterfaceIndex;
                         addr.SubIfIdx = 0;
-                        EnsureHostRouteViaVpn(_dnsRedirectIpNbo, _dnsRedirectIp);
+                        QueueHostRouteViaVpn(_dnsRedirectIpNbo, _dnsRedirectIp);
                         if (!string.IsNullOrWhiteSpace(dnsProc))
                             _ipToProcess[_dnsRedirectIpNbo] = dnsProc;
 
                         ApplyGameModePacketTuning(buffer, readLen);
                         WinDivertNative.WinDivertHelperCalcChecksums(buffer, readLen, ref addr, 0);
-
                         _natTable[(tuple.Protocol, tuple.LocalPort, _dnsRedirectIpNbo)] = new NatEntry
                         {
                             OriginalSrcIp = wgDnsOrigSrc,
@@ -775,7 +796,7 @@ public partial class TrafficRouterService
                         if (!string.IsNullOrWhiteSpace(routeOwner))
                             _ipToProcess[dstNbo] = routeOwner;
                         if (!_addedRoutes.ContainsKey(dstNbo))
-                            EnsureHostRouteViaVpn(dstNbo, tuple.RemoteIp);
+                            QueueHostRouteViaVpn(dstNbo, tuple.RemoteIp);
                     }
 
                     WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
