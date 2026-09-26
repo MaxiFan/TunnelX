@@ -2258,20 +2258,10 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// Measures the true end-to-end TCP round-trip through the SOCKS5 proxy.
-    ///
-    /// IMPORTANT: We CANNOT just time the SOCKS5 CONNECT reply — sing-box (and
-    /// many modern SOCKS5 implementations) deliberately send the CONNECT success
-    /// reply IMMEDIATELY, before dialing the upstream, as a latency optimization.
-    /// On loopback this returns in 1-2 ms regardless of the real path.
-    ///
-    /// Instead we do CONNECT (untimed), then send a probe and time how long
-    /// until the FIRST response byte from the upstream server arrives. That gives
-    /// us exactly one round-trip through the entire proxy chain to the remote
-    /// host. For port 443 we send a minimal TLS ClientHello (server replies with
-    /// ServerHello after 1 RTT). For other ports we send an HTTP GET (server
-    /// replies with response data or RST after 1 RTT). Either way, time-to-first-
-    /// byte is the real RTT.
+    /// Measures delay through the SOCKS5 proxy. Success requires a real upstream
+    /// response (TLS plus HTTP on port 443). A closed or reset connection is a
+    /// failure, not a latency value — sing-box can answer CONNECT before the
+    /// outbound dial finishes.
     /// </summary>
     private static Task<long> PingViaSocks5Async(
         string host, int port, int socks5Port, CancellationToken ct, int probeTimeoutMs = 5000)
