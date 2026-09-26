@@ -83,6 +83,10 @@ public static class LocalizationLayoutHelper
         if (HasBinding(tb, TextBlock.TextAlignmentProperty))
             return;
 
+        // Honor explicit XAML/local alignment (e.g. Center on ad placeholder).
+        if (tb.ReadLocalValue(TextBlock.TextAlignmentProperty) != DependencyProperty.UnsetValue)
+            return;
+
         if (TextBlockFlags.GetUseEmojiFont(tb))
             return;
 

@@ -37,7 +37,8 @@ public partial class ConnectionTabView : System.Windows.Controls.UserControl
         ProfileQuickActionsButtons.FlowDirection = flow;
         ProfileQuickActionsButtons.HorizontalAlignment = start;
         ProfileBulkActionsBar.FlowDirection = flow;
-        ProfileBulkActionsBar.HorizontalAlignment = start;
+        if (ProfilesList != null)
+            ProfilesList.FlowDirection = flow;
 
         foreach (var textBlock in ProfileQuickActionsHeader.Children.OfType<TextBlock>())
         {

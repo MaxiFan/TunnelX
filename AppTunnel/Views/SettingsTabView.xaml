@@ -6,87 +6,86 @@
                   CanContentScroll="False"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
-        <StackPanel HorizontalAlignment="Stretch" Margin="16,8,16,4">
+        <Grid Margin="16,8,16,8"
+              FlowDirection="{Binding AppFlowDirection}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-            <!-- Language -->
-            <Border Style="{StaticResource CardPanel}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 زبان"
+            <!-- ═══ Column 1: Language · Local proxy · Notifications ═══ -->
+            <StackPanel Grid.Column="0" HorizontalAlignment="Stretch">
+
+                <!-- Language -->
+                <Border Style="{StaticResource CardPanel}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="🌐 زبان"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="زبان رابط کاربری"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="در حالت خودکار TunnelX زبان ویندوز را دنبال می‌کند. می‌توانید فارسی، انگلیسی یا روسی را دستی انتخاب کنید."
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2"
+                                  Style="{StaticResource DarkComboBox}"
+                                  SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
+                                  SelectedValuePath="Tag"
+                                  VerticalAlignment="Center"
+                                  MinWidth="140"
+                                  FontSize="12"
+                                  Padding="8,6">
+                            <ComboBoxItem Content="خودکار" Tag="auto"/>
+                            <ComboBoxItem Content="فارسی" Tag="fa-IR"/>
+                            <ComboBoxItem Content="English" Tag="en-US"/>
+                            <ComboBoxItem Content="Русский" Tag="ru-RU"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Local Proxy Settings -->
+                <Border Style="{StaticResource CardPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="🧦 پروکسی محلی"
                                    Margin="0,0,0,4"/>
-                        <TextBlock Text="زبان رابط کاربری"
+                        <TextBlock Text="پورت پروکسی محلی (SOCKS5/HTTP)"
                                    FontSize="11"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <TextBlock Text="در حالت خودکار TunnelX زبان ویندوز را دنبال می‌کند. می‌توانید فارسی، انگلیسی یا روسی را دستی انتخاب کنید."
-                                   FontSize="10"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <ComboBox Grid.Column="2"
-                              Style="{StaticResource DarkComboBox}"
-                              SelectedValue="{Binding UiLanguageSetting, Mode=TwoWay}"
-                              SelectedValuePath="Tag"
-                              VerticalAlignment="Center"
-                              MinWidth="160"
-                              FontSize="12"
-                              Padding="8,6">
-                        <ComboBoxItem Content="خودکار" Tag="auto"/>
-                        <ComboBoxItem Content="فارسی" Tag="fa-IR"/>
-                        <ComboBoxItem Content="English" Tag="en-US"/>
-                        <ComboBoxItem Content="Русский" Tag="ru-RU"/>
-                    </ComboBox>
-                </Grid>
-            </Border>
-
-            <!-- Local Proxy Settings -->
-            <Border Style="{StaticResource CardPanel}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="🧦 پروکسی محلی"
-                               Margin="0,0,0,4"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="10"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
-                                   Text="پورت پروکسی محلی (SOCKS5/HTTP)"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="2"
-                                 Style="{StaticResource ModernTextBox}"
-                                 Text="{Binding MixedProxyPortText, UpdateSourceTrigger=PropertyChanged}"
-                                 FlowDirection="LeftToRight"
-                                 FontSize="12"
-                                 Padding="8,5"
-                                 MinWidth="90"
-                                 Width="110"
-                                 ToolTip="پورت داخلی 127.0.0.1 برای پروکسی SOCKS5 و HTTP"/>
-                        <TextBlock Grid.Column="4"
-                                   Text="{Binding MixedProxyPortStatusText}"
-                                   FontSize="10"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap"
-                                   VerticalAlignment="Center"/>
-                    </Grid>
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding MixedProxyPortText, UpdateSourceTrigger=PropertyChanged}"
+                                     FlowDirection="LeftToRight"
+                                     FontSize="12"
+                                     Padding="8,5"
+                                     MinWidth="90"
+                                     Width="110"
+                                     ToolTip="پورت داخلی 127.0.0.1 برای پروکسی SOCKS5 و HTTP"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding MixedProxyPortStatusText}"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <StackPanel Margin="0,8,0,0">
                             <TextBlock Text="نام کاربری پیش‌فرض پروکسی محلی"
                                        FontSize="11"
                                        FontWeight="SemiBold"
@@ -98,12 +97,11 @@
                                      Padding="8,5"
                                      Margin="0,4,0,0"
                                      ToolTip="نام کاربری اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
                             <TextBlock Text="رمز عبور پیش‌فرض پروکسی محلی"
                                        FontSize="11"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Margin="0,8,0,0"/>
                             <PasswordBox x:Name="LocalProxyPasswordField"
                                          Style="{StaticResource ModernPasswordBox}"
                                          FlowDirection="LeftToRight"
@@ -112,217 +110,221 @@
                                          Margin="0,4,0,0"
                                          ToolTip="رمز عبور اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"/>
                         </StackPanel>
-                    </Grid>
-                    <TextBlock Text="اگر نام کاربری خالی باشد، پروکسی محلی بدون احراز هویت کار می‌کند. وقتی روی پروفایل نام کاربری جداگانه‌ای تنظیم نشده باشد، همین پیش‌فرض‌ها هنگام گوش‌دادن اعمال می‌شوند."
-                               FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,6,0,0"/>
-                    <TextBlock Text="پورت‌های زیر 1024 و چند پورت رایج مثل 2080، 3000، 3389، 8080 و 9090 مجاز نیستند تا با سرویس‌های سیستم یا ابزارهای توسعه تداخل نداشته باشند."
-                               FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,6,0,0"/>
+                        <TextBlock Text="اگر نام کاربری خالی باشد، پروکسی محلی بدون احراز هویت کار می‌کند. وقتی روی پروفایل نام کاربری جداگانه‌ای تنظیم نشده باشد، همین پیش‌فرض‌ها هنگام گوش‌دادن اعمال می‌شوند."
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
+                        <TextBlock Text="پورت‌های زیر 1024 و چند پورت رایج مثل 2080، 3000، 3389، 8080 و 9090 مجاز نیستند تا با سرویس‌های سیستم یا ابزارهای توسعه تداخل نداشته باشند."
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
 
-                </StackPanel>
-            </Border>
+            </StackPanel>
 
-            <!-- Connection health check -->
-            <Border Style="{StaticResource CardPanel}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}"
-                               Text="{Binding HealthCheckSectionTitleText}"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="{Binding HealthCheckEndpointsLabelText}"
-                               FontSize="11"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}"/>
-                    <TextBlock Text="{Binding HealthCheckEndpointsHintText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,2,0,6"/>
-                    <TextBox Style="{StaticResource ModernTextBox}"
-                             Text="{Binding HealthCheckEndpointsText, UpdateSourceTrigger=PropertyChanged}"
-                             Tag="{Binding HealthCheckEndpointsPlaceholderText}"
-                             AcceptsReturn="True"
-                             MinHeight="72"
-                             MaxHeight="140"
-                             FontFamily="Consolas"
-                             FontSize="12"
-                             FlowDirection="LeftToRight"
-                             VerticalScrollBarVisibility="Auto"
-                             TextWrapping="Wrap"
-                             VerticalContentAlignment="Top"/>
-                    <TextBlock Text="{Binding HealthCheckEndpointsStatusText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,6,0,0"/>
+            <!-- ═══ Column 2: Health check · Performance · Startup · Notifications ═══ -->
+            <StackPanel Grid.Column="2" HorizontalAlignment="Stretch">
 
-                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+                <!-- Connection health check -->
+                <Border Style="{StaticResource CardPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                   Text="{Binding HealthCheckSectionTitleText}"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock Text="{Binding HealthCheckEndpointsLabelText}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="{Binding HealthCheckEndpointsHintText}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,6"/>
+                        <TextBox Style="{StaticResource ModernTextBox}"
+                                 Text="{Binding HealthCheckEndpointsText, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="{Binding HealthCheckEndpointsPlaceholderText}"
+                                 AcceptsReturn="True"
+                                 MinHeight="72"
+                                 MaxHeight="140"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 FlowDirection="LeftToRight"
+                                 VerticalScrollBarVisibility="Auto"
+                                 TextWrapping="Wrap"
+                                 VerticalContentAlignment="Top"/>
+                        <TextBlock Text="{Binding HealthCheckEndpointsStatusText}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsTitleText}"
-                                       FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsDescriptionText}"
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding IncludeDefaultHealthCheckEndpoints, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                        <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
 
-            <!-- Performance Tuning -->
-            <Border Style="{StaticResource CardPanel}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="🚀 بهینه‌سازی تونل"
-                               Margin="0,0,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsTitleText}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding IncludeDefaultHealthCheckEndpointsDescriptionText}"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding IncludeDefaultHealthCheckEndpoints, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <Grid Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="MTU خودکار" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="در زمان اتصال، MTU مناسب بر اساس شبکه فعلی انتخاب می‌شود."
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding AutoTuneMtu, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
+                <!-- Performance Tuning -->
+                <Border Style="{StaticResource CardPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="🚀 بهینه‌سازی تونل"
+                                   Margin="0,0,0,4"/>
 
-                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="MTU خودکار" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="در زمان اتصال، MTU مناسب بر اساس شبکه فعلی انتخاب می‌شود."
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AutoTuneMtu, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="DNS Optimization + Cache" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="برای Resolveها از cache کوتاه‌مدت استفاده می‌شود و DNS redirect مسیر پایدارتر می‌گیرد."
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding IsDnsOptimizationEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
+                        <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
 
-                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="DNS Optimization + Cache" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="برای Resolveها از cache کوتاه‌مدت استفاده می‌شود و DNS redirect مسیر پایدارتر می‌گیرد."
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding IsDnsOptimizationEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Game Mode" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="{Binding GameModeStatusText}" FontSize="10"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding IsGameModeEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                        <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
 
-            <!-- Notifications -->
-            <Border Style="{StaticResource CardPanel}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}"
-                               Text="{Binding InformationalNotificationsSectionTitleText}"
-                               Margin="0,0,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Game Mode" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding GameModeStatusText}" FontSize="10"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding IsGameModeEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <Grid Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="{Binding InformationalNotificationsTitleText}"
-                                       FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="{Binding InformationalNotificationsDescriptionText}"
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding EnableInformationalNotifications, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                <!-- Startup & Auto-Connect -->
+                <Border Style="{StaticResource CardPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="🖥️ اجرای خودکار و اتصال خودکار"
+                                   Margin="0,0,0,4"/>
 
-            <!-- Startup & Auto-Connect -->
-            <Border Style="{StaticResource CardPanel}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="🖥️ اجرای خودکار و اتصال خودکار"
-                               Margin="0,0,0,4"/>
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="اجرای TunnelX همراه با ویندوز" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="در ورود به ویندوز، TunnelX از مسیر فعلی فایل اجرا می‌شود. اگر فایل را جابه‌جا کردید، گزینه را خاموش و روشن کنید."
+                                           FontSize="10" Foreground="{StaticResource WarningBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <Grid Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="اجرای TunnelX همراه با ویندوز" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="در ورود به ویندوز، TunnelX از مسیر فعلی فایل اجرا می‌شود. اگر فایل را جابه‌جا کردید، گزینه را خاموش و روشن کنید."
-                                       FontSize="10" Foreground="{StaticResource WarningBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
+                        <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
 
-                    <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="اتصال خودکار هنگام اجرای TunnelX" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="پس از باز شدن برنامه، به آخرین پروفایلی که با موفقیت وصل شده بود متصل می‌شود."
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AutoConnectOnStartup, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="اتصال خودکار هنگام اجرای TunnelX" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="پس از باز شدن برنامه، به آخرین پروفایلی که با موفقیت وصل شده بود متصل می‌شود."
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding AutoConnectOnStartup, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                <!-- Notifications -->
+                <Border Style="{StaticResource CardPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}"
+                                   Text="{Binding InformationalNotificationsSectionTitleText}"
+                                   Margin="0,0,0,4"/>
 
-        </StackPanel>
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding InformationalNotificationsTitleText}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding InformationalNotificationsDescriptionText}"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding EnableInformationalNotifications, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </Grid>
     </ScrollViewer>
 </UserControl>

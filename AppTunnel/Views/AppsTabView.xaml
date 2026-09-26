@@ -53,9 +53,9 @@
             <Setter Property="BorderBrush" Value="#10FFFFFF"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Padding" Value="10,8"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinHeight" Value="48"/>
             <Setter Property="FlowDirection" Value="LeftToRight"/>
         </Style>
 
@@ -83,7 +83,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="12,8,12,4">
+    <Grid Margin="16,8,16,8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="12"/>
@@ -154,59 +154,65 @@
                                         <Image Source="{Binding Icon}" Style="{StaticResource AppIconImage}"/>
                                     </Border>
 
-                                    <!-- App Name & Exe -->
-                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding DisplayName}"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="10.8"
-                                                   FontWeight="Normal"
-                                                   TextOptions.TextFormattingMode="Display"
-                                                   TextOptions.TextRenderingMode="ClearType"
-                                                   TextOptions.TextHintingMode="Fixed"
-                                                   TextWrapping="Wrap"
-                                                   FlowDirection="LeftToRight"
-                                                   TextAlignment="Left"/>
-                                        <TextBlock Text="{Binding ExecutableName}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   FontSize="8.5"
-                                                   Margin="0,2,0,0"
-                                                   FlowDirection="LeftToRight"
-                                                   TextAlignment="Left"/>
-                                    </StackPanel>
-
-                                    <!-- Compact actions -->
-                                    <StackPanel Grid.Column="4"
-                                          VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          FlowDirection="LeftToRight">
-                                        <StackPanel Orientation="Horizontal"
-                                                    HorizontalAlignment="Right">
-                                            <CheckBox Style="{StaticResource CompactToggleSwitch}"
-                                                      IsChecked="{Binding IsEnabled, Mode=OneWay}"
-                                                      Command="{Binding DataContext.ToggleAppCommand,
-                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      CommandParameter="{Binding}"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,0,4,0"/>
-
-                                            <Button Style="{StaticResource CompactIconButton}"
-                                                    Content="×"
-                                                    ToolTip="حذف"
-                                                    Foreground="#FF8A80"
-                                                    Command="{Binding DataContext.RemoveAppCommand,
-                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"/>
+                                    <!-- App Name & Exe (single visual row with traffic/actions) -->
+                                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="6"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="12"
+                                                       FontWeight="Normal"
+                                                       TextOptions.TextFormattingMode="Display"
+                                                       TextOptions.TextRenderingMode="ClearType"
+                                                       TextOptions.TextHintingMode="Fixed"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       FlowDirection="LeftToRight"
+                                                       TextAlignment="Left"/>
+                                            <TextBlock Text="{Binding ExecutableName}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="9.5"
+                                                       Margin="0,1,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       FlowDirection="LeftToRight"
+                                                       TextAlignment="Left"/>
                                         </StackPanel>
-                                        <Border Background="#15121212"
+                                        <Border Grid.Column="2"
+                                                Background="#15121212"
                                                 CornerRadius="6"
-                                                Padding="4,1"
-                                                Margin="0,4,0,0"
-                                                HorizontalAlignment="Right">
+                                                Padding="5,2"
+                                                VerticalAlignment="Center">
                                             <TextBlock Text="{Binding TrafficDisplay}"
                                                        Foreground="{StaticResource AccentBrush}"
                                                        FontSize="8.5"
                                                        FlowDirection="LeftToRight"/>
                                         </Border>
+                                    </Grid>
+
+                                    <!-- Compact actions -->
+                                    <StackPanel Grid.Column="4"
+                                          Orientation="Horizontal"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Right"
+                                          FlowDirection="LeftToRight">
+                                        <CheckBox Style="{StaticResource CompactToggleSwitch}"
+                                                  IsChecked="{Binding IsEnabled, Mode=OneWay}"
+                                                  Command="{Binding DataContext.ToggleAppCommand,
+                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  CommandParameter="{Binding}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,4,0"/>
+
+                                        <Button Style="{StaticResource CompactIconButton}"
+                                                Content="×"
+                                                ToolTip="حذف"
+                                                Foreground="#FF8A80"
+                                                Command="{Binding DataContext.RemoveAppCommand,
+                                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -296,18 +302,19 @@
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding DisplayName}"
                                                    Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="10.8"
+                                                   FontSize="12"
                                                    FontWeight="Normal"
                                                    TextOptions.TextFormattingMode="Display"
                                                    TextOptions.TextRenderingMode="ClearType"
                                                    TextOptions.TextHintingMode="Fixed"
-                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
                                                    FlowDirection="LeftToRight"
                                                    TextAlignment="Left"/>
                                         <TextBlock Text="{Binding ExecutableName}"
                                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                                   FontSize="8.5"
-                                                   Margin="0,2,0,0"
+                                                   FontSize="9.5"
+                                                   Margin="0,1,0,0"
+                                                   TextTrimming="CharacterEllipsis"
                                                    FlowDirection="LeftToRight"
                                                    TextAlignment="Left"/>
                                     </StackPanel>

@@ -89,8 +89,8 @@
                   CanContentScroll="False"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="0,12,0,10">
-        <StackPanel Margin="14,0">
+                  Padding="0,8,0,8">
+        <StackPanel Margin="16,0">
 
             <!-- Header -->
             <Border Style="{StaticResource HelpCard}">
