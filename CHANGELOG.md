@@ -19,6 +19,8 @@
 - Settings can store default local SOCKS/HTTP proxy username and password (DPAPI-encrypted). The built-in listener uses them when a profile has no MixedProxy credentials; empty username keeps no-auth.
 - In-app Help covers WireGuard, subscription import, pre-connect latency, and local proxy auth defaults; connection troubleshooting mentions WireGuard install; ping tooltips include Hysteria. FA/EN/RU help strings completed for those guides.
 
+- Wider window layouts on large screens, clearer RTL packing for settings rows, and smoother mouse-wheel scrolling (GentleWheelScroll).
+
 ### فارسی
 
 <div dir="rtl" align="right">
@@ -38,7 +40,28 @@
 - در تنظیمات می‌توان نام کاربری و رمز پیش‌فرض پروکسی محلی SOCKS/HTTP را ذخیره کرد (رمز با DPAPI). اگر پروفایل اعتبارنامه جدا نداشته باشد، هنگام گوش‌دادن همین پیش‌فرض‌ها اعمال می‌شوند؛ نام کاربری خالی یعنی بدون احراز هویت.
 - راهنمای داخل برنامه برای WireGuard، اشتراک، تست تأخیر قبل از اتصال و احراز هویت پروکسی محلی تکمیل شد؛ عیب‌یابی اتصال به نصب WireGuard اشاره می‌کند و tooltipهای پینگ Hysteria را هم پوشش می‌دهند. متن‌های راهنما برای FA/EN/RU پر شد.
 
+- پنجره‌های عریض‌تر روی نمایشگرهای بزرگ، چیدمان راست‌به‌چپ مرتب‌تر برای ردیف‌های تنظیمات، و اسکرول نرم‌تر با چرخ ماوس (GentleWheelScroll).
+
 </div>
+
+### Русский
+
+- Исправлены сбои SOCKS5/HTTP при разборе конфига sing-box (`outbounds[0].users: unknown field "users"`). Учётные данные прокси пишутся как `username` и `password` outbound.
+- Исправлено ложное «Connected, no internet» для Wi‑Fi при длительных сессиях per-app / split-route. Проверки связности Windows остаются на физическом NIC; обновления таблицы маршрутов больше не выполняются на пути каждого пакета.
+- Предварительный ping для V2Ray/Xray больше не считается успешным только из‑за открытого TCP-порта. Как «test real delay» в v2rayN, задержка показывается только если запрос через конфиг доходит до цели. Обрыв соединения — это ошибка, а не успешный ping.
+- Удаление нескольких конфигов сразу: мультивыбор, «Выбрать все» и одно подтверждение с числом удаляемых.
+- Пользовательские цели проверки здоровья соединения в настройках (URL, хост или IP). Без настроек по-прежнему используются `google.com` и `cloudflare.com`. Публичные цели по умолчанию можно отключить.
+- Subscription (sub) ссылки: добавить http/https URL, импортировать конфиги как профили и обновлять позже.
+- Русский интерфейс; в настройках можно выбрать Auto, персидский, английский или русский.
+- Отключение и повторное подключение локального прокси объявляются как `127.0.0.1:port is now disconnected` / `connected`. Активные сессии на встроенном listener сбрасываются, чтобы клиенты вроде Telethon `run_until_disconnected()` просыпались. См. `docs/PROXY_LIFECYCLE.md`.
+- Upstream HTTP или SOCKS5 прокси для OpenVPN. Хост, порт и опциональные логин/пароль сохраняются в профиле и записываются в конфиг OpenVPN как `http-proxy` или `socks-proxy` при подключении.
+- Hysteria 1 (`hysteria://`) и Hysteria 2 (`hysteria2://` / `hy2://`) на встроенном пути sing-box, включая обёртку сырого outbound JSON.
+- Поиск локализации не падает на отсутствующих или пустых ключах: запасной путь English → Persian → имя ключа. Дозаполнены оставшиеся EN/RU строки RC UI.
+- Язык выбирается из выпадающего списка (Настройки и футер): Auto, персидский, английский или русский — без многократного нажатия кнопки цикла.
+- В настройках можно сохранить логин/пароль локального SOCKS/HTTP прокси по умолчанию (шифрование DPAPI). Встроенный listener использует их, если у профиля нет MixedProxy credentials; пустой логин означает без аутентификации.
+- Встроенная справка охватывает WireGuard, импорт подписки, latency перед подключением и defaults auth локального прокси; troubleshooting упоминает установку WireGuard; подсказки ping включают Hysteria. Строки FA/EN/RU для этих разделов заполнены.
+- UX: более широкие окна на больших экранах, аккуратнее RTL-ряды настроек, мягкая прокрутка колёсиком (GentleWheelScroll).
+
 
 ## 2.1.2 - 2026-05-30
 
