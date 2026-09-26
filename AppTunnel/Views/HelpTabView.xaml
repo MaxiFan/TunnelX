@@ -268,7 +268,7 @@
                     </Expander>
 
                     <Expander Header="OpenVPN" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید."
+                        <TextBlock Text="فایل ovpn را انتخاب کنید. OpenVPN Community باید جداگانه نصب باشد؛ OpenVPN Connect برای Split Tunneling مناسب نیست. اگر سرور رمز می‌خواهد، نام کاربری و رمز را در TunnelX وارد کنید. برای عبور اتصال از پراکسی، در همان پروفایل نوع پراکسی بالادستی را HTTP یا SOCKS5 بگذارید و آدرس و پورت را وارد کنید. این حالت فقط با کانفیگ TCP کار می‌کند."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
                 </StackPanel>

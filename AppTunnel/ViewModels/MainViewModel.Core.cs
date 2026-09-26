@@ -1081,6 +1081,148 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private OpenVpnUpstreamProxyKind _openVpnUpstreamProxyKind = OpenVpnUpstreamProxyKind.None;
+    public OpenVpnUpstreamProxyKind OpenVpnUpstreamProxyKind
+    {
+        get => _openVpnUpstreamProxyKind;
+        set
+        {
+            if (_openVpnUpstreamProxyKind == value) return;
+            var previous = _openVpnUpstreamProxyKind;
+            _openVpnUpstreamProxyKind = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyKind = value;
+            // Port is applied before kind when importing a .ovpn, so an explicit port is kept.
+            // Switching HTTP <-> SOCKS replaces only that protocol's default port.
+            if (value == OpenVpnUpstreamProxyKind.Http &&
+                (_openVpnUpstreamProxyPort == 0 ||
+                 (previous == OpenVpnUpstreamProxyKind.Socks &&
+                  _openVpnUpstreamProxyPort == OpenVpnUpstreamProxy.DefaultSocksPort)))
+                OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultHttpPort;
+            else if (value == OpenVpnUpstreamProxyKind.Socks &&
+                     (_openVpnUpstreamProxyPort == 0 ||
+                      (previous == OpenVpnUpstreamProxyKind.Http &&
+                       _openVpnUpstreamProxyPort == OpenVpnUpstreamProxy.DefaultHttpPort)))
+                OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultSocksPort;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsOpenVpnUpstreamProxyEnabled));
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    public bool IsOpenVpnUpstreamProxyEnabled =>
+        _openVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None;
+
+    private string _openVpnUpstreamProxyHost = "";
+    public string OpenVpnUpstreamProxyHost
+    {
+        get => _openVpnUpstreamProxyHost;
+        set
+        {
+            if (_openVpnUpstreamProxyHost == value) return;
+            _openVpnUpstreamProxyHost = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyHost = value;
+            OnPropertyChanged();
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    private int _openVpnUpstreamProxyPort;
+    public int OpenVpnUpstreamProxyPort
+    {
+        get => _openVpnUpstreamProxyPort;
+        set
+        {
+            if (_openVpnUpstreamProxyPort == value) return;
+            _openVpnUpstreamProxyPort = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyPort = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OpenVpnUpstreamProxyPortText));
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    public string OpenVpnUpstreamProxyPortText
+    {
+        get => _openVpnUpstreamProxyPort.ToString();
+        set
+        {
+            if (int.TryParse((value ?? "").Trim(), out var port))
+            {
+                OpenVpnUpstreamProxyPort = port;
+                return;
+            }
+
+            ConfigValidationText = string.IsNullOrWhiteSpace(value)
+                ? OpenVpnUpstreamProxy.PortInvalidKey
+                : OpenVpnUpstreamProxy.PortNumberKey;
+        }
+    }
+
+    private string _openVpnUpstreamProxyUsername = "";
+    public string OpenVpnUpstreamProxyUsername
+    {
+        get => _openVpnUpstreamProxyUsername;
+        set
+        {
+            if (_openVpnUpstreamProxyUsername == value) return;
+            _openVpnUpstreamProxyUsername = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyUsername = value;
+            OnPropertyChanged();
+            UpdateConfigDiagnostics();
+            SaveCurrentState();
+        }
+    }
+
+    private string _openVpnUpstreamProxyPassword = "";
+    public string OpenVpnUpstreamProxyPassword
+    {
+        get => _openVpnUpstreamProxyPassword;
+        set
+        {
+            if (_openVpnUpstreamProxyPassword == value) return;
+            _openVpnUpstreamProxyPassword = value;
+            if (_selectedProfile != null)
+                _selectedProfile.OpenVpnUpstreamProxyPassword = value;
+            OnPropertyChanged();
+            SaveCurrentState();
+        }
+    }
+
+    public string OpenVpnUpstreamProxyIntroText =>
+        LocalizationService.Instance.T(OpenVpnUpstreamProxy.IntroTextKey);
+
+    private OpenVpnUpstreamProxySettings CurrentUpstreamProxySettings() =>
+        OpenVpnUpstreamProxySettings.From(
+            OpenVpnUpstreamProxyKind,
+            OpenVpnUpstreamProxyHost,
+            OpenVpnUpstreamProxyPort,
+            OpenVpnUpstreamProxyUsername,
+            OpenVpnUpstreamProxyPassword);
+
+    private void ImportUpstreamProxyFromOpenVpnConfig(string config)
+    {
+        if (!OpenVpnUpstreamProxy.TryParse(config, out var parsed))
+            return;
+
+        OpenVpnUpstreamProxyHost = parsed.Host;
+        OpenVpnUpstreamProxyPort = parsed.Port;
+        if (parsed.HasInlineCredentials)
+        {
+            OpenVpnUpstreamProxyUsername = parsed.Username;
+            OpenVpnUpstreamProxyPassword = parsed.Password;
+            OpenVpnUpstreamProxyPasswordChanged?.Invoke(parsed.Password);
+        }
+
+        OpenVpnUpstreamProxyKind = parsed.Kind;
+    }
+
     public string OpenVpnConfigIntroText =>
         LocalizationService.Instance.T("فایل .ovpn و اطلاعات احراز هویت OpenVPN را وارد کنید. TunnelX بر اساس محتوای فایل مشخص می‌کند کدام فیلدها اجباری است.");
 
@@ -2212,7 +2354,10 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 var text = System.Windows.Clipboard.GetText().Trim();
                 if (CurrentTunnelType == TunnelType.OpenVpn)
+                {
                     SelectedOpenVpnConfig = text;
+                    ImportUpstreamProxyFromOpenVpnConfig(text);
+                }
                 else if (CurrentTunnelType == TunnelType.WireGuard)
                 {
                     SelectedWireGuardConfig = text;
@@ -2260,6 +2405,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             SelectedOpenVpnConfigPath = dialog.FileName;
             SelectedOpenVpnConfig = File.ReadAllText(dialog.FileName);
+            ImportUpstreamProxyFromOpenVpnConfig(SelectedOpenVpnConfig);
             WarnIfOpenVpnMissingAfterConfigAdded();
         }
         catch (Exception ex)
@@ -2386,6 +2532,24 @@ public partial class MainViewModel : INotifyPropertyChanged
                     out var openVpnValidationError))
             {
                 ConfigValidationText = openVpnValidationError;
+                return;
+            }
+
+            if (OpenVpnUpstreamProxy.TryGetConnectError(
+                    CurrentUpstreamProxySettings(),
+                    SelectedOpenVpnConfig,
+                    out var upstreamProxyError))
+            {
+                ConfigValidationText = upstreamProxyError;
+                return;
+            }
+
+            if (OpenVpnUpstreamProxy.TryParse(SelectedOpenVpnConfig, out var parsedUpstream) &&
+                parsedUpstream.ReferencesExternalAuthFile &&
+                string.IsNullOrWhiteSpace(OpenVpnUpstreamProxyUsername) &&
+                OpenVpnUpstreamProxyKind != OpenVpnUpstreamProxyKind.None)
+            {
+                ConfigValidationText = OpenVpnUpstreamProxy.ExternalAuthFileKey;
                 return;
             }
 
@@ -2906,6 +3070,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OpenVpnUsernameFieldLabelText));
         OnPropertyChanged(nameof(OpenVpnPasswordFieldLabelText));
         OnPropertyChanged(nameof(OpenVpnSecretFieldLabelText));
+        OnPropertyChanged(nameof(OpenVpnUpstreamProxyIntroText));
         OnPropertyChanged(nameof(ActiveProfileTypeText));
         OnPropertyChanged(nameof(ActiveProfileEndpointText));
         OnPropertyChanged(nameof(ProfileSaveHintText));

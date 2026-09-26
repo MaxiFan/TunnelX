@@ -63,6 +63,7 @@ public partial class ProfileEditorDialog : Window
         PskField.Password = _profile.PreSharedKey;
         OpenVpnPasswordField.Password = _profile.OpenVpnPassword;
         OpenVpnPrivateKeyPasswordField.Password = _profile.OpenVpnPrivateKeyPassword;
+        OpenVpnUpstreamProxyPasswordField.Password = _profile.OpenVpnUpstreamProxyPassword;
         ProxyPasswordField.Password = _profile.ProxyPassword;
         RefreshOpenVpnProfileUi();
     }
@@ -80,12 +81,15 @@ public partial class ProfileEditorDialog : Window
         OpenVpnUsernameLabelTextBlock.Text = OpenVpnProfileAnalyzer.GetUsernameFieldLabel(_profile.OpenVpnConfig);
         OpenVpnPasswordLabelTextBlock.Text = OpenVpnProfileAnalyzer.GetPasswordFieldLabel(_profile.OpenVpnConfig);
         OpenVpnSecretLabelTextBlock.Text = OpenVpnProfileAnalyzer.GetSecretFieldLabel(_profile.OpenVpnConfig);
+        OpenVpnUpstreamProxyHintTextBlock.Text = loc.T(OpenVpnUpstreamProxy.IntroTextKey);
+        OpenVpnUpstreamProxyKindLabel.Text = loc.T("پراکسی بالادستی");
 
         foreach (var block in new TextBlock[]
                  {
                      DialogTitleText, DialogSubtitleText, OpenVpnIntroTextBlock, OpenVpnFileLabelTextBlock,
                      OpenVpnScenarioTitleTextBlock, OpenVpnScenarioHintTextBlock, OpenVpnUsernameLabelTextBlock,
-                     OpenVpnPasswordLabelTextBlock, OpenVpnSecretLabelTextBlock, ProfileNameValidationText,
+                     OpenVpnPasswordLabelTextBlock, OpenVpnSecretLabelTextBlock,
+                     OpenVpnUpstreamProxyHintTextBlock, OpenVpnUpstreamProxyKindLabel, ProfileNameValidationText,
                      ValidationText
                  })
         {
@@ -131,6 +135,7 @@ public partial class ProfileEditorDialog : Window
         {
             _profile.OpenVpnConfigPath = dialog.FileName;
             _profile.OpenVpnConfig = File.ReadAllText(dialog.FileName);
+            ApplyParsedUpstreamProxy(_profile.OpenVpnConfig);
             RefreshOpenVpnProfileUi();
             if (OpenVpnProfileAnalyzer.TryGetProfileValidationError(
                     _profile.OpenVpnConfig,
@@ -226,6 +231,7 @@ public partial class ProfileEditorDialog : Window
             case TunnelType.OpenVpn:
                 _profile.OpenVpnConfig = draft.ConfigText;
                 _profile.OpenVpnConfigPath = "";
+                ApplyParsedUpstreamProxy(draft.ConfigText);
                 break;
             case TunnelType.WireGuard:
                 _profile.WireGuardConfig = draft.ConfigText;
@@ -269,6 +275,7 @@ public partial class ProfileEditorDialog : Window
         _profile.PreSharedKey = PskField.Password;
         _profile.OpenVpnPassword = OpenVpnPasswordField.Password;
         _profile.OpenVpnPrivateKeyPassword = OpenVpnPrivateKeyPasswordField.Password;
+        _profile.OpenVpnUpstreamProxyPassword = OpenVpnUpstreamProxyPasswordField.Password;
         _profile.ProxyPassword = ProxyPasswordField.Password;
 
         if (!ValidateProfile(out var message))
@@ -304,6 +311,12 @@ public partial class ProfileEditorDialog : Window
                 OpenVpnPrivateKeyPasswordField.Password,
                 out message):
                 return false;
+            case TunnelType.OpenVpn when OpenVpnUpstreamProxy.TryGetConnectError(
+                _profile.ToUpstreamProxySettings(),
+                _profile.OpenVpnConfig,
+                out var upstreamProxyError):
+                message = LocalizationService.Instance.T(upstreamProxyError);
+                return false;
             case TunnelType.SocksProxy when string.IsNullOrWhiteSpace(_profile.ProxyServerAddress):
                 message = LocalizationService.Instance.T("آدرس سرور پراکسی را وارد کنید");
                 return false;
@@ -317,6 +330,38 @@ public partial class ProfileEditorDialog : Window
 
         message = "";
         return true;
+    }
+
+    private void ApplyParsedUpstreamProxy(string config)
+    {
+        if (!OpenVpnUpstreamProxy.TryParse(config, out var parsed))
+            return;
+
+        _profile.ApplyParsedUpstreamProxy(parsed);
+        if (parsed.HasInlineCredentials)
+            OpenVpnUpstreamProxyPasswordField.Password = _profile.OpenVpnUpstreamProxyPassword;
+        if (parsed.ReferencesExternalAuthFile && string.IsNullOrWhiteSpace(_profile.OpenVpnUpstreamProxyUsername))
+            ValidationText.Text = LocalizationService.Instance.T(OpenVpnUpstreamProxy.ExternalAuthFileKey);
+    }
+
+    private void OnOpenVpnUpstreamProxyKindChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.RemovedItems.Count == 0 || e.AddedItems.Count == 0)
+            return;
+        if (e.RemovedItems[0] is not ComboBoxItem removed || removed.Tag is not OpenVpnUpstreamProxyKind previous)
+            return;
+        if (e.AddedItems[0] is not ComboBoxItem added || added.Tag is not OpenVpnUpstreamProxyKind current)
+            return;
+        if (previous == current)
+            return;
+
+        var port = _profile.OpenVpnUpstreamProxyPort;
+        if (current == OpenVpnUpstreamProxyKind.Http &&
+            (port == 0 || (previous == OpenVpnUpstreamProxyKind.Socks && port == OpenVpnUpstreamProxy.DefaultSocksPort)))
+            _profile.OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultHttpPort;
+        else if (current == OpenVpnUpstreamProxyKind.Socks &&
+                 (port == 0 || (previous == OpenVpnUpstreamProxyKind.Http && port == OpenVpnUpstreamProxy.DefaultHttpPort)))
+            _profile.OpenVpnUpstreamProxyPort = OpenVpnUpstreamProxy.DefaultSocksPort;
     }
 
     private void OnProfileNameTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)

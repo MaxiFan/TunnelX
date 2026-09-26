@@ -81,6 +81,8 @@ OpenVPN 未随 TunnelX 捆绑。请单独安装 OpenVPN Community，在 TunnelX 
 
 为兼容分流，TunnelX 通过控制推送的路由和 DNS 行为准备 OpenVPN 配置。近期版本改进了多 `<connection>` 配置的稳定性：远程端口顺序（443/80 优先于 21/53）、保留 `tcp-client` 块、跳过无法解析的远程主机名，以及控制通道重置时更清晰的断开信息。若 OpenVPN 重连并更改隧道 IP、网关、接口或远程端点，TunnelX 会用新值重启数据包路由。
 
+若 OpenVPN 服务器无法直连，可在同一配置中将上游代理设为 HTTP 或 SOCKS5，并填写地址、端口以及可选的用户名/密码。TunnelX 会保存这些字段，并在连接时写入 `http-proxy` 或 `socks-proxy`。仅 TCP 配置（`proto tcp` 或 `tcp-client`）可通过该代理连接。若 `.ovpn` 已包含代理指令，重新选择该文件即可把主机和端口填入配置。
+
 ## 路由说明
 
 目标 include/exclude 规则匹配输入的域名及其子域名。例如添加 `githubusercontent.com` 在 DNS 解析后也会覆盖 `raw.githubusercontent.com`。若 HTTPS 客户端在证书吊销检查时失败，可能是因为 OCSP/CRL 主机无法通过所选路由访问；请将下载应用或相关吊销域名加入 include 列表。
