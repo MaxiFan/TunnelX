@@ -20,6 +20,7 @@ public static class ConfigImportService
     private static readonly string[] V2RaySchemes =
     [
         "vmess://", "vless://", "trojan://", "ss://",
+        "hysteria2://", "hy2://", "hysteria://",
         "socks5://", "socks://", "http://"
     ];
 
@@ -141,7 +142,7 @@ public static class ConfigImportService
 
         if (segment.StartsWith('{'))
         {
-            if (!IsV2RayJson(segment))
+            if (!IsV2RayJson(segment) && !HysteriaShareLink.TryCreateOutbound(segment, out _, out _))
             {
                 return new ImportedConfigDraft
                 {
@@ -173,6 +174,24 @@ public static class ConfigImportService
                     ConfigText = segment,
                     SuggestedName = SuggestUriProfileName(segment, "Proxy")
                 };
+            }
+
+            if (HysteriaShareLink.IsShareLink(segment))
+            {
+                try
+                {
+                    HysteriaShareLink.Parse(segment);
+                }
+                catch (Exception ex)
+                {
+                    return new ImportedConfigDraft
+                    {
+                        TunnelType = TunnelType.V2Ray,
+                        ConfigText = segment,
+                        SuggestedName = "",
+                        SkipReason = LocalizationService.Instance.T(ex.Message)
+                    };
+                }
             }
 
             return new ImportedConfigDraft
@@ -251,6 +270,15 @@ public static class ConfigImportService
                         return SanitizeName(port is > 0 ? $"{server}:{port}" : server);
                 }
             }
+
+            var rootTag = root?["tag"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(rootTag))
+                return SanitizeName(rootTag);
+
+            var rootServer = root?["server"]?.GetValue<string>();
+            var rootPort = root?["server_port"]?.GetValue<int>();
+            if (!string.IsNullOrWhiteSpace(rootServer))
+                return SanitizeName(rootPort is > 0 ? $"{rootServer}:{rootPort}" : rootServer);
         }
         catch
         {

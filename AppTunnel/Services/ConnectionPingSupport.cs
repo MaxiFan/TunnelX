@@ -26,8 +26,11 @@ public static class ConnectionPingSupport
             return false;
 
         config = config.Trim();
+        if (HysteriaShareLink.IsShareLink(config))
+            return true;
+
         if (config.StartsWith('{'))
-            return false;
+            return HysteriaShareLink.TryCreateOutbound(config, out _, out _);
 
         if (TunnelProviderFactory.RequiresXray(config))
             return false;

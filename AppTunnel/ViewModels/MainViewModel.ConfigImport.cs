@@ -589,6 +589,13 @@ public partial class MainViewModel
             return;
         }
 
+        if (HysteriaShareLink.IsHysteria(config))
+        {
+            profile.LastServerLatencyLabel = "ICMP";
+            profile.LastServerLatencyMs = await MeasureHysteriaServerPingAsync(config, ct);
+            return;
+        }
+
         if (!TryExtractProxyEndpointDetails(config, out var endpoint, out var error))
         {
             profile.LastServerLatencyError = error;

@@ -258,7 +258,7 @@
                     </Expander>
 
                     <Expander Header="V2Ray / Xray" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. TunnelX معمولاً sing-box را اجرا می‌کند و برای قابلیت‌هایی مثل xhttp از Xray-core استفاده می‌کند."
+                        <TextBlock Text="لینک یا JSON کانفیگ را وارد کنید یا از کلیپ‌بورد پیست کنید. vmess، vless، trojan، shadowsocks و Hysteria (hysteria:// و hysteria2:// و hy2://) با sing-box اجرا می‌شوند. برای xhttp از Xray-core استفاده می‌شود."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 

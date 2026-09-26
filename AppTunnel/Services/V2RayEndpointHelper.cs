@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 namespace AppTunnel.Services;
 
 /// <summary>
-/// Parses V2Ray share links (vmess/vless/trojan/ss/…) for server host/port used in status and routing.
+/// Parses V2Ray share links (vmess/vless/trojan/ss/hysteria/…) for server host/port used in status and routing.
 /// </summary>
 internal static class V2RayEndpointHelper
 {
@@ -62,11 +62,23 @@ internal static class V2RayEndpointHelper
                     }
                 }
 
+                if (HysteriaShareLink.IsHysteriaType(root?["type"]?.GetValue<string>()) &&
+                    !string.IsNullOrWhiteSpace(root?["server"]?.GetValue<string>()))
+                {
+                    host = root!["server"]!.GetValue<string>();
+                    var barePort = root["server_port"]?.GetValue<int>();
+                    if (barePort is > 0 and <= 65535)
+                        port = barePort.Value;
+                    return true;
+                }
+
                 return false;
             }
 
             var uri = new Uri(userConfig.Split('#')[0]);
             host = uri.Host;
+            if (host.Length >= 2 && host[0] == '[' && host[^1] == ']')
+                host = host[1..^1];
             if (uri.Port > 0)
                 port = uri.Port;
             else if (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))

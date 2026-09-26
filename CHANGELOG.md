@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+#### قابلیت‌های جدید
+- پشتیبانی از Hysteria 1 و Hysteria 2 (`hysteria://`، `hysteria2://`، `hy2://`) و JSON سینگ‌باکس روی هسته sing-box
+
+</div>
+
+### English
+
+#### Added
+- Hysteria 1 and Hysteria 2 (`hysteria://`, `hysteria2://`, `hy2://`, and sing-box JSON) on the bundled sing-box core
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

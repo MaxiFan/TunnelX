@@ -1,0 +1,16 @@
+{
+  "outbounds": [
+    {
+      "type": "hysteria2",
+      "tag": "hy2-out",
+      "server": "example.com",
+      "server_port": 443,
+      "password": "password",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com",
+        "alpn": ["h3"]
+      }
+    }
+  ]
+}

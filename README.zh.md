@@ -61,6 +61,14 @@
 
 将 V2Ray/Xray 链接或 JSON 配置粘贴到配置中。TunnelX 对常规配置使用 sing-box，对需要 Xray 特有行为（如 `xhttp`）的配置切换到 Xray-core。
 
+Hysteria 由附带的 sing-box 1.12 运行（Xray 没有 Hysteria 出站）：
+
+- **Hysteria 2：** `hysteria2://` 与 `hy2://`。认证在 userinfo，或 `auth` / `password` 参数。可选 `sni`、`insecure`、`obfs=salamander` 与 `obfs-password`、端口跳跃 `mport`，以及 `upmbps` / `downmbps`。
+- **Hysteria 1：** `hysteria://` 仅 UDP（`auth`、`peer` 或 `sni`、`insecure`、`obfsParam`、`upmbps` / `downmbps`）。不支持 `faketcp` 与 `wechat-video`。未写带宽时默认为 100/100 Mbps。
+- **sing-box JSON：** 已含 inbounds 的完整配置会原样使用。没有 inbounds 的裸 outbound，或仅含 `hysteria` / `hysteria2` 出站的文档，会包上 TunnelX 的 TUN 与 mixed inbound。示例：`examples/singbox-hysteria2.example.json`。
+
+此版 sing-box 会忽略 `pinSHA256`。连接延迟走 sing-box；服务器按钮使用 ICMP，因为 Hysteria 是 QUIC/UDP。
+
 ### SOCKS5/HTTP Proxy
 
 若已有外部代理端点，使用 SOCKS5/HTTP Proxy 配置。输入代理服务器、端口及可选凭据。这与连接后暴露的本地 `127.0.0.1` SOCKS5 代理不同，后者供需要本地代理地址的工具使用。

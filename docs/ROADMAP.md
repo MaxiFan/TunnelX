@@ -38,7 +38,7 @@ For public releases, TunnelX should continue to prefer self-contained standalone
 
 ### V2Ray core fallback: sing-box first, Xray when needed
 
-Today, share links such as `vmess://`, `vless`+WebSocket+TLS, trojan, and shadowsocks are converted and run through **sing-box** only. **Xray-core** is used when the config explicitly requires it (for example `vless` with `type=xhttp` or raw Xray JSON with `streamSettings`).
+Today, share links such as `vmess://`, `vless`+WebSocket+TLS, trojan, shadowsocks, and Hysteria (`hysteria://`, `hysteria2://`, `hy2://`) are converted and run through **sing-box** only. **Xray-core** is used when the config explicitly requires it (for example `vless` with `type=xhttp` or raw Xray JSON with `streamSettings`).
 
 Planned improvement for the same class of profiles that work on mobile (v2rayNG / Xray) but fail or feel slow on sing-box:
 

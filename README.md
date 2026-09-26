@@ -87,6 +87,14 @@ Enter the server address, username, password, and pre-shared key. TunnelX create
 
 Paste a V2Ray/Xray link or JSON config into the profile. TunnelX uses sing-box for regular configs and switches to Xray-core for configs that require Xray-specific behavior such as `xhttp`.
 
+Hysteria uses the bundled sing-box 1.12 core (Xray has no Hysteria outbound):
+
+- **Hysteria 2:** `hysteria2://` and `hy2://`. Auth can be the URI userinfo or the `auth` / `password` query. Optional `sni`, `insecure`, `obfs=salamander` with `obfs-password`, `mport` port hopping (`20000-50000`), and `upmbps` / `downmbps` when Brutal bandwidth is set.
+- **Hysteria 1:** `hysteria://` over UDP (`auth`, `peer` or `sni`, `insecure`, `obfsParam`, `upmbps` / `downmbps`). `faketcp` and `wechat-video` are not supported. Missing bandwidth defaults to 100/100 Mbps.
+- **sing-box JSON:** a full config that already has inbounds is used as-is. A bare outbound, or a document whose only proxy outbound is `hysteria` / `hysteria2` and which has no inbounds, is wrapped with the TunnelX TUN and mixed inbound. See `examples/singbox-hysteria2.example.json`.
+
+`pinSHA256` is ignored on this sing-box build (no certificate-pin field). Connection ping goes through sing-box. The server button uses ICMP because Hysteria is QUIC/UDP.
+
 ### SOCKS5/HTTP Proxy
 
 Use a SOCKS5/HTTP Proxy profile when you already have an external proxy endpoint. Enter the proxy server, port, and optional credentials. This is different from the local `127.0.0.1` SOCKS5 proxy, which is exposed after connection for tools that need a local proxy address.
