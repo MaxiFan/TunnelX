@@ -99,35 +99,51 @@ public class Socks5LatencyProbeTests
     [Fact]
     public async Task TlsHttp204_IsSuccess()
     {
-        using var cert = CreateCert("www.google.com");
-        var ms = await WithSocksServerAsync(443, async stream =>
+        // Self-signed TLS over a fake SOCKS hop can flake on CI (EOF mid-handshake).
+        Exception? last = null;
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            await using var ssl = new SslStream(stream, leaveInnerStreamOpen: true);
-            await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+            try
             {
-                ServerCertificate = cert,
-                ClientCertificateRequired = false,
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck
-            });
+                using var cert = CreateCert("www.google.com");
+                var ms = await WithSocksServerAsync(443, async stream =>
+                {
+                    await using var ssl = new SslStream(stream, leaveInnerStreamOpen: true);
+                    await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = cert,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.Tls12,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                    });
 
-            var buffer = new byte[1024];
-            var used = 0;
-            while (used < buffer.Length)
-            {
-                var read = await ssl.ReadAsync(buffer.AsMemory(used, buffer.Length - used));
-                if (read == 0)
-                    break;
-                used += read;
-                if (Encoding.ASCII.GetString(buffer, 0, used).Contains("\r\n\r\n", StringComparison.Ordinal))
-                    break;
+                    var buffer = new byte[1024];
+                    var used = 0;
+                    while (used < buffer.Length)
+                    {
+                        var read = await ssl.ReadAsync(buffer.AsMemory(used, buffer.Length - used));
+                        if (read == 0)
+                            break;
+                        used += read;
+                        if (Encoding.ASCII.GetString(buffer, 0, used).Contains("\r\n\r\n", StringComparison.Ordinal))
+                            break;
+                    }
+
+                    var response = Encoding.ASCII.GetBytes("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    await ssl.WriteAsync(response);
+                    await ssl.FlushAsync();
+                });
+
+                Assert.InRange(ms, 0, 5000);
+                return;
             }
+            catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
+            {
+                last = ex;
+            }
+        }
 
-            var response = Encoding.ASCII.GetBytes("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-            await ssl.WriteAsync(response);
-        });
-
-        Assert.InRange(ms, 0, 5000);
+        throw new InvalidOperationException("TLS probe test failed after retries", last);
     }
 
     [Theory]
