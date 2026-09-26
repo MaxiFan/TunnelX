@@ -85,19 +85,62 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         SetLanguageInternal(language, raiseChanged: true);
     }
 
-    public string T(string source)
+    /// <summary>
+    /// Resolves a Persian source key for the effective UI language.
+    /// Missing or empty translations never throw: try the active language, then
+    /// English, then Persian (the source key), then the key name as a last-resort placeholder.
+    /// </summary>
+    public string T(string? source)
     {
-        if (string.IsNullOrEmpty(source) || IsRightToLeft)
+        if (string.IsNullOrEmpty(source))
+            return source ?? string.Empty;
+
+        // Persian UI displays source keys as-is (they are already fa).
+        if (IsRightToLeft)
             return source;
 
-        return _translations.TryGetValue(_effectiveLanguage, out var table) &&
-               table.TryGetValue(source, out var translated)
-            ? translated
-            : source;
+        if (TryResolveTranslation(_effectiveLanguage, source, out var translated))
+            return translated;
+
+        // Fallback chain: English → Persian (source key) → key-name placeholder.
+        if (!string.Equals(_effectiveLanguage, EnglishLanguage, StringComparison.Ordinal) &&
+            TryResolveTranslation(EnglishLanguage, source, out translated))
+            return translated;
+
+        // Persian keys are the canonical source strings; the key name is the final placeholder.
+        return source;
     }
 
-    public string Format(string sourceFormat, params object?[] args)
-        => string.Format(CultureInfo.CurrentCulture, T(sourceFormat), args);
+    public string Format(string? sourceFormat, params object?[] args)
+    {
+        var template = T(sourceFormat);
+        if (args is null || args.Length == 0)
+            return template;
+
+        try
+        {
+            return string.Format(CultureInfo.CurrentCulture, template, args);
+        }
+        catch (FormatException)
+        {
+            // Never crash the UI on a bad format string / argument mismatch.
+            return template;
+        }
+    }
+
+    private bool TryResolveTranslation(string language, string source, out string translated)
+    {
+        translated = string.Empty;
+        if (!_translations.TryGetValue(language, out var table))
+            return false;
+        if (!table.TryGetValue(source, out var value))
+            return false;
+        // Empty entries are treated as missing so English/Persian fallbacks can run.
+        if (string.IsNullOrEmpty(value))
+            return false;
+        translated = value;
+        return true;
+    }
 
     /// <summary>
     /// Normalizes a display string (Persian key, English translation, or formatted message)
@@ -661,6 +704,7 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         ["کانفیگ WireGuard باید یک بخش [Peer] داشته باشد"] = "WireGuard config must contain one [Peer] section",
         ["در این نسخه فقط کانفیگ WireGuard تک-peer پشتیبانی می‌شود"] = "This version supports single-peer WireGuard configs only",
         ["کلید خصوصی WireGuard وارد نشده است"] = "WireGuard private key is missing",
+        ["کانفیگ WireGuard باید یک Address IPv4 داشته باشد"] = "WireGuard config must include an IPv4 Address",
         ["آدرس Interface در کانفیگ WireGuard وارد نشده است"] = "WireGuard interface address is missing",
         ["کلید عمومی Peer در کانفیگ WireGuard وارد نشده است"] = "WireGuard peer public key is missing",
         ["Endpoint در کانفیگ WireGuard وارد نشده است"] = "WireGuard endpoint is missing",
@@ -778,6 +822,7 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         ["سلامت اتصال با هشدار — {0}"] = "Connection health warning — {0}",
         ["آداپتر VPN فعال"] = "VPN adapter up",
         ["آداپتر VPN شناسایی نشد"] = "VPN adapter not detected",
+        ["آداپتر VPN برای اسپلیت‌تانلینگ آماده نیست (ifIdx={0})."] = "VPN adapter is not ready for split tunneling (ifIdx={0}).",
         ["اسپلیت‌تانلینگ فعال"] = "Split tunneling active",
         ["اسپلیت‌تانلینگ غیرفعال"] = "Split tunneling inactive",
         ["بدون نشت ترافیک"] = "No traffic leaks",
@@ -1100,6 +1145,7 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         ["تغییرات این پروفایل به‌صورت خودکار ذخیره می‌شود"] = "Profile changes are saved automatically",
         ["در حال ذخیره..."] = "Saving...",
         ["پیش‌فرض"] = "Default",
+        ["پروفایل جدید"] = "New profile",
         ["پروفایل {0}"] = "Profile {0}",
         ["{0} (کپی)"] = "{0} (copy)",
         ["کپی پروفایل"] = "Copy Profile",
