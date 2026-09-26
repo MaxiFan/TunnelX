@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
 ### English
 
 - Fixed SOCKS5 and HTTP proxy connects that failed while sing-box decoded the config (`outbounds[0].users: unknown field "users"`). Proxy credentials are now written as outbound `username` and `password`.
@@ -12,14 +11,12 @@
 - Custom connection health-check targets in Settings (URL, hostname, or IP). With nothing configured, `google.com` and `cloudflare.com` are still used. The default public targets can be turned off.
 - Subscription (sub) links: add an http/https URL, import the returned configs as profiles, and refresh them later.
 - Russian UI, with Auto, Persian, English, or Russian selectable in Settings.
+- Local proxy disconnect and reconnect are announced as `127.0.0.1:port is now disconnected` / `connected`. Active sessions on the built-in listener are reset so clients such as Telethon `run_until_disconnected()` wake up. See `docs/PROXY_LIFECYCLE.md`.
 
-=======
->>>>>>> origin/cursor/proxy-disconnect-announcements-1a9d
 ### فارسی
 
 <div dir="rtl" align="right">
 
-<<<<<<< HEAD
 - اتصال پراکسی SOCKS5 و HTTP که هنگام خواندن کانفیگ sing-box با خطای `unknown field "users"` قطع می‌شد اصلاح شد. نام کاربری و رمز اکنون در فیلدهای خروجی `username` و `password` نوشته می‌شوند.
 - رفع مشکلی که در حالت per-app / اسپلیت، بعد از مدتی طولانی وای‌فای را «Connected - No Internet» نشان می‌داد. بررسی اتصال ویندوز روی کارت شبکه فیزیکی می‌ماند و تغییر جدول مسیر دیگر روی مسیر بسته‌ها انجام نمی‌شود.
 - پینگ قبل از اتصال برای کانفیگ‌های V2Ray/Xray دیگر با باز بودن پورت سرور موفق حساب نمی‌شود. مثل «test real delay» در v2rayN، عدد پینگ فقط وقتی نشان داده می‌شود که درخواست واقعاً از داخل کانفیگ به مقصد برسد. قطع شدن اتصال به‌جای پینگ موفق ثبت نمی‌شود.
@@ -27,19 +24,10 @@
 - مقصدهای سفارشی برای بررسی سلامت اتصال در تنظیمات (URL، دامنه یا IP). اگر چیزی تنظیم نشود، `google.com` و `cloudflare.com` مثل قبل بررسی می‌شوند. می‌توان مقصدهای عمومی پیش‌فرض را خاموش کرد.
 - لینک اشتراک (sub): افزودن آدرس http/https، ساخت پروفایل از کانفیگ‌های دریافتی، و به‌روزرسانی بعدی.
 - رابط کاربری روسی و انتخاب زبان در تنظیمات: خودکار، فارسی، انگلیسی یا روسی.
-
-</div>
-
-=======
 - قطع و وصل پراکسی محلی (`127.0.0.1:port`) اعلام می‌شود و اتصال‌های فعال آن ریست می‌شوند تا کلاینت‌هایی مثل Telethon از `run_until_disconnected()` باخبر شوند. جزئیات در `docs/PROXY_LIFECYCLE.md`.
 
 </div>
 
-### English
-
-- Local proxy disconnect and reconnect are announced as `127.0.0.1:port is now disconnected` / `connected`. Active sessions on the built-in listener are reset so clients such as Telethon `run_until_disconnected()` wake up. See `docs/PROXY_LIFECYCLE.md`.
-
->>>>>>> origin/cursor/proxy-disconnect-announcements-1a9d
 ## 2.1.2 - 2026-05-30
 
 ### فارسی
