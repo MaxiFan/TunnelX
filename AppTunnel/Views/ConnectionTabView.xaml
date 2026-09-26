@@ -243,6 +243,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <StackPanel x:Name="ProfileQuickActionsHeader"
@@ -293,6 +294,28 @@
                                     FontSize="10"
                                     Padding="8,4"
                                     Command="{Binding NewProfileCommand}"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="ProfileBulkActionsBar"
+                                    Grid.Row="2"
+                                    Orientation="Horizontal"
+                                    Margin="0,6,0,0"
+                                    FlowDirection="{Binding AppFlowDirection}"
+                                    HorizontalAlignment="{Binding AppStartHorizontalAlignment}">
+                            <Button Style="{StaticResource SecondaryButton}"
+                                    Content="{Binding SelectAllProfilesButtonText}"
+                                    FontSize="10"
+                                    Padding="8,4"
+                                    Margin="0,0,4,0"
+                                    Command="{Binding ToggleSelectAllProfilesCommand}"
+                                    ToolTip="{Binding SelectAllProfilesToolTipText}"/>
+                            <Button Style="{StaticResource DangerButton}"
+                                    Content="{Binding DeleteSelectedProfilesButtonText}"
+                                    FontSize="10"
+                                    Padding="8,4"
+                                    Command="{Binding DeleteSelectedProfilesCommand}"
+                                    ToolTip="{Binding DeleteSelectedProfilesToolTipText}"
+                                    Visibility="{Binding HasProfilesSelectedForDeletion, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -352,12 +375,23 @@
                         <DataTemplate>
                             <Grid FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
+                                <CheckBox Grid.Column="0"
+                                          VerticalAlignment="Center"
+                                          Cursor="Hand"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsSelectedForDeletion, Mode=TwoWay}"
+                                          IsEnabled="{Binding DataContext.CanBulkSelectProfiles, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                          ToolTip="{Binding DataContext.ProfileBulkSelectToolTipText, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                          PreviewMouseLeftButtonDown="ProfileBulkSelectCheckBox_PreviewMouseLeftButtonDown"/>
+
+                                <StackPanel Grid.Column="2">
                                     <StackPanel Orientation="Horizontal" FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="13"
@@ -422,7 +456,7 @@
                                     </StackPanel>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="2"
+                                <StackPanel Grid.Column="4"
                                             Orientation="Horizontal"
                                             FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             VerticalAlignment="Center">

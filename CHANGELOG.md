@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### فارسی
+
+<div dir="rtl" align="right">
+
+#### قابلیت‌های جدید
+- حذف چند کانفیگ با هم از لیست: تیک چندتایی، انتخاب همه، و یک تأیید که تعداد حذف را می‌گوید
+
+</div>
+
+### English
+
+#### Added
+- Delete many configs at once from the list, with multi-select, Select all, and one confirmation that states how many will be removed
+
 ## 2.1.2 - 2026-05-30
 
 ### فارسی

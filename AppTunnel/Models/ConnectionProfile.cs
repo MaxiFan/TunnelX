@@ -59,6 +59,7 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _lastLatencyLabel = "";
     private string _lastLatencyError = "";
     private bool _isLatencyTesting;
+    private bool _isSelectedForDeletion;
     private long? _lastServerLatencyMs;
     private string _lastServerLatencyLabel = "";
     private string _lastServerLatencyError = "";
@@ -254,6 +255,21 @@ public class ConnectionProfile : INotifyPropertyChanged
     {
         get => _enableGameMode;
         set => SetField(ref _enableGameMode, value);
+    }
+
+    /// <summary>
+    /// Transient multi-select flag for bulk deletion. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSelectedForDeletion
+    {
+        get => _isSelectedForDeletion;
+        set
+        {
+            if (_isSelectedForDeletion == value) return;
+            _isSelectedForDeletion = value;
+            OnPropertyChanged();
+        }
     }
 
     [JsonIgnore]
