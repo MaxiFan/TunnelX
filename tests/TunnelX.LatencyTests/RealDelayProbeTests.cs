@@ -31,6 +31,10 @@ public class PreConnectLatencyPlanTests
     [InlineData("ss://YWVzLTI1Ni1nY206cGFzcw@example.com:8388")]
     [InlineData("socks5://user:pass@example.com:1080")]
     [InlineData("http://user:pass@example.com:8080")]
+    [InlineData("hysteria://example.com:443?auth=pw")]
+    [InlineData("hysteria2://pw@example.com:443/?sni=www.example.com")]
+    [InlineData("hy2://pw@example.com:443/")]
+    [InlineData("{\"type\":\"hysteria2\",\"server\":\"example.com\",\"server_port\":443,\"password\":\"pw\"}")]
     public void SingBoxShareLinks_UseRealDelay(string config)
     {
         Assert.Equal(PreConnectLatencyMode.RealDelaySingBox, PreConnectLatencyPlan.ForV2RayConfig(config));
@@ -40,7 +44,6 @@ public class PreConnectLatencyPlanTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("{\"outbounds\":[]}")]
-    [InlineData("hysteria://example.com:443")]
     public void ConfigsWithoutAProbe_AreUnsupported_SoTheyAreNotReportedAsServerTcp(string config)
     {
         Assert.Equal(PreConnectLatencyMode.Unsupported, PreConnectLatencyPlan.ForV2RayConfig(config));

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace AppTunnel.Services;
 
 internal enum PreConnectLatencyMode
@@ -30,7 +32,7 @@ internal static class PreConnectLatencyPlan
         if (config.StartsWith('{'))
         {
             // Bare hysteria outbounds can be wrapped for a sing-box real-delay probe.
-            if (HysteriaShareLink.TryCreateOutbound(config, out _, out _))
+            if (IsBareHysteriaJson(config))
                 return PreConnectLatencyMode.RealDelaySingBox;
 
             // Xray JSON can be started as a SOCKS probe. Other full documents (sing-box JSON)
@@ -57,14 +59,67 @@ internal static class PreConnectLatencyPlan
 
     private static bool IsSingBoxShareLink(string config)
     {
-        if (HysteriaShareLink.IsShareLink(config))
-            return true;
-
-        return config.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)
+        return config.StartsWith("hysteria2://", StringComparison.OrdinalIgnoreCase)
+               || config.StartsWith("hy2://", StringComparison.OrdinalIgnoreCase)
+               || config.StartsWith("hysteria://", StringComparison.OrdinalIgnoreCase)
+               || config.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("trojan://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("ss://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("socks5://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("socks://", StringComparison.OrdinalIgnoreCase)
                || config.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Mirrors <see cref="HysteriaShareLink.TryCreateOutbound"/> eligibility without pulling that
+    /// type into LatencyTests (which only links a small AppTunnel subset).
+    /// </summary>
+    private static bool IsBareHysteriaJson(string config)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(config);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return false;
+
+            if (root.TryGetProperty("inbounds", out var inbounds) &&
+                inbounds.ValueKind == JsonValueKind.Array &&
+                inbounds.GetArrayLength() > 0)
+                return false;
+
+            if (IsHysteriaType(TryGetString(root, "type")) &&
+                !string.IsNullOrWhiteSpace(TryGetString(root, "server")))
+                return true;
+
+            if (!root.TryGetProperty("outbounds", out var outbounds) ||
+                outbounds.ValueKind != JsonValueKind.Array)
+                return false;
+
+            foreach (var item in outbounds.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+                if (IsHysteriaType(TryGetString(item, "type")) &&
+                    !string.IsNullOrWhiteSpace(TryGetString(item, "server")))
+                    return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsHysteriaType(string? type) =>
+        type != null &&
+        (type.Equals("hysteria", StringComparison.OrdinalIgnoreCase) ||
+         type.Equals("hysteria2", StringComparison.OrdinalIgnoreCase));
+
+    private static string? TryGetString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 }
