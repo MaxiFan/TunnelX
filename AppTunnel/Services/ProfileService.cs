@@ -66,7 +66,9 @@ public class ProfileService
         try
         {
             var json = File.ReadAllText(AppSettingsFile, Encoding.UTF8);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            settings.LocalProxyPassword = DecryptString(settings.EncryptedLocalProxyPassword);
+            return settings;
         }
         catch
         {
@@ -80,6 +82,7 @@ public class ProfileService
     public void SaveAppSettings(AppSettings settings)
     {
         Directory.CreateDirectory(ProfileDir);
+        settings.EncryptedLocalProxyPassword = EncryptString(settings.LocalProxyPassword ?? "");
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         File.WriteAllText(AppSettingsFile, json, Encoding.UTF8);
     }
@@ -108,6 +111,19 @@ public class ProfileService
         /// Ignored when no valid custom target is configured, so health checks still have a destination.
         /// </summary>
         public bool IncludeDefaultHealthCheckEndpoints { get; set; } = true;
+
+        /// <summary>
+        /// Default username for the local mixed SOCKS5/HTTP listener when a profile
+        /// does not set its own MixedProxyUsername.
+        /// </summary>
+        public string LocalProxyUsername { get; set; } = "";
+
+        /// <summary>DPAPI ciphertext for <see cref="LocalProxyPassword"/> (persisted).</summary>
+        public string EncryptedLocalProxyPassword { get; set; } = "";
+
+        /// <summary>Plaintext local-proxy password; not written to JSON.</summary>
+        [JsonIgnore]
+        public string LocalProxyPassword { get; set; } = "";
     }
 
     /// <summary>
@@ -156,6 +172,8 @@ public class ProfileService
                 ProxyUsername = s.ProxyUsername,
                 ProxyPassword = DecryptString(s.EncryptedProxyPassword),
                 MixedProxyPort = s.Socks5Port > 0 ? s.Socks5Port : 1080,
+                MixedProxyUsername = s.MixedProxyUsername ?? "",
+                MixedProxyPassword = DecryptString(s.EncryptedMixedProxyPassword),
                 AutoTuneMtu = s.AutoTuneMtu,
                 EnableDnsOptimization = s.EnableDnsOptimization,
                 EnableGameMode = s.EnableGameMode,
@@ -207,6 +225,8 @@ public class ProfileService
             ProxyUsername = p.ProxyUsername,
             EncryptedProxyPassword = EncryptString(p.ProxyPassword),
             Socks5Port = p.MixedProxyPort,
+            MixedProxyUsername = p.MixedProxyUsername,
+            EncryptedMixedProxyPassword = EncryptString(p.MixedProxyPassword),
             AutoTuneMtu = p.AutoTuneMtu,
             EnableDnsOptimization = p.EnableDnsOptimization,
             EnableGameMode = p.EnableGameMode,
@@ -286,6 +306,8 @@ public class ProfileService
         public string EncryptedProxyPassword { get; set; } = "";
         [JsonPropertyName("socks5Port")]
         public int Socks5Port { get; set; } = 1080;
+        public string MixedProxyUsername { get; set; } = "";
+        public string EncryptedMixedProxyPassword { get; set; } = "";
         public bool AutoTuneMtu { get; set; } = true;
         public bool EnableDnsOptimization { get; set; } = true;
         public bool EnableGameMode { get; set; } = false;

@@ -647,6 +647,7 @@ public partial class MainViewModel
         }
 
         _trafficRouter.Socks5Port = MixedProxyPort;
+        ApplyLocalProxyAuthToRouter();
         _trafficRouter.EnableDnsOptimization = IsDnsOptimizationEnabled;
         _trafficRouter.DnsRedirectOverrideIp = CurrentTunnelType == TunnelType.WireGuard
             ? snap.DnsRedirectIp

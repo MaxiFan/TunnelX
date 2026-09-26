@@ -80,6 +80,44 @@
                                    TextWrapping="Wrap"
                                    VerticalAlignment="Center"/>
                     </Grid>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="نام کاربری پیش‌فرض پروکسی محلی"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBox Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding LocalProxyUsername, UpdateSourceTrigger=PropertyChanged}"
+                                     FlowDirection="LeftToRight"
+                                     FontSize="12"
+                                     Padding="8,5"
+                                     Margin="0,4,0,0"
+                                     ToolTip="نام کاربری اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="رمز عبور پیش‌فرض پروکسی محلی"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <PasswordBox x:Name="LocalProxyPasswordField"
+                                         Style="{StaticResource ModernPasswordBox}"
+                                         FlowDirection="LeftToRight"
+                                         FontSize="12"
+                                         Padding="8,5"
+                                         Margin="0,4,0,0"
+                                         ToolTip="رمز عبور اختیاری برای احراز هویت کلاینت‌هایی که به پروکسی محلی وصل می‌شوند"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="اگر نام کاربری خالی باشد، پروکسی محلی بدون احراز هویت کار می‌کند. وقتی روی پروفایل نام کاربری جداگانه‌ای تنظیم نشده باشد، همین پیش‌فرض‌ها هنگام گوش‌دادن اعمال می‌شوند."
+                               FontSize="10"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"/>
                     <TextBlock Text="پورت‌های زیر 1024 و چند پورت رایج مثل 2080، 3000، 3389، 8080 و 9090 مجاز نیستند تا با سرویس‌های سیستم یا ابزارهای توسعه تداخل نداشته باشند."
                                FontSize="10"
                                Foreground="{StaticResource TextSecondaryBrush}"

@@ -233,6 +233,52 @@ public partial class MainViewModel : INotifyPropertyChanged
         set { _mixedProxyPortStatusText = value; OnPropertyChanged(); }
     }
 
+    private string _localProxyUsername = "";
+    public string LocalProxyUsername
+    {
+        get => _localProxyUsername;
+        set
+        {
+            var normalized = value ?? "";
+            if (_localProxyUsername == normalized) return;
+            _localProxyUsername = normalized;
+            _appSettings.LocalProxyUsername = normalized;
+            _profileService.SaveAppSettings(_appSettings);
+            OnPropertyChanged();
+            ApplyLocalProxyAuthToRouter();
+        }
+    }
+
+    private string _localProxyPassword = "";
+    public string LocalProxyPassword
+    {
+        get => _localProxyPassword;
+        set
+        {
+            var normalized = value ?? "";
+            if (_localProxyPassword == normalized) return;
+            _localProxyPassword = normalized;
+            _appSettings.LocalProxyPassword = normalized;
+            _profileService.SaveAppSettings(_appSettings);
+            OnPropertyChanged();
+            ApplyLocalProxyAuthToRouter();
+        }
+    }
+
+    /// <summary>Notifies Settings PasswordBox when defaults are loaded.</summary>
+    public event Action<string>? LocalProxyPasswordChanged;
+
+    private void ApplyLocalProxyAuthToRouter()
+    {
+        var creds = LocalProxyAuth.Resolve(
+            _selectedProfile?.MixedProxyUsername,
+            _selectedProfile?.MixedProxyPassword,
+            LocalProxyUsername,
+            LocalProxyPassword);
+        _trafficRouter.MixedProxyUsername = creds.Username;
+        _trafficRouter.MixedProxyPassword = creds.Password;
+    }
+
     private bool _autoTuneMtu = true;
     public bool AutoTuneMtu
     {
@@ -2817,6 +2863,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         _enableInformationalNotifications = _appSettings.EnableInformationalNotifications;
         _healthCheckEndpointsText = _appSettings.HealthCheckEndpoints ?? "";
         _includeDefaultHealthCheckEndpoints = _appSettings.IncludeDefaultHealthCheckEndpoints;
+        _localProxyUsername = _appSettings.LocalProxyUsername ?? "";
+        _localProxyPassword = _appSettings.LocalProxyPassword ?? "";
         _githubInstallCount = _appSettings.GitHubAppDownloadCount;
         AppNotificationService.Configure(() => _enableInformationalNotifications);
         OnPropertyChanged(nameof(StartWithWindows));
@@ -2824,6 +2872,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(EnableInformationalNotifications));
         OnPropertyChanged(nameof(HealthCheckEndpointsText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpoints));
+        OnPropertyChanged(nameof(LocalProxyUsername));
+        LocalProxyPasswordChanged?.Invoke(_localProxyPassword);
+        ApplyLocalProxyAuthToRouter();
         RefreshHealthCheckStatus();
         SyncPingTargetWithHealthChecks();
         OnPropertyChanged(nameof(HealthCheckSectionTitleText));

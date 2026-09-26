@@ -289,6 +289,7 @@ public partial class MainViewModel
             OpenVpnPrivateKeyPasswordChanged?.Invoke(profile.OpenVpnPrivateKeyPassword);
             OpenVpnUpstreamProxyPasswordChanged?.Invoke(profile.OpenVpnUpstreamProxyPassword);
             ProxyPasswordChanged?.Invoke(profile.ProxyPassword);
+            ApplyLocalProxyAuthToRouter();
         }
         finally
         {
@@ -595,6 +596,8 @@ public partial class MainViewModel
         ProxyUsername = source.ProxyUsername,
         ProxyPassword = source.ProxyPassword,
         MixedProxyPort = source.MixedProxyPort,
+        MixedProxyUsername = source.MixedProxyUsername,
+        MixedProxyPassword = source.MixedProxyPassword,
         AutoTuneMtu = source.AutoTuneMtu,
         EnableDnsOptimization = source.EnableDnsOptimization,
         EnableGameMode = source.EnableGameMode,
@@ -629,6 +632,8 @@ public partial class MainViewModel
         target.ProxyUsername = source.ProxyUsername;
         target.ProxyPassword = source.ProxyPassword;
         target.MixedProxyPort = source.MixedProxyPort;
+        target.MixedProxyUsername = source.MixedProxyUsername;
+        target.MixedProxyPassword = source.MixedProxyPassword;
         target.AutoTuneMtu = source.AutoTuneMtu;
         target.EnableDnsOptimization = source.EnableDnsOptimization;
         target.EnableGameMode = source.EnableGameMode;

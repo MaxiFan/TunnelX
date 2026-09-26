@@ -173,6 +173,12 @@ public partial class TrafficRouterService : IDisposable
     /// <summary>Listener port for the built-in mixed proxy (SOCKS5 + HTTP).</summary>
     public int Socks5Port { get; set; } = 1080;
 
+    /// <summary>Optional username for local mixed-proxy client authentication.</summary>
+    public string MixedProxyUsername { get; set; } = "";
+
+    /// <summary>Optional password for local mixed-proxy client authentication.</summary>
+    public string MixedProxyPassword { get; set; } = "";
+
     /// <summary>
     /// Enables DNS optimization features (cached resolves + best DNS redirect target).
     /// </summary>
@@ -550,7 +556,7 @@ public partial class TrafficRouterService : IDisposable
         // Optional mixed SOCKS5/HTTP proxy
         if (EnableSocks5)
         {
-            _mixedProxy = new MixedProxyServer(Socks5Port);
+            _mixedProxy = new MixedProxyServer(Socks5Port, MixedProxyUsername, MixedProxyPassword);
             _mixedProxy.Start(vpnLocalIp, EnsureHostRouteForSocks5);
         }
     }

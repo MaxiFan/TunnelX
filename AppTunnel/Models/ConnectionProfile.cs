@@ -57,6 +57,8 @@ public class ConnectionProfile : INotifyPropertyChanged
     private string _proxyUsername = "";
     private string _proxyPassword = "";
     private int _mixedProxyPort = 1080;
+    private string _mixedProxyUsername = "";
+    private string _mixedProxyPassword = "";
     private bool _autoTuneMtu = true;
     private bool _enableDnsOptimization = true;
     private bool _enableGameMode = false;
@@ -305,6 +307,26 @@ public class ConnectionProfile : INotifyPropertyChanged
     {
         get => _mixedProxyPort;
         set => SetField(ref _mixedProxyPort, value);
+    }
+
+    /// <summary>
+    /// Optional per-profile local mixed-proxy auth username.
+    /// When empty, Settings defaults (<c>LocalProxyUsername</c>) are used.
+    /// </summary>
+    public string MixedProxyUsername
+    {
+        get => _mixedProxyUsername;
+        set => SetField(ref _mixedProxyUsername, value);
+    }
+
+    /// <summary>
+    /// Optional per-profile local mixed-proxy auth password (DPAPI at rest).
+    /// Used only when <see cref="MixedProxyUsername"/> is set.
+    /// </summary>
+    public string MixedProxyPassword
+    {
+        get => _mixedProxyPassword;
+        set => SetField(ref _mixedProxyPassword, value);
     }
 
     public bool AutoTuneMtu
