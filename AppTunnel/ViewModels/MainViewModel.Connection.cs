@@ -590,9 +590,7 @@ public partial class MainViewModel
         VpnAdapterName = "";
         _currentVpnInterfaceIndex = -1;
         _currentVpnGatewayIp = "";
-        _isFullRouteEnabled = false;
-        OnPropertyChanged(nameof(IsFullRouteEnabled));
-        OnPropertyChanged(nameof(FullRouteStatusText));
+        ResetFullRouteUi();
         RaiseHealthStatusChanged();
     }
 
@@ -737,9 +735,7 @@ public partial class MainViewModel
         VpnAdapterName = "";
         _currentVpnInterfaceIndex = -1;
         _currentVpnGatewayIp = "";
-        _isFullRouteEnabled = false;
-        OnPropertyChanged(nameof(IsFullRouteEnabled));
-        OnPropertyChanged(nameof(FullRouteStatusText));
+        ResetFullRouteUi();
         RaiseHealthStatusChanged();
         ConnectionDuration = "--:--:--";
         TotalTraffic = "0 B";
@@ -1217,9 +1213,7 @@ public partial class MainViewModel
         VpnAdapterName = "";
         _currentVpnInterfaceIndex = -1;
         _currentVpnGatewayIp = "";
-        _isFullRouteEnabled = false;
-        OnPropertyChanged(nameof(IsFullRouteEnabled));
-        OnPropertyChanged(nameof(FullRouteStatusText));
+        ResetFullRouteUi();
         RaiseHealthStatusChanged();
         ConnectionDuration = "--:--:--";
         TotalTraffic = "0 B";
@@ -1311,6 +1305,7 @@ public partial class MainViewModel
 
         var (directSent, directReceived) = _trafficRouter.GetDirectTraffic();
         DirectTraffic = FormatBytes(directSent + directReceived);
+        SyncObservedRouteMode();
         RaiseHealthStatusChanged();
     }
 
@@ -1362,9 +1357,7 @@ public partial class MainViewModel
             VpnAdapterName = ResolveInterfaceName(status.VpnInterfaceIndex);
             _currentVpnInterfaceIndex = status.VpnInterfaceIndex;
             _currentVpnGatewayIp = status.VpnGatewayIp;
-            _isFullRouteEnabled = false;
-            OnPropertyChanged(nameof(IsFullRouteEnabled));
-            OnPropertyChanged(nameof(FullRouteStatusText));
+            ResetFullRouteUi();
 
             var routerSnap = new VpnRouterSnapshot(
                 status.VpnInterfaceIndex,
@@ -1381,12 +1374,19 @@ public partial class MainViewModel
             if (wasFullRoute)
             {
                 _isFullRouteEnabled = _trafficRouter.SetFullRouteEnabled(true);
-                OnPropertyChanged(nameof(IsFullRouteEnabled));
-                OnPropertyChanged(nameof(FullRouteStatusText));
+                NotifyRouteModeUiChanged();
+                if (_isFullRouteEnabled)
+                {
+                    AppNotificationService.ShowTrayForced(
+                        "عبور کل سیستم فعال است",
+                        "پس از اتصال مجدد OpenVPN، Full Route دوباره اعمال شد؛ ترافیک کل سیستم از تونل عبور می‌کند.");
+                    StatusText = "OpenVPN دوباره متصل شد؛ عبور کل سیستم همچنان فعال است";
+                }
             }
 
             _vpnHealthCheckCounter = 0;
-            StatusText = "OpenVPN دوباره متصل شد و مسیرها بروزرسانی شدند";
+            if (!(wasFullRoute && _isFullRouteEnabled))
+                StatusText = "OpenVPN دوباره متصل شد و مسیرها بروزرسانی شدند";
             RaiseHealthStatusChanged();
         }
         catch (Exception ex)

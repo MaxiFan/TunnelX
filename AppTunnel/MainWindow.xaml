@@ -151,7 +151,7 @@
                             </Border>
                             <Border Background="#12FFFFFF" CornerRadius="8" Padding="7,2" Margin="0,0,4,0">
                                 <TextBlock Text="{Binding HeaderRouteText}" FontSize="9"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                           Foreground="{Binding HeaderRouteColor, Converter={StaticResource StringToColor}}"/>
                             </Border>
                             <Border Background="#12FFFFFF" CornerRadius="8" Padding="7,2">
                                 <TextBlock Text="{Binding HeaderLeakText}" FontSize="9"

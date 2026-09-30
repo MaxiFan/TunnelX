@@ -1716,6 +1716,9 @@ public partial class MainViewModel : INotifyPropertyChanged
     }
 
     private bool _isFullRouteEnabled;
+    private bool _unexpectedVpnDefaultRoute;
+    private int _lastUnexpectedDefaultRouteEvents;
+
     public bool IsFullRouteEnabled
     {
         get => _isFullRouteEnabled;
@@ -1735,11 +1738,29 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
 
             _isFullRouteEnabled = value;
+            if (value)
+                _unexpectedVpnDefaultRoute = false;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(FullRouteStatusText));
-            OnPropertyChanged(nameof(RouteModeTitle));
-            OnPropertyChanged(nameof(RouteModeDescription));
+            NotifyRouteModeUiChanged();
             RaiseHealthStatusChanged();
+
+            if (IsConnected)
+            {
+                if (value)
+                {
+                    AppNotificationService.ShowTrayForced(
+                        "عبور کل سیستم فعال شد",
+                        "Full Route فعال است؛ ترافیک کل ویندوز از تونل عبور می‌کند.");
+                    StatusText = "Full Route فعال است؛ کل سیستم از تونل عبور می‌کند";
+                }
+                else
+                {
+                    AppNotificationService.ShowTray(
+                        "حالت انتخابی فعال شد",
+                        "Split فعال است؛ فقط برنامه‌ها و مقصدهای انتخابی از تونل عبور می‌کنند");
+                    StatusText = "Split فعال است؛ فقط برنامه‌ها و مقصدهای انتخابی از تونل عبور می‌کنند";
+                }
+            }
         }
     }
 
@@ -1754,8 +1775,56 @@ public partial class MainViewModel : INotifyPropertyChanged
         ? LocalizationService.Instance.T("ترافیک کل سیستم از تونل عبور خواهد کرد؛ برای وقتی مناسب است که همه برنامه‌ها باید پشت تونل باشند.")
         : LocalizationService.Instance.T("فقط برنامه‌ها و مقصدهای انتخابی از تونل عبور می‌کنند؛ بقیه ترافیک مستقیم می‌ماند.");
 
+    public bool ShowSystemWideTunnelBanner =>
+        IsConnected && (_isFullRouteEnabled || _unexpectedVpnDefaultRoute);
+
+    public bool SystemWideTunnelBannerIsUnexpected =>
+        IsConnected && !_isFullRouteEnabled && _unexpectedVpnDefaultRoute;
+
+    public string SystemWideTunnelBannerText
+    {
+        get
+        {
+            if (_isFullRouteEnabled)
+                return LocalizationService.Instance.T("عبور کل سیستم فعال است: ترافیک همه برنامه‌ها از تونل می‌گذرد مگر مقصدهای استثنا.");
+            if (_unexpectedVpnDefaultRoute)
+                return LocalizationService.Instance.T("مسیر پیش‌فرض ویندوز روی آداپتر VPN دیده شد. TunnelX آن را برمی‌دارد تا حالت انتخابی حفظ شود.");
+            return "";
+        }
+    }
+
     public string HeaderCoreText => $"Core: {ActiveCoreName}";
-    public string HeaderRouteText => IsFullRouteEnabled ? "Mode: Full" : "Mode: Split";
+    public string HeaderRouteText
+    {
+        get
+        {
+            if (!IsConnected)
+                return LocalizationService.Instance.T("حالت: —");
+            if (_isFullRouteEnabled)
+                return LocalizationService.Instance.T("حالت: کل سیستم");
+            if (_unexpectedVpnDefaultRoute)
+                return LocalizationService.Instance.T("حالت: تونل سراسری ناخواسته");
+            return LocalizationService.Instance.T("حالت: انتخابی");
+        }
+    }
+
+    public string HeaderRouteColor =>
+        !IsConnected
+            ? "#A0A8B8"
+            : _isFullRouteEnabled
+                ? "#E07820"
+                : _unexpectedVpnDefaultRoute
+                    ? "#E05252"
+                    : "#6CCB5F";
+
+    public string TrayRouteStatusText =>
+        !IsConnected
+            ? LocalizationService.Instance.T("TunnelX")
+            : _isFullRouteEnabled
+                ? LocalizationService.Instance.T("TunnelX — عبور کل سیستم")
+                : _unexpectedVpnDefaultRoute
+                    ? LocalizationService.Instance.T("TunnelX — تونل سراسری ناخواسته")
+                    : LocalizationService.Instance.T("TunnelX — حالت انتخابی");
     public string HeaderLeakText => IsConnected
         ? (_trafficRouter.LeakCount == 0
             ? (_trafficRouter.LeakBlockedCount == 0
@@ -1782,9 +1851,13 @@ public partial class MainViewModel : INotifyPropertyChanged
     public string HealthIpv6Text => IsConnected
         ? $"IPv6 blocked {_trafficRouter.Ipv6BlockedCount}"
         : "-";
-    public string HealthRoutesText => IsConnected
-        ? $"routes {_trafficRouter.ActiveRouteCount}/{_trafficRouter.RouteFailureCount} fail"
-        : "-";
+    public string HealthRoutesText => !IsConnected
+        ? "-"
+        : _isFullRouteEnabled
+            ? LocalizationService.Instance.T("کل سیستم")
+            : _unexpectedVpnDefaultRoute
+                ? LocalizationService.Instance.T("تونل سراسری!")
+                : $"routes {_trafficRouter.ActiveRouteCount}/{_trafficRouter.RouteFailureCount} fail";
 
     public string ConnectedBadgeText => CurrentTunnelType == TunnelType.SocksProxy
         ? LocalizationService.Instance.T("متصل به پراکسی")
@@ -2798,14 +2871,76 @@ public partial class MainViewModel : INotifyPropertyChanged
         return "";
     }
 
+    private void NotifyRouteModeUiChanged()
+    {
+        OnPropertyChanged(nameof(IsFullRouteEnabled));
+        OnPropertyChanged(nameof(FullRouteStatusText));
+        OnPropertyChanged(nameof(RouteModeTitle));
+        OnPropertyChanged(nameof(RouteModeDescription));
+        OnPropertyChanged(nameof(ShowSystemWideTunnelBanner));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerIsUnexpected));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerText));
+        OnPropertyChanged(nameof(HeaderRouteText));
+        OnPropertyChanged(nameof(HeaderRouteColor));
+        OnPropertyChanged(nameof(TrayRouteStatusText));
+        OnPropertyChanged(nameof(HealthRoutesText));
+    }
+
+    private void ResetFullRouteUi()
+    {
+        _isFullRouteEnabled = false;
+        _unexpectedVpnDefaultRoute = false;
+        _lastUnexpectedDefaultRouteEvents = 0;
+        NotifyRouteModeUiChanged();
+    }
+
+    internal void SyncObservedRouteMode()
+    {
+        if (!IsConnected)
+        {
+            if (_unexpectedVpnDefaultRoute)
+            {
+                _unexpectedVpnDefaultRoute = false;
+                NotifyRouteModeUiChanged();
+            }
+            return;
+        }
+
+        var unexpected = !_isFullRouteEnabled &&
+                         (_trafficRouter.HasVpnDefaultRoute || _trafficRouter.UnexpectedVpnDefaultRouteEvents > _lastUnexpectedDefaultRouteEvents);
+        var events = _trafficRouter.UnexpectedVpnDefaultRouteEvents;
+        var becameUnexpected = unexpected && !_unexpectedVpnDefaultRoute;
+        _lastUnexpectedDefaultRouteEvents = events;
+
+        if (unexpected != _unexpectedVpnDefaultRoute)
+        {
+            _unexpectedVpnDefaultRoute = unexpected;
+            NotifyRouteModeUiChanged();
+        }
+
+        // Count an appearance (edge), not every 5s while the row is stuck.
+        if (!_isFullRouteEnabled && becameUnexpected)
+        {
+            Logger.Warning("[FULL-ROUTE] Unexpected VPN default route while UI is split; user notified");
+            AppNotificationService.ShowTrayForced(
+                "تونل سراسری ناخواسته",
+                "مسیر پیش‌فرض ویندوز روی آداپتر VPN دیده شد. TunnelX آن را برمی‌دارد تا حالت انتخابی حفظ شود.");
+        }
+    }
+
     private void RaiseHealthStatusChanged()
     {
         OnPropertyChanged(nameof(HeaderCoreText));
         OnPropertyChanged(nameof(HeaderRouteText));
+        OnPropertyChanged(nameof(HeaderRouteColor));
         OnPropertyChanged(nameof(HeaderLeakText));
         OnPropertyChanged(nameof(HeaderLeakColor));
         OnPropertyChanged(nameof(RouteModeTitle));
         OnPropertyChanged(nameof(RouteModeDescription));
+        OnPropertyChanged(nameof(ShowSystemWideTunnelBanner));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerIsUnexpected));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerText));
+        OnPropertyChanged(nameof(TrayRouteStatusText));
         OnPropertyChanged(nameof(HealthLeakText));
         OnPropertyChanged(nameof(HealthDnsText));
         OnPropertyChanged(nameof(HealthIpv6Text));
@@ -3048,8 +3183,13 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(FullRouteStatusText));
         OnPropertyChanged(nameof(RouteModeTitle));
         OnPropertyChanged(nameof(RouteModeDescription));
+        OnPropertyChanged(nameof(ShowSystemWideTunnelBanner));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerIsUnexpected));
+        OnPropertyChanged(nameof(SystemWideTunnelBannerText));
         OnPropertyChanged(nameof(HeaderCoreText));
         OnPropertyChanged(nameof(HeaderRouteText));
+        OnPropertyChanged(nameof(HeaderRouteColor));
+        OnPropertyChanged(nameof(TrayRouteStatusText));
         OnPropertyChanged(nameof(HeaderLeakText));
         OnPropertyChanged(nameof(HealthLeakText));
         OnPropertyChanged(nameof(HealthDnsText));

@@ -522,6 +522,11 @@ public partial class TrafficRouterService : IDisposable
             Logger.Info("[WG-OUT] Active VPN-interface intercept disabled for WireGuard; using NET-OUT/NET-IN plus read-only sniffing");
         }
         _fullRouteEnabled = false;
+        _hasVpnDefaultRoute = false;
+        _loggedInitialDefaultSnapshot = false;
+        _loggedSplitDefaultPresent = false;
+        _splitDefaultWatchTick = 0;
+        _unexpectedVpnDefaultRouteEvents = 0;
         _routeBootstrapReady = false;
         // Install DoH/bootstrap routes before INCLUDE/EXCLUDE DNS refresh so lookups
         // egress via the tunnel (not filtered system DNS on the physical path).
@@ -692,18 +697,18 @@ public partial class TrafficRouterService : IDisposable
                 $"rewriteOut={netOutRw} wgSeen={wgOutSeen} wgRewrite={wgOutRw} wgDns={wgDnsRedirect} wgQuicDrop={wgQuicDropped} rewriteIn={netInRw} rewriteFail={netOutFail} " +
                 $"vpnOut={vpnOut}/{vpnOutOurIp} vpnIn={vpnIn}/{vpnInOurIp} nat={_natTable.Count} " +
                 $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
-                $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count}");
+                $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count} " +
+                $"vpnIfDefault={(_hasVpnDefaultRoute ? "yes" : "no")} unexpectedDefaultEvents={_unexpectedVpnDefaultRouteEvents}");
         }
-        if (_vpnServerIsUdpOnly && !_fullRouteEnabled)
+
+        var splitWatchTick = Interlocked.Increment(ref _splitDefaultWatchTick);
+        try
         {
-            var wgTicks = Interlocked.Increment(ref _diagTick);
-            if (wgTicks % 6 == 0)
-            {
-                // iphlpapi only. route.exe / route print on this timer holds the
-                // Windows routing lock; after a long per-app session that stall
-                // is enough for NCSI to fail and Wi-Fi to drop.
-                try { RemoveVpnDefaultRouteByInterface(); } catch { }
-            }
+            EnforceSplitTunnelDefaultRoute(verboseLog: splitWatchTick % 6 == 1);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[ROUTE] Split default-route watch failed: {ex.Message}");
         }
 
         // Loop health check — warn if any background loop has exited unexpectedly
@@ -752,7 +757,7 @@ public partial class TrafficRouterService : IDisposable
                         }
                     }
                 }
-                Logger.Info($"[DIAG] defaultGateways={defGwCount} primaryNic='{defNic ?? "<none>"}'");
+                Logger.Info($"[DIAG] defaultGateways={defGwCount} primaryNic='{defNic ?? "<none>"}' vpnIf={_vpnInterfaceIndex} vpnIfDefault={(_hasVpnDefaultRoute ? "yes" : "no")} fullRoute={_fullRouteEnabled}");
             }
             catch { }
         }
@@ -1197,6 +1202,11 @@ public partial class TrafficRouterService : IDisposable
         Interlocked.Exchange(ref _statsReportTick, 0);
         _lastStatsHealthSignature = "";
         _fullRouteEnabled = false;
+        _hasVpnDefaultRoute = false;
+        _loggedInitialDefaultSnapshot = false;
+        _loggedSplitDefaultPresent = false;
+        _splitDefaultWatchTick = 0;
+        _unexpectedVpnDefaultRouteEvents = 0;
         _inboundRewriteCount = 0;
         _redirectCount = 0;
 

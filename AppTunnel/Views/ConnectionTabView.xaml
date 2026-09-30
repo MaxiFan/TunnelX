@@ -1290,10 +1290,39 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- Always-visible when Full Route is on, or when a VPN default route was detected in split mode. -->
+            <Border Grid.Row="0"
+                    Margin="0,4,0,2"
+                    CornerRadius="10"
+                    Padding="10,8"
+                    Visibility="{Binding ShowSystemWideTunnelBanner, Converter={StaticResource BoolToVis}}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#33E07820"/>
+                        <Setter Property="BorderBrush" Value="#88E07820"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SystemWideTunnelBannerIsUnexpected}" Value="True">
+                                <Setter Property="Background" Value="#33E05252"/>
+                                <Setter Property="BorderBrush" Value="#88E05252"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding SystemWideTunnelBannerText}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           FlowDirection="{Binding AppFlowDirection}"
+                           TextAlignment="{Binding AppTextAlignment}"/>
+            </Border>
+
             <!-- Connection summary -->
-            <Grid Grid.Row="0" Margin="0,4,0,0">
+            <Grid Grid.Row="1" Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="0.95*"/>
                     <ColumnDefinition Width="6"/>
@@ -1479,7 +1508,7 @@
             </Grid>
 
             <!-- Route, manual proxy, ping -->
-            <Grid Grid.Row="1"
+            <Grid Grid.Row="2"
                   Margin="0,6,0,0"
                   FlowDirection="{Binding AppFlowDirection}">
                 <Grid.ColumnDefinitions>
@@ -1634,7 +1663,7 @@
                 </Border>
             </Grid>
 
-            <Button Grid.Row="2"
+            <Button Grid.Row="3"
                     Command="{Binding ConnectCommand}"
                     MinWidth="220"
                     Height="50"
@@ -1710,7 +1739,7 @@
                 </Button.Style>
             </Button>
 
-            <StackPanel Grid.Row="3"
+            <StackPanel Grid.Row="4"
                         Margin="0,10,0,2">
             <Border Background="#24E8803A"
                     BorderBrush="#66E8803A"

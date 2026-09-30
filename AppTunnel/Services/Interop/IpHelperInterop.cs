@@ -23,6 +23,8 @@ internal struct MIB_IPFORWARDROW
 
 internal static class IpHelperNative
 {
+    public const int ErrorInsufficientBuffer = 122;
+
     [DllImport("iphlpapi.dll")]
     public static extern int CreateIpForwardEntry(ref MIB_IPFORWARDROW pRoute);
 
@@ -31,4 +33,7 @@ internal static class IpHelperNative
 
     [DllImport("iphlpapi.dll")]
     public static extern int SetIpForwardEntry(ref MIB_IPFORWARDROW pRoute);
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern int GetIpForwardTable(IntPtr pIpForwardTable, ref int pdwSize, bool bOrder);
 }

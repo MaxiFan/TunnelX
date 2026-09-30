@@ -205,6 +205,12 @@ public partial class MainWindow : Window
             {
                 Dispatcher.BeginInvoke(NotifyUpdateAvailable);
             }
+            else if (args.PropertyName is nameof(MainViewModel.TrayRouteStatusText)
+                     or nameof(MainViewModel.IsFullRouteEnabled)
+                     or nameof(MainViewModel.HeaderRouteText))
+            {
+                Dispatcher.BeginInvoke(RefreshTrayText);
+            }
         };
 
         var updateItem = new System.Windows.Forms.ToolStripMenuItem("بررسی بروزرسانی");
@@ -233,7 +239,12 @@ public partial class MainWindow : Window
     {
         if (_trayIcon?.ContextMenuStrip == null) return;
 
-        _trayIcon.Text = LocalizationService.Instance.T("TunnelX — Split Traffic Per App");
+        var trayText = string.IsNullOrWhiteSpace(_viewModel.TrayRouteStatusText)
+            ? LocalizationService.Instance.T("TunnelX")
+            : _viewModel.TrayRouteStatusText;
+        if (trayText.Length > 63)
+            trayText = trayText[..60] + "...";
+        _trayIcon.Text = trayText;
         var items = _trayIcon.ContextMenuStrip.Items;
         if (items.Count > 0 && items[0] is System.Windows.Forms.ToolStripMenuItem showItem)
             showItem.Text = LocalizationService.Instance.T("نمایش TunnelX");

@@ -82,13 +82,15 @@ public class WireGuardTunnelProvider : ITunnelProvider
             ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Active, "راه‌اندازی سرویس WireGuard");
             Status.Message = LocalizationService.Instance.T("در حال اجرای سرویس WireGuard...");
             var install = await RunWireGuardAsync($"/installtunnelservice \"{_configPath}\"", TimeSpan.FromSeconds(20), ct);
-            if (install.ExitCode != 0 && LooksLikeUnsupportedTableOption(install.Output, install.Error))
+            var installedWithoutTableOff = false;
+            if (install.ExitCode != 0 && WireGuardSplitRouteOptions.LooksLikeUnsupportedTableOption(install.Output, install.Error))
             {
-                Logger.Warning("[WireGuard] Table=off was rejected by wireguard.exe; retrying without Table=off fallback");
+                Logger.Warning("[WireGuard] Table=off was rejected by wireguard.exe; retrying without Table=off. AllowedIPs 0.0.0.0/0 may install a system default route until TunnelX strips it.");
                 preparedConfig = BuildWindowsWireGuardConfig(profile, tunnelAddress, disableTable: false);
                 await File.WriteAllTextAsync(_configPath, preparedConfig, Utf8NoBom, ct);
                 await UninstallTunnelServiceAsync(ignoreErrors: true, CancellationToken.None);
                 install = await RunWireGuardAsync($"/installtunnelservice \"{_configPath}\"", TimeSpan.FromSeconds(20), ct);
+                installedWithoutTableOff = install.ExitCode == 0;
             }
             if (install.ExitCode != 0)
             {
@@ -114,6 +116,17 @@ public class WireGuardTunnelProvider : ITunnelProvider
             }
 
             _vpnInterfaceIndex = interfaceIndex;
+            if (installedWithoutTableOff)
+            {
+                var stripped = VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(interfaceIndex);
+                Logger.Warning($"[ROUTE] WireGuard without Table=off: stripped {stripped} 0.0.0.0/0 row(s) on IF {interfaceIndex} (split mode)");
+            }
+            else
+            {
+                var leftover = VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(interfaceIndex);
+                if (leftover > 0)
+                    Logger.Warning($"[ROUTE] WireGuard Table=off still left {leftover} 0.0.0.0/0 row(s) on IF {interfaceIndex}; stripped");
+            }
             ConnectionProgressService.Report(
                 "tun_interface",
                 ConnectionProgressPhase.Complete,
@@ -383,14 +396,6 @@ public class WireGuardTunnelProvider : ITunnelProvider
             Logger.Warning("[WireGuard] Reserved bytes are not supported by WireGuard for Windows and were omitted from the service config.");
 
         return builder.ToString();
-    }
-
-    private static bool LooksLikeUnsupportedTableOption(string stdout, string stderr)
-    {
-        var text = $"{stdout}\n{stderr}";
-        return text.Contains("Table", StringComparison.OrdinalIgnoreCase) ||
-               text.Contains("unrecognized", StringComparison.OrdinalIgnoreCase) ||
-               text.Contains("unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void LogIgnoredDnsServers(WireGuardProfile profile)
