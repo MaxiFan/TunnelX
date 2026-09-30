@@ -145,127 +145,77 @@ public class V2RayTunnelProvider : ITunnelProvider
             Logger.Info($"V2Ray config written to {_configPath}");
             mixedProxyPortReservation.Dispose();
 
-            // Start sing-box process
-            _process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName               = _singBoxExe,
-                    Arguments              = $"run -c \"{_configPath}\"",
-                    CreateNoWindow         = true,
-                    UseShellExecute        = false,
-                    RedirectStandardError  = true,
-                    RedirectStandardOutput = true,
-                    WorkingDirectory       = _workDir
-                },
-                EnableRaisingEvents = true
-            };
-
-            // Pipe stderr/stdout to Logger; stderr also feeds the watchdog.
-            //
-            // Watchdog policy (intentionally permissive — matches v2rayN behavior):
-            //   * i/o timeouts and "context deadline exceeded" are LOGGED ONLY.
-            //     They are common transient errors when CDN POPs are slow or a
-            //     specific destination is being throttled. sing-box retries
-            //     internally; we should not tear the whole tunnel down.
-            //   * "missing default interface" is also transient — it can fire
-            //     during a brief Wi-Fi roam or routing-table flux. We require it
-            //     to be reported repeatedly within a short window before acting.
-            //   * Process exit is a definitive failure and closes the local mixed
-            //     inbound. That must surface as a tunnel drop so clients on the
-            //     built-in proxy are reset and the endpoint is announced down.
-            _process.Exited += (_, _) =>
-            {
-                if (Status.State == ConnectionState.Connected)
-                {
-                    Logger.Warning("[WATCHDOG] sing-box process exited — triggering tunnel failure");
-                    TriggerTunnelFailed();
-                }
-            };
-            _process.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data == null) return;
-                Logger.ProcessOutput("[sing-box stderr]", e.Data, isError: true);
-
-                if (e.Data.Contains("network: missing default interface"))
-                {
-                    int n = Interlocked.Increment(ref _missingDefaultCount);
-                    var nowTicks = Environment.TickCount64;
-                    var first = Interlocked.Read(ref _missingDefaultFirstTick);
-                    if (first == 0)
-                    {
-                        Interlocked.Exchange(ref _missingDefaultFirstTick, nowTicks);
-                    }
-                    else if (nowTicks - first > MissingDefaultWindowMs)
-                    {
-                        // Stale window — reset and start over.
-                        Interlocked.Exchange(ref _missingDefaultCount, 1);
-                        Interlocked.Exchange(ref _missingDefaultFirstTick, nowTicks);
-                    }
-                    else if (n >= MissingDefaultThreshold)
-                    {
-                        Logger.Error($"[WATCHDOG] sing-box: 'missing default interface' ×{n} within {(nowTicks - first)/1000}s — triggering tunnel failure");
-                        TriggerTunnelFailed();
-                    }
-                    return;
-                }
-
-                if (e.Data.Contains("i/o timeout") || e.Data.Contains("context deadline exceeded"))
-                {
-                    // Just count for diagnostics, but never trigger disconnect.
-                    Interlocked.Increment(ref _singBoxTimeoutErrors);
-                    return;
-                }
-
-                if (e.Data.Contains("accepted") || e.Data.Contains("established") ||
-                    e.Data.Contains("connected") || e.Data.Contains("inbound/"))
-                {
-                    // Reset diagnostic counter on healthy log lines.
-                    Interlocked.Exchange(ref _singBoxTimeoutErrors, 0);
-                    Interlocked.Exchange(ref _missingDefaultCount, 0);
-                    Interlocked.Exchange(ref _missingDefaultFirstTick, 0);
-                }
-            };
-            _process.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data != null) Logger.ProcessOutput("[sing-box]", e.Data, isError: false);
-            };
-
-            _process.Start();
-            _process.BeginErrorReadLine();
-            _process.BeginOutputReadLine();
-
-            Logger.Info($"sing-box started (PID {_process.Id})");
-            ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Active, "راه‌اندازی هسته تونل (Xray/V2Ray)");
-            ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
-            ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
-            Status.Message = LocalizationService.Instance.T("در حال انتظار برای interface TunnelX-V2Ray...");
-
+            const int maxTunAttempts = 2;
+            var capturedLogs = new StringBuilder();
             int interfaceIndex = -1;
-            var deadline = DateTime.UtcNow.AddSeconds(TunInterfaceWaitSeconds);
-            while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+
+            for (var attempt = 1; attempt <= maxTunAttempts; attempt++)
             {
-                // Detect early crash before we even get the interface
+                capturedLogs = new StringBuilder();
+                await WintunAdapterHealth.PrepareForTunOpenAsync(
+                    attempt == 1 ? "pre-connect" : $"retry-{attempt}",
+                    ct);
+
+                StartSingBoxProcess(capturedLogs);
+                Logger.Info($"sing-box started (PID {_process!.Id}) attempt={attempt}/{maxTunAttempts}");
+                ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Active, "راه‌اندازی هسته تونل (Xray/V2Ray)");
+                ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
+                ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
+                Status.Message = LocalizationService.Instance.T("در حال انتظار برای interface TunnelX-V2Ray...");
+
+                interfaceIndex = -1;
+                var deadline = DateTime.UtcNow.AddSeconds(TunInterfaceWaitSeconds);
+                while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+                {
+                    if (_process.HasExited)
+                        break;
+
+                    interfaceIndex = FindInterfaceIndex(TunInterfaceName);
+                    if (interfaceIndex > 0)
+                        break;
+                    await Task.Delay(500, ct);
+                }
+
+                if (interfaceIndex > 0)
+                    break;
+
                 if (_process.HasExited)
                 {
-                    Status.State   = ConnectionState.Error;
-                    Status.Message = LocalizationService.Instance.Format("sing-box زودتر خارج شد (exit code {0}) — کانفیگ را بررسی کنید", _process.ExitCode);
-                    Logger.Error(Status.Message);
-                    await KillProcessAsync();
-                    return false;
+                    // Redirected stderr is async; wait briefly so TUN FATAL lines are captured.
+                    try { await Task.Delay(400, ct); } catch (OperationCanceledException) { throw; }
                 }
 
-                interfaceIndex = FindInterfaceIndex(TunInterfaceName);
-                if (interfaceIndex > 0) break;
-                await Task.Delay(500, ct);
+                var logs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
+                var exited = _process.HasExited;
+                var exitCode = exited ? _process.ExitCode : 0;
+                await KillProcessAsync();
+                WintunAdapterHealth.LogInventory(exited ? "after-early-exit" : "after-tun-timeout");
+
+                var canRetry = attempt < maxTunAttempts &&
+                    SingBoxTunFailure.ShouldRetryTunOpen(logs, exited);
+                if (canRetry)
+                {
+                    Logger.Warning(
+                        $"[WINTUN] TUN open failed (exited={exited} code={exitCode}); retrying after backoff");
+                    Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
+                    await Task.Delay(1500, ct);
+                    continue;
+                }
+
+                Status.State = ConnectionState.Error;
+                Status.Message = exited
+                    ? SingBoxTunFailure.FormatEarlyExitMessage(exitCode, logs)
+                    : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
+                Logger.Error(Status.Message);
+                ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
+                return false;
             }
 
             if (interfaceIndex <= 0)
             {
-                Status.State   = ConnectionState.Error;
-                Status.Message = LocalizationService.Instance.Format(
-                    "interface TunnelX-V2Ray ظاهر نشد (timeout {0}s)",
-                    TunInterfaceWaitSeconds);
+                var logs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
+                Status.State = ConnectionState.Error;
+                Status.Message = SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
                 Logger.Error(Status.Message);
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
                 await KillProcessAsync();
@@ -345,6 +295,96 @@ public class V2RayTunnelProvider : ITunnelProvider
         Status.VpnInterfaceIndex = -1;
         Status.SingBoxMixedPort  = 0;
         Status.Message           = LocalizationService.Instance.T("قطع شد");
+    }
+
+    private void StartSingBoxProcess(StringBuilder capturedLogs)
+    {
+        _process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName               = _singBoxExe,
+                Arguments              = $"run -c \"{_configPath}\"",
+                CreateNoWindow         = true,
+                UseShellExecute        = false,
+                RedirectStandardError  = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory       = _workDir
+            },
+            EnableRaisingEvents = true
+        };
+
+        // Pipe stderr/stdout to Logger; stderr also feeds the watchdog.
+        //
+        // Watchdog policy (intentionally permissive — matches v2rayN behavior):
+        //   * i/o timeouts and "context deadline exceeded" are LOGGED ONLY.
+        //   * "missing default interface" must repeat in a short window.
+        //   * Process exit while Connected is a definitive tunnel drop.
+        _process.Exited += (_, _) =>
+        {
+            if (Status.State == ConnectionState.Connected)
+            {
+                Logger.Warning("[WATCHDOG] sing-box process exited — triggering tunnel failure");
+                TriggerTunnelFailed();
+            }
+        };
+        _process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data == null) return;
+            WintunAdapterHealth.AppendCaptured(capturedLogs, e.Data);
+            Logger.ProcessOutput("[sing-box stderr]", e.Data, isError: true);
+
+            if (e.Data.Contains("network: missing default interface"))
+            {
+                int n = Interlocked.Increment(ref _missingDefaultCount);
+                var nowTicks = Environment.TickCount64;
+                var first = Interlocked.Read(ref _missingDefaultFirstTick);
+                if (first == 0)
+                {
+                    Interlocked.Exchange(ref _missingDefaultFirstTick, nowTicks);
+                }
+                else if (nowTicks - first > MissingDefaultWindowMs)
+                {
+                    Interlocked.Exchange(ref _missingDefaultCount, 1);
+                    Interlocked.Exchange(ref _missingDefaultFirstTick, nowTicks);
+                }
+                else if (n >= MissingDefaultThreshold)
+                {
+                    Logger.Error($"[WATCHDOG] sing-box: 'missing default interface' ×{n} within {(nowTicks - first)/1000}s — triggering tunnel failure");
+                    TriggerTunnelFailed();
+                }
+                return;
+            }
+
+            if (e.Data.Contains("i/o timeout") || e.Data.Contains("context deadline exceeded"))
+            {
+                Interlocked.Increment(ref _singBoxTimeoutErrors);
+                return;
+            }
+
+            if (SingBoxTunFailure.IsReadinessFailure(e.Data))
+                return;
+
+            if (e.Data.Contains("accepted", StringComparison.OrdinalIgnoreCase) ||
+                e.Data.Contains("established", StringComparison.OrdinalIgnoreCase) ||
+                (e.Data.Contains("connected", StringComparison.OrdinalIgnoreCase) &&
+                 !e.Data.Contains("FATAL", StringComparison.OrdinalIgnoreCase)))
+            {
+                Interlocked.Exchange(ref _singBoxTimeoutErrors, 0);
+                Interlocked.Exchange(ref _missingDefaultCount, 0);
+                Interlocked.Exchange(ref _missingDefaultFirstTick, 0);
+            }
+        };
+        _process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data == null) return;
+            WintunAdapterHealth.AppendCaptured(capturedLogs, e.Data);
+            Logger.ProcessOutput("[sing-box]", e.Data, isError: false);
+        };
+
+        _process.Start();
+        _process.BeginErrorReadLine();
+        _process.BeginOutputReadLine();
     }
 
     // =========================================================================

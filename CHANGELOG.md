@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### English
+
+- When sing-box/Xray TUN fails with Wintun “device is not ready” or “open interface take too much time”, the UI no longer blames a bad profile. It shows a localized TUN/Wintun readiness message (Administrator, stale adapters, antivirus, other Wintun apps, reboot) and logs leftover adapters (`Fixes #67`).
+- Pre-connect now inventories Wintun/TunnelX-V2Ray adapters, bounces a leftover TunnelX adapter if one is still present, and retries TUN open once after a short backoff.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- اگر sing-box/Xray با خطای Wintun («device is not ready» یا «open interface take too much time») خارج شود، رابط دیگر کانفیگ را مقصر نشان نمی‌دهد؛ پیام محلی‌شده آماده‌نبودن آداپتر TUN و لاگ آداپترهای گیرکرده نمایش داده می‌شود (رفع #67).
+- قبل از اتصال، آداپترهای Wintun/TunnelX-V2Ray فهرست می‌شوند؛ آداپتر باقی‌مانده TunnelX در صورت وجود bounce می‌شود و ساخت TUN یک‌بار با تأخیر کوتاه تکرار می‌شود.
+
+</div>
+
+### Русский
+
+- Если sing-box/Xray падает на TUN с «device is not ready» или «open interface take too much time», интерфейс больше не винит конфиг. Показывается локализованное сообщение о готовности TUN/Wintun и в лог пишутся оставшиеся адаптеры (`Fixes #67`).
+- Перед подключением TunnelX перечисляет адаптеры Wintun/TunnelX-V2Ray, при необходимости сбрасывает зависший адаптер TunnelX и один раз повторяет открытие TUN после короткой паузы.
+
 ## 2.2.1 - 2026-09-30
 
 ### English

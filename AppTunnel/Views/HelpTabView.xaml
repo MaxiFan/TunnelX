@@ -378,6 +378,11 @@
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
                     </Expander>
 
+                    <Expander Header="آداپتر مجازی TUN/Wintun بالا نمی‌آید" Style="{StaticResource HelpExpander}">
+                        <TextBlock Text="اگر sing-box با «device is not ready» یا «open interface take too much time» خارج شد، کانفیگ خراب نیست. با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl یا Device Manager آداپترهای گیرکرده Wintun/TunnelX-V2Ray را حذف کنید؛ WireGuard/WARP/Outline و سایر برنامه‌های Wintun را ببندید؛ ویندوز را ری‌استارت کنید و دوباره وصل شوید."
+                                   Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
+                    </Expander>
+
                     <Expander Header="ترافیک برنامه از تونل عبور نمی‌کند" Style="{StaticResource HelpExpander}">
                         <TextBlock Text="برنامه را در تب برنامه‌ها فعال کنید. اگر چندپردازشی است، برنامه را باز نگه دارید و لیست برنامه‌ها را دوباره بارگذاری کنید."
                                    Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
