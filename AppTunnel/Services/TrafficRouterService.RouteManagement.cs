@@ -6,8 +6,21 @@ namespace AppTunnel.Services;
 public partial class TrafficRouterService
 {
     private bool _vpnServerPhysicalRouteAdded;
+    private int _splitDefaultWatchTick;
+    private int _unexpectedVpnDefaultRouteEvents;
+    private volatile bool _hasVpnDefaultRoute;
+    private bool _loggedInitialDefaultSnapshot;
+    private bool _loggedSplitDefaultPresent;
 
     public bool IsFullRouteEnabled => _fullRouteEnabled;
+
+    /// <summary>
+    /// True when a 0.0.0.0/0 route is currently bound to the VPN interface.
+    /// In split mode this is unexpected (silent full tunnel).
+    /// </summary>
+    public bool HasVpnDefaultRoute => _hasVpnDefaultRoute;
+
+    public int UnexpectedVpnDefaultRouteEvents => _unexpectedVpnDefaultRouteEvents;
 
     public bool SetFullRouteEnabled(bool enabled)
     {
@@ -36,6 +49,8 @@ public partial class TrafficRouterService
             }
 
             _fullRouteEnabled = true;
+            _hasVpnDefaultRoute = true;
+            _loggedSplitDefaultPresent = true;
             InvalidateProcessCaches();
             RefreshExcludedDirectRoutes();
             Logger.Info($"[FULL-ROUTE] Enabled via VPN IF {_vpnInterfaceIndex}");
@@ -46,6 +61,8 @@ public partial class TrafficRouterService
         RemoveFullRouteDefault();
         RemoveVpnServerPhysicalRoute();
         _fullRouteEnabled = false;
+        _hasVpnDefaultRoute = false;
+        _loggedSplitDefaultPresent = false;
         MarkPolicyTransitionGrace(TimeSpan.FromSeconds(25));
         CleanupRoutesForCurrentMode(dropStaleNat: true);
         InvalidateProcessCaches();
@@ -98,6 +115,8 @@ public partial class TrafficRouterService
         if (_vpnInterfaceIndex <= 0)
             return;
 
+        VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(_vpnInterfaceIndex);
+
         foreach (int metric in new[] { 1, 6, 25, 26, 0 })
         {
             foreach (int proto in new[] { 3, 2, 5 }) // NETMGMT, LOCAL, ICMP/RIP
@@ -131,31 +150,17 @@ public partial class TrafficRouterService
     /// </summary>
     private void RemoveDefaultRouteOnVpn()
     {
-        // Print a compact summary of routes containing 0.0.0.0 for diagnostics.
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "route.exe",
-                Arguments = "print 0.0.0.0",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc != null)
-            {
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(3000);
-                var defaultRoutes = output.Split('\n')
-                    .Select(l => l.Trim())
-                    .Where(l => l.Contains("0.0.0.0") && l.Length > 10)
-                    .ToList();
-                Logger.Info($"[ROUTE-DIAG] Default routes found: {defaultRoutes.Count}");
-            }
+            var defaults = VpnDefaultRouteInspector.ReadDefaultRoutes();
+            Logger.Info($"[ROUTE-DIAG] {VpnDefaultRouteInspector.FormatSummary(defaults, _vpnInterfaceIndex)}");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[ROUTE-DIAG] Failed to read IPv4 forward table: {ex.Message}");
+        }
+
+        VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(_vpnInterfaceIndex);
 
         // Delete default route (0.0.0.0/0) on the VPN interface via route.exe.
         // We try multiple metric values because the server-pushed default route
@@ -187,29 +192,88 @@ public partial class TrafficRouterService
         // Interface-scoped. Does not match the physical NIC's default route.
         RemoveVpnDefaultRouteByInterface();
 
-        // Log the route table after deletion (single-line summary).
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "route.exe",
-                Arguments = "print 0.0.0.0",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc != null)
-            {
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(3000);
-                var remainingRoutes = output.Split('\n')
-                    .Count(l => l.Trim().Contains("0.0.0.0") && l.Trim().Length > 10);
-                Logger.Info($"[ROUTE-AFTER] Default routes remaining: {remainingRoutes}");
-            }
+            var remaining = VpnDefaultRouteInspector.ReadDefaultRoutes();
+            var vpnLeft = remaining.Count(r => r.IfIndex == (uint)_vpnInterfaceIndex);
+            _hasVpnDefaultRoute = vpnLeft > 0;
+            Logger.Info($"[ROUTE-AFTER] {VpnDefaultRouteInspector.FormatSummary(remaining, _vpnInterfaceIndex)}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[ROUTE-AFTER] Failed to re-read IPv4 forward table: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Split mode must not leave 0.0.0.0/0 on the VPN adapter. OpenVPN IPCP,
+    /// WireGuard without Table=off, and TAP/Wintun can re-add it after bootstrap.
+    /// </summary>
+    private void EnforceSplitTunnelDefaultRoute(bool verboseLog)
+    {
+        if (_vpnInterfaceIndex <= 0)
+            return;
+
+        IReadOnlyList<VpnDefaultRouteInspector.Ipv4RouteRow> defaults;
+        try
+        {
+            defaults = VpnDefaultRouteInspector.ReadDefaultRoutes();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[ROUTE] Forward table read failed: {ex.Message}");
+            return;
+        }
+
+        var vpnDefaults = VpnDefaultRouteInspector.OnInterface(defaults, _vpnInterfaceIndex);
+        _hasVpnDefaultRoute = vpnDefaults.Count > 0;
+
+        if (verboseLog || !_loggedInitialDefaultSnapshot)
+        {
+            _loggedInitialDefaultSnapshot = true;
+            Logger.Info($"[ROUTE] {VpnDefaultRouteInspector.FormatSummary(defaults, _vpnInterfaceIndex)} fullRoute={_fullRouteEnabled}");
+        }
+
+        if (_fullRouteEnabled)
+            return;
+
+        if (vpnDefaults.Count == 0)
+        {
+            _loggedSplitDefaultPresent = false;
+            return;
+        }
+
+        Logger.Warning($"[ROUTE] Unexpected 0.0.0.0/0 on VPN IF {_vpnInterfaceIndex} while split; stripping. {VpnDefaultRouteInspector.FormatSummary(vpnDefaults, _vpnInterfaceIndex)}");
+        var deleted = VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(_vpnInterfaceIndex);
+        RemoveVpnDefaultRouteByInterface();
+
+        var remaining = 0;
+        try
+        {
+            remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex).Count;
         }
         catch { }
+
+        if (remaining > 0)
+        {
+            Logger.Warning($"[ROUTE] IP helper left {remaining} VPN default(s); falling back to route.exe delete IF {_vpnInterfaceIndex}");
+            TryRunRouteCommand($"delete 0.0.0.0 mask 0.0.0.0 IF {_vpnInterfaceIndex}", out var stderr);
+            if (!string.IsNullOrWhiteSpace(stderr))
+                Logger.Warning($"[ROUTE] route.exe delete stderr={stderr.Trim()}");
+            try
+            {
+                remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex).Count;
+            }
+            catch { }
+        }
+
+        _hasVpnDefaultRoute = remaining > 0;
+        var appearedAfterClean = _routeBootstrapReady && remaining > 0 && !_loggedSplitDefaultPresent;
+        if (appearedAfterClean)
+            Interlocked.Increment(ref _unexpectedVpnDefaultRouteEvents);
+        _loggedSplitDefaultPresent = remaining > 0;
+
+        Logger.Info($"[ROUTE] Split strip result helperDeleted={deleted} vpnDefaultRemaining={remaining} unexpectedEvents={_unexpectedVpnDefaultRouteEvents}");
     }
 
     /// <summary>
