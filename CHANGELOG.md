@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.1 - 2026-09-30
+
 ### English
 
 - Bulk “Test all ping” for ready V2Ray/Xray/Hysteria configs now runs real-delay probes in parallel, with a Settings control for how many tests run at once (default 4, range 1–8). Cancel still stops in-flight tests; each row updates as it finishes.
@@ -387,6 +389,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
