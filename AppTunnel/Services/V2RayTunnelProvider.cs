@@ -415,11 +415,10 @@ public class V2RayTunnelProvider : ITunnelProvider
         if (!File.Exists(_singBoxExe))
             throw new FileNotFoundException(LocalizationService.Instance.Format("فایل sing-box.exe پیدا نشد: {0}", _singBoxExe));
 
-        // Release the reservation before sing-box starts. Holding it makes the probe
-        // connect to our own listener and never exercise the outbound.
-        int mixedPort;
-        using (var portReservation = LocalPortReservation.ReservePreferredOrRandom(DefaultMixedProxyPort + 17))
-            mixedPort = portReservation.Port;
+        // LatencyProbePortLease releases the TCP reservation before this returns so
+        // sing-box can bind; the port stays marked in-use until the probe finishes.
+        using var portLease = LatencyProbePortLease.Acquire(DefaultMixedProxyPort + 17);
+        var mixedPort = portLease.Port;
 
         var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
         Process? process = null;

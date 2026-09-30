@@ -392,9 +392,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     public string InformationalNotificationsDescriptionText =>
         LocalizationService.Instance.T("نمایش اعلان‌های وضعیت اتصال و برنامه. اعلان‌های تبلیغ/به‌روزرسانی با دکمه ✕ بسته می‌شوند.");
 
-    public string HelpSettingsTabBodyText =>
-        LocalizationService.Instance.T("پورت پراکسی محلی، نام کاربری/رمز پیش‌فرض پروکسی محلی، مقصدهای بررسی سلامت اتصال، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
-
     private string _healthCheckEndpointsText = "";
     public string HealthCheckEndpointsText
     {
@@ -451,6 +448,33 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     public string IncludeDefaultHealthCheckEndpointsDescriptionText =>
         LocalizationService.Instance.T("google.com و cloudflare.com هم بررسی می‌شوند. با خاموش کردن این گزینه، فقط مقصدهای سفارشی معتبر استفاده می‌شوند.");
+
+    private int _latencyTestConcurrency = LatencyTestLimits.Default;
+
+    public int LatencyTestConcurrency
+    {
+        get => _latencyTestConcurrency;
+        set
+        {
+            var next = LatencyTestLimits.Normalize(value);
+            if (_latencyTestConcurrency == next) return;
+            _latencyTestConcurrency = next;
+            OnPropertyChanged();
+            _appSettings.LatencyTestConcurrency = next;
+            _profileService.SaveAppSettings(_appSettings);
+        }
+    }
+
+    public IReadOnlyList<int> LatencyTestConcurrencyOptions { get; } = LatencyTestLimits.Options;
+
+    public string LatencyTestConcurrencyTitleText =>
+        LocalizationService.Instance.T("تعداد تست پینگ همزمان");
+
+    public string LatencyTestConcurrencyDescriptionText =>
+        LocalizationService.Instance.T("چند کانفیگ V2Ray/Xray همزمان با تأخیر واقعی تست شوند. پیش‌فرض ۴ است.");
+
+    public string HelpSettingsTabBodyText =>
+        LocalizationService.Instance.T("پورت پراکسی محلی، نام کاربری/رمز پیش‌فرض پروکسی محلی، مقصدهای بررسی سلامت اتصال، تعداد تست پینگ همزمان، MTU خودکار، DNS Optimization، Game Mode، اعلان‌های وضعیت، اجرای خودکار ویندوز و اتصال خودکار اینجاست.");
 
     private void PersistHealthCheckSettings()
     {
@@ -2863,6 +2887,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         _enableInformationalNotifications = _appSettings.EnableInformationalNotifications;
         _healthCheckEndpointsText = _appSettings.HealthCheckEndpoints ?? "";
         _includeDefaultHealthCheckEndpoints = _appSettings.IncludeDefaultHealthCheckEndpoints;
+        _latencyTestConcurrency = LatencyTestLimits.Normalize(_appSettings.LatencyTestConcurrency);
         _localProxyUsername = _appSettings.LocalProxyUsername ?? "";
         _localProxyPassword = _appSettings.LocalProxyPassword ?? "";
         _githubInstallCount = _appSettings.GitHubAppDownloadCount;
@@ -2872,6 +2897,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(EnableInformationalNotifications));
         OnPropertyChanged(nameof(HealthCheckEndpointsText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpoints));
+        OnPropertyChanged(nameof(LatencyTestConcurrency));
         OnPropertyChanged(nameof(LocalProxyUsername));
         LocalProxyPasswordChanged?.Invoke(_localProxyPassword);
         ApplyLocalProxyAuthToRouter();
@@ -2882,6 +2908,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
+        OnPropertyChanged(nameof(LatencyTestConcurrencyTitleText));
+        OnPropertyChanged(nameof(LatencyTestConcurrencyDescriptionText));
         OnPropertyChanged(nameof(InformationalNotificationsSectionTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsTitleText));
         OnPropertyChanged(nameof(InformationalNotificationsDescriptionText));
@@ -2943,6 +2971,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HealthCheckEndpointsHintText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsTitleText));
         OnPropertyChanged(nameof(IncludeDefaultHealthCheckEndpointsDescriptionText));
+        OnPropertyChanged(nameof(LatencyTestConcurrencyTitleText));
+        OnPropertyChanged(nameof(LatencyTestConcurrencyDescriptionText));
         RefreshHealthCheckStatus();
         OnPropertyChanged(nameof(OpenVpnPrerequisiteText));
         OnPropertyChanged(nameof(OpenVpnIntroText));

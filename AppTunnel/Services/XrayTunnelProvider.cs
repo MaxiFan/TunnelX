@@ -258,9 +258,8 @@ public class XrayTunnelProvider : ITunnelProvider
         if (!File.Exists(_xrayExe))
             throw new FileNotFoundException(LocalizationService.Instance.Format("فایل xray.exe پیدا نشد: {0}", _xrayExe));
 
-        int socksPort;
-        using (var reservation = LocalPortReservation.ReservePreferredOrRandom(DefaultXraySocksPort + 20))
-            socksPort = reservation.Port;
+        using var portLease = LatencyProbePortLease.Acquire(DefaultXraySocksPort + 20);
+        var socksPort = portLease.Port;
 
         var probeConfigPath = Path.Combine(_workDir, $"probe-{Guid.NewGuid():N}.json");
         Process? process = null;

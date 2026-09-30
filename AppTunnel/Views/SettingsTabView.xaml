@@ -181,6 +181,33 @@
                                       IsChecked="{Binding IncludeDefaultHealthCheckEndpoints, Mode=TwoWay}"
                                       VerticalAlignment="Center"/>
                         </Grid>
+
+                        <Border Background="#18FFFFFF" Height="1" Margin="0,8,0,8"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding LatencyTestConcurrencyTitleText}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding LatencyTestConcurrencyDescriptionText}"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="2"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding LatencyTestConcurrencyOptions}"
+                                      SelectedItem="{Binding LatencyTestConcurrency, Mode=TwoWay}"
+                                      VerticalAlignment="Center"
+                                      MinWidth="72"
+                                      FontSize="12"
+                                      Padding="8,6"
+                                      FlowDirection="LeftToRight"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
 

@@ -124,6 +124,12 @@ public class ProfileService
         /// <summary>Plaintext local-proxy password; not written to JSON.</summary>
         [JsonIgnore]
         public string LocalProxyPassword { get; set; } = "";
+
+        /// <summary>
+        /// How many V2Ray real-delay probes may run at once during bulk ping.
+        /// Values outside 1–8 are normalized on load.
+        /// </summary>
+        public int LatencyTestConcurrency { get; set; } = LatencyTestLimits.Default;
     }
 
     /// <summary>

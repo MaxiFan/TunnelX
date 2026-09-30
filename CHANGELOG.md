@@ -4,18 +4,24 @@
 
 ### English
 
+- Bulk “Test all ping” for ready V2Ray/Xray/Hysteria configs now runs real-delay probes in parallel, with a Settings control for how many tests run at once (default 4, range 1–8). Cancel still stops in-flight tests; each row updates as it finishes.
+- Failed real-delay probes no longer show raw `SOCKS5 connect failed` text. Dead configs use the same localized “ping target did not respond” message as other outbound failures.
 - Config list rows ellipsize long names and ping/test results so ping/edit/delete stay inside the window (Fixes #68).
 
 ### فارسی
 
 <div dir="rtl" align="right">
 
+- دکمه «تست پینگ همه» برای کانفیگ‌های آماده V2Ray/Xray/Hysteria حالا چند تست تأخیر واقعی را همزمان اجرا می‌کند. تعداد همزمان در تنظیمات قابل انتخاب است (پیش‌فرض ۴، بین ۱ تا ۸). توقف، تست‌های در حال اجرا را قطع می‌کند و نتیجه هر ردیف جداگانه به‌روز می‌شود.
+- خطاهای تست واقعی دیگر متن خام `SOCKS5 connect failed` را نشان نمی‌دهند؛ کانفیگ مرده همان پیام «پاسخی از مقصد پینگ نیامد» را می‌گیرد.
 - ردیف کانفیگ‌ها نام و نتیجه پینگ/تست طولانی را با ellipsis کوتاه می‌کند تا دکمه‌ها داخل پنجره بمانند (رفع #68).
 
 </div>
 
 ### Русский
 
+- Кнопка «Пинг всех» для готовых конфигов V2Ray/Xray/Hysteria запускает Real Delay параллельно. Число одновременных проверок задаётся в настройках (по умолчанию 4, диапазон 1–8). Отмена останавливает текущие тесты; строки списка обновляются по мере завершения.
+- Ошибки Real Delay больше не показывают сырой текст `SOCKS5 connect failed`. Мёртвые конфиги получают то же локализованное «цель пинга не ответила».
 - Длинные имена конфигов и строки ping/теста в списке обрезаются с многоточием, чтобы кнопки не выходили за окно (Fixes #68).
 
 ## 2.2.0 - 2026-09-26
