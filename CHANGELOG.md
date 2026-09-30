@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.2 - 2026-09-30
+
 ### English
 
 - When sing-box/Xray TUN fails with Wintun “device is not ready” or “open interface take too much time”, the UI no longer blames a bad profile. It shows a localized TUN/Wintun readiness message (Administrator, stale adapters, antivirus, other Wintun apps, reboot) and logs leftover adapters (`Fixes #67`).
@@ -408,6 +410,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
