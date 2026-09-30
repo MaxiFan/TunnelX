@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### English
+
+- Config list rows ellipsize long names and ping/test results so ping/edit/delete stay inside the window (Fixes #68).
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- ردیف کانفیگ‌ها نام و نتیجه پینگ/تست طولانی را با ellipsis کوتاه می‌کند تا دکمه‌ها داخل پنجره بمانند (رفع #68).
+
+</div>
+
+### Русский
+
+- Длинные имена конфигов и строки ping/теста в списке обрезаются с многоточием, чтобы кнопки не выходили за окно (Fixes #68).
+
 ## 2.2.0 - 2026-09-26
 
 ### English
