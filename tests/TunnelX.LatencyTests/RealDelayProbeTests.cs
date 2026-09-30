@@ -198,7 +198,44 @@ public class Socks5LatencyProbeTests
             _ => Task.CompletedTask,
             connectReply: 0x05));
 
-        Assert.Contains("SOCKS5 connect failed", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(Socks5LatencyProbe.NoResponseMessage, ex.Message);
+        Assert.True(Socks5LatencyProbe.IsOutboundProbeFailure(ex));
+        Assert.Contains("SOCKS5 connect failed", ex.InnerException?.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SocksHandshakeRejected_IsNotMappedToPingTargetMessage()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            await ReadExactlyAsync(stream, new byte[3]);
+            await stream.WriteAsync(new byte[] { 0x05, 0xFF });
+        });
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                Socks5LatencyProbe.MeasureAsync(
+                    "www.google.com",
+                    443,
+                    proxyPort,
+                    CancellationToken.None,
+                    probeTimeoutMs: 4000));
+
+            Assert.Equal("SOCKS5 handshake rejected", ex.Message);
+            Assert.False(Socks5LatencyProbe.IsOutboundProbeFailure(ex));
+        }
+        finally
+        {
+            try { await server.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch { /* the client may close before the server finishes */ }
+            listener.Stop();
+        }
     }
 
     [Fact]

@@ -41,7 +41,7 @@ public partial class MainViewModel
         {
             foreach (var profile in Profiles)
             {
-                if (profile.IsReady)
+                if (IsV2RayReadyForRealDelay(profile))
                     return true;
             }
 
@@ -158,7 +158,7 @@ public partial class MainViewModel
         "پینگ سرور: فقط رسیدن به IP/پورت سرور (TCP/TLS/ICMP) — سالم بودن کانفیگ را نشان نمی‌دهد");
 
     public string TestAllProfilesLatencyToolTipText => LocalizationService.Instance.T(
-        "تأخیر واقعی V2Ray/Xray برای پروفایل‌های آماده — سریع‌ترین کانفیگ سالم را پیدا کنید");
+        "تأخیر واقعی همه کانفیگ‌های V2Ray/Xray/Hysteria — چند تست همزمان؛ سریع‌ترین کانفیگ سالم را پیدا کنید");
 
     public string ProfileLatencyResultToolTipText => LocalizationService.Instance.T(
         "نتیجه تأخیر واقعی از مسیر کانفیگ");
@@ -369,10 +369,10 @@ public partial class MainViewModel
         if (!CanUseConnectionTabQuickActions || IsTestingAllProfilesLatency)
             return;
 
-        var candidates = Profiles.Where(p => p.IsReady).ToList();
+        var candidates = Profiles.Where(IsV2RayReadyForRealDelay).ToList();
         if (candidates.Count == 0)
         {
-            ProfileQuickActionsStatusText = LocalizationService.Instance.T("پروفایل آماده‌ای برای تست وجود ندارد");
+            ProfileQuickActionsStatusText = LocalizationService.Instance.T("پروفایل V2Ray آماده‌ای برای تست وجود ندارد");
             ShowImportToast(ProfileQuickActionsStatusText, warning: true);
             return;
         }
@@ -380,6 +380,8 @@ public partial class MainViewModel
         _profileLatencyCts?.Cancel();
         _profileLatencyCts = new CancellationTokenSource();
         var ct = _profileLatencyCts.Token;
+        var ui = SynchronizationContext.Current;
+        var concurrency = LatencyTestConcurrency;
 
         IsTestingAllProfilesLatency = true;
         foreach (var profile in candidates)
@@ -390,69 +392,91 @@ public partial class MainViewModel
 
         var completed = 0;
         var success = 0;
+        ProfileQuickActionsStatusText = LocalizationService.Instance.Format(
+            "در حال تست پینگ {0}/{1} (همزمان {2})",
+            0,
+            candidates.Count,
+            concurrency);
+
         try
         {
-            foreach (var profile in candidates)
+            await ParallelWorkLimit.ForEachAsync(candidates, concurrency, async (profile, token) =>
             {
-                ct.ThrowIfCancellationRequested();
-                completed++;
-                ProfileQuickActionsStatusText = LocalizationService.Instance.Format(
-                    "در حال تست پینگ {0}/{1}: {2}",
-                    completed,
-                    candidates.Count,
-                    profile.Name);
-                profile.IsLatencyTesting = true;
+                await RunOnSyncContextAsync(ui, () => profile.IsLatencyTesting = true);
                 try
                 {
-                    await MeasureProfileLatencyAsync(profile, ct);
+                    await RunOnSyncContextAsync(ui, () => MeasureProfileLatencyAsync(profile, token));
                     if (profile.LastLatencyMs.HasValue)
-                        success++;
+                        Interlocked.Increment(ref success);
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     throw;
                 }
                 catch (Exception ex)
                 {
                     if (string.IsNullOrWhiteSpace(profile.LastLatencyError))
-                        profile.LastLatencyError = ex.Message;
+                    {
+                        var message = FormatLatencyProbeUserMessage(ex);
+                        await RunOnSyncContextAsync(ui, () => profile.LastLatencyError = message);
+                    }
                 }
                 finally
                 {
-                    profile.IsLatencyTesting = false;
+                    await RunOnSyncContextAsync(ui, () => profile.IsLatencyTesting = false);
                 }
-            }
 
-            var best = candidates
-                .Where(p => p.LastLatencyMs.HasValue)
-                .OrderBy(p => p.LastLatencyMs)
-                .FirstOrDefault();
+                var done = Interlocked.Increment(ref completed);
+                await RunOnSyncContextAsync(ui, () =>
+                {
+                    ProfileQuickActionsStatusText = LocalizationService.Instance.Format(
+                        "در حال تست پینگ {0}/{1} (همزمان {2})",
+                        done,
+                        candidates.Count,
+                        concurrency);
+                });
+            }, ct);
 
-            ProfileQuickActionsStatusText = best != null
-                ? LocalizationService.Instance.Format(
-                    "تست {0}/{1} موفق — سریع‌ترین: «{2}» ({3} {4} ms)",
-                    success,
-                    candidates.Count,
-                    best.Name,
-                    best.LastLatencyLabel,
-                    best.LastLatencyMs)
-                : LocalizationService.Instance.Format("تست {0} پروفایل انجام شد — هیچ کانفیگ پاسخ نداد", candidates.Count);
+            var finishedSuccess = success;
+            await RunOnSyncContextAsync(ui, () =>
+            {
+                var best = candidates
+                    .Where(p => p.LastLatencyMs.HasValue)
+                    .OrderBy(p => p.LastLatencyMs)
+                    .FirstOrDefault();
 
-            ShowImportToast(ProfileQuickActionsStatusText, warning: success == 0);
+                ProfileQuickActionsStatusText = best != null
+                    ? LocalizationService.Instance.Format(
+                        "تست {0}/{1} موفق — سریع‌ترین: «{2}» ({3} {4} ms)",
+                        finishedSuccess,
+                        candidates.Count,
+                        best.Name,
+                        best.LastLatencyLabel,
+                        best.LastLatencyMs)
+                    : LocalizationService.Instance.Format("تست {0} پروفایل انجام شد — هیچ کانفیگ پاسخ نداد", candidates.Count);
 
-            if (best != null)
-                SelectedProfile = best;
+                ShowImportToast(ProfileQuickActionsStatusText, warning: finishedSuccess == 0);
+
+                if (best != null)
+                    SelectedProfile = best;
+            });
         }
         catch (OperationCanceledException)
         {
-            ProfileQuickActionsStatusText = LocalizationService.Instance.T("تست پینگ متوقف شد");
-            ShowImportToast(ProfileQuickActionsStatusText, warning: true);
+            await RunOnSyncContextAsync(ui, () =>
+            {
+                ProfileQuickActionsStatusText = LocalizationService.Instance.T("تست پینگ متوقف شد");
+                ShowImportToast(ProfileQuickActionsStatusText, warning: true);
+            });
         }
         finally
         {
-            IsTestingAllProfilesLatency = false;
-            foreach (var profile in candidates)
-                profile.IsLatencyTesting = false;
+            await RunOnSyncContextAsync(ui, () =>
+            {
+                IsTestingAllProfilesLatency = false;
+                foreach (var profile in candidates)
+                    profile.IsLatencyTesting = false;
+            });
         }
     }
 
@@ -494,8 +518,49 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             Logger.Warning($"[PING] real-delay failed: {ex}");
-            profile.LastLatencyError = LocalizationService.Instance.T(ex.Message);
+            // Keep the SOCKS CONNECT code in the log (inner exception). The row shows the
+            // same ping-target message as close/reset after a successful CONNECT.
+            profile.LastLatencyError = FormatLatencyProbeUserMessage(ex);
         }
+    }
+
+    private static string FormatLatencyProbeUserMessage(Exception ex)
+    {
+        var userMessage = Socks5LatencyProbe.IsOutboundProbeFailure(ex)
+            ? Socks5LatencyProbe.NoResponseMessage
+            : ex.Message;
+        return LocalizationService.Instance.T(userMessage);
+    }
+
+    private static bool IsV2RayReadyForRealDelay(ConnectionProfile profile)
+        => profile.TunnelType == TunnelType.V2Ray && profile.IsReady;
+
+    private static Task RunOnSyncContextAsync(SynchronizationContext? ui, Action action)
+        => RunOnSyncContextAsync(ui, () =>
+        {
+            action();
+            return Task.CompletedTask;
+        });
+
+    private static Task RunOnSyncContextAsync(SynchronizationContext? ui, Func<Task> work)
+    {
+        if (ui == null || SynchronizationContext.Current == ui)
+            return work();
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ui.Post(async _ =>
+        {
+            try
+            {
+                await work();
+                tcs.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }, null);
+        return tcs.Task;
     }
 
     private async Task MeasureProfileServerPingAsync(ConnectionProfile profile, CancellationToken ct)

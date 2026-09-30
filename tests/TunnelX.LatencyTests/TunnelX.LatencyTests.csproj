@@ -14,5 +14,9 @@
     <Compile Include="..\..\AppTunnel\Services\Socks5LatencyProbe.cs" Link="Socks5LatencyProbe.cs" />
     <Compile Include="..\..\AppTunnel\Services\PreConnectLatencyPlan.cs" Link="PreConnectLatencyPlan.cs" />
     <Compile Include="..\..\AppTunnel\Services\V2RayCoreSelector.cs" Link="V2RayCoreSelector.cs" />
+    <Compile Include="..\..\AppTunnel\Services\LocalPortReservation.cs" Link="LocalPortReservation.cs" />
+    <Compile Include="..\..\AppTunnel\Services\LatencyProbePortLease.cs" Link="LatencyProbePortLease.cs" />
+    <Compile Include="..\..\AppTunnel\Services\LatencyTestLimits.cs" Link="LatencyTestLimits.cs" />
+    <Compile Include="..\..\AppTunnel\Services\ParallelWorkLimit.cs" Link="ParallelWorkLimit.cs" />
   </ItemGroup>
 </Project>
