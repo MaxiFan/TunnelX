@@ -48,6 +48,15 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,5,0"/>
         </Style>
+
+        <!-- Shrinks in star columns; ellipsis + tooltip keep long FA/EN/RU strings from shoving actions off-screen. -->
+        <Style x:Key="ProfileRowTruncateText" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="16,8,16,8"
@@ -435,6 +444,8 @@
                          Padding="0"
                          Cursor="Arrow"
                          MinHeight="80"
+                         MinWidth="0"
+                         HorizontalContentAlignment="Stretch"
                          VerticalAlignment="Stretch"
                          FlowDirection="{Binding AppFlowDirection}"
                          VirtualizingPanel.IsVirtualizing="False"
@@ -448,7 +459,11 @@
                             <Setter Property="Cursor" Value="Arrow"/>
                             <Setter Property="Padding" Value="0"/>
                             <Setter Property="Margin" Value="0,0,0,6"/>
+                            <Setter Property="MinWidth" Value="0"/>
+                            <Setter Property="HorizontalAlignment" Value="Stretch"/>
                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            <Setter Property="helpers:ViewportLimit.IsEnabled" Value="True"/>
                             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
                             <Setter Property="Background" Value="#121212"/>
                             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
@@ -463,7 +478,8 @@
                                                 CornerRadius="10"
                                                 Padding="10,6"
                                                 FlowDirection="{TemplateBinding FlowDirection}">
-                                            <ContentPresenter/>
+                                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -484,27 +500,27 @@
                         <DataTemplate>
                             <!--
                               Packed from layout start (right in FA / left in EN):
-                              checkbox · name · badges · endpoint · status · [flex] · actions
-                              Trailing * absorbs extra width so content never sits mid-gap.
+                              checkbox · name · badges · endpoint · status · ping · actions
+                              Star columns (MinWidth=0) ellipsize long names/results;
+                              Auto action column keeps ping/edit/delete reachable.
                             -->
-                            <Grid VerticalAlignment="Center">
+                            <Grid MinWidth="0" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="2*" MinWidth="0"/>
                                     <ColumnDefinition Width="6"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="10"/>
-                                    <ColumnDefinition Width="Auto" MaxWidth="200"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="1.4*" MinWidth="0"/>
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="1.8*" MinWidth="0"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="1.2*" MinWidth="0"/>
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
@@ -521,13 +537,11 @@
                                           PreviewMouseLeftButtonDown="ProfileBulkSelectCheckBox_PreviewMouseLeftButtonDown"/>
 
                                 <TextBlock Grid.Column="2"
+                                           Style="{StaticResource ProfileRowTruncateText}"
                                            Text="{Binding Name}"
                                            FontSize="12.5"
                                            FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="220"
-                                           VerticalAlignment="Center"
                                            FlowDirection="LeftToRight"
                                            TextAlignment="Left"
                                            ToolTip="{Binding Name}"/>
@@ -558,47 +572,45 @@
                                 </Border>
 
                                 <TextBlock Grid.Column="8"
+                                           Style="{StaticResource ProfileRowTruncateText}"
                                            Text="{Binding EndpointDisplay}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center"
                                            FlowDirection="LeftToRight"
                                            TextAlignment="Left"
                                            ToolTip="{Binding EndpointDisplay}"/>
 
                                 <TextBlock Grid.Column="10"
+                                           Style="{StaticResource ProfileRowTruncateText}"
                                            Text="{Binding ReadinessText}"
                                            Foreground="{Binding ReadinessColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
+                                           ToolTip="{Binding ReadinessText}"/>
 
                                 <TextBlock Grid.Column="12"
+                                           Style="{StaticResource ProfileRowTruncateText}"
                                            Text="{Binding LatencyDisplayText}"
                                            Foreground="{Binding LatencyColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
                                            FlowDirection="LeftToRight"
                                            TextAlignment="Left"
                                            Visibility="{Binding SupportsServerPing, Converter={StaticResource BoolToVis}}"
-                                           ToolTip="{Binding PingResultToolTipText}"/>
+                                           ToolTip="{Binding LatencyDisplayText}"/>
 
                                 <TextBlock Grid.Column="14"
+                                           Style="{StaticResource ProfileRowTruncateText}"
                                            Text="{Binding ServerLatencyDisplayText}"
                                            Foreground="{Binding ServerLatencyColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
                                            FlowDirection="LeftToRight"
                                            TextAlignment="Left"
                                            Visibility="{Binding ShowsServerPingButton, Converter={StaticResource BoolToVis}}"
-                                           ToolTip="{Binding DataContext.ProfileServerPingResultToolTipText, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
+                                           ToolTip="{Binding ServerLatencyDisplayText}"/>
 
-                                <!-- Column 15 = * flex filler -->
-
-                                <StackPanel Grid.Column="17"
+                                <StackPanel Grid.Column="16"
                                             Orientation="Horizontal"
                                             VerticalAlignment="Center">
                                     <Button FontSize="10"
