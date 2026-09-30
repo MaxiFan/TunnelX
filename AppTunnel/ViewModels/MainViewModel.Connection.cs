@@ -1167,7 +1167,10 @@ public partial class MainViewModel
         }
         catch (Exception ex)
         {
-            return (host, false, 0, ex.Message);
+            var detail = Socks5LatencyProbe.IsOutboundProbeFailure(ex)
+                ? LocalizationService.Instance.T(Socks5LatencyProbe.NoResponseMessage)
+                : ex.Message;
+            return (host, false, 0, detail);
         }
     }
 
@@ -2328,7 +2331,10 @@ public partial class MainViewModel
                 }
                 catch (Exception ex)
                 {
-                    SetPingResult("✗ {0}  ({1}/{2})", ex.Message, success, sent);
+                    var shown = Socks5LatencyProbe.IsOutboundProbeFailure(ex)
+                        ? LocalizationService.Instance.T(Socks5LatencyProbe.NoResponseMessage)
+                        : ex.Message;
+                    SetPingResult("✗ {0}  ({1}/{2})", shown, success, sent);
                 }
 
                 await Task.Delay(1000, ct);
