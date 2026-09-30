@@ -9,8 +9,11 @@ namespace AppTunnel.Services;
 
 /// <summary>
 /// Measures delay through a local SOCKS5 proxy by completing a real request to the target.
-/// Connection close, reset, or a SOCKS success with no upstream response is a failure —
-/// those used to be reported as a successful ping for configs that do not actually work.
+/// The local mixed/SOCKS inbound is only probe transport (xray/sing-box), not the protocol
+/// under test. A SOCKS CONNECT reply failure, connection close, reset, or a SOCKS success
+/// with no upstream response is therefore the same user-facing result: the config did not
+/// carry traffic to the ping target. Handshake/TCP failures against 127.0.0.1 stay technical
+/// because those mean the local inbound never came up.
 /// </summary>
 internal static class Socks5LatencyProbe
 {
@@ -33,15 +36,16 @@ internal static class Socks5LatencyProbe
         await tcp.ConnectAsync("127.0.0.1", socks5Port, cts.Token);
 
         var stream = tcp.GetStream();
+        // Greeting is the local inbound. Failure here is probe plumbing, not the outbound.
         await WriteGreetingAsync(stream, cts.Token);
 
         // Time from the SOCKS CONNECT (remote dial) through the first real upstream response.
         // sing-box may answer CONNECT before the outbound is up; only the response after that
         // proves the config can carry traffic.
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        await WriteConnectAsync(stream, host, port, cts.Token);
         try
         {
+            await WriteConnectAsync(stream, host, port, cts.Token);
             if (port == 443)
                 await MeasureTlsHttpAsync(stream, host, cts.Token);
             else if (port == 80)
@@ -60,6 +64,26 @@ internal static class Socks5LatencyProbe
 
         sw.Stop();
         return sw.ElapsedMilliseconds;
+    }
+
+    /// <summary>
+    /// True when <paramref name="ex"/> is a SOCKS CONNECT/upstream failure through the
+    /// local probe inbound (already mapped to <see cref="NoResponseMessage"/>, or still
+    /// the raw CONNECT reply). Handshake and TCP-to-localhost errors return false.
+    /// </summary>
+    internal static bool IsOutboundProbeFailure(Exception ex)
+    {
+        for (var cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (string.Equals(cur.Message, NoResponseMessage, StringComparison.Ordinal))
+                return true;
+            if (cur.Message.StartsWith("SOCKS5 connect failed", StringComparison.Ordinal))
+                return true;
+            if (cur.Message == "SOCKS5 connect reply was incomplete")
+                return true;
+        }
+
+        return false;
     }
 
     internal static bool TryParseHttpStatusLine(ReadOnlySpan<char> line, out int status)

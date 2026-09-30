@@ -415,7 +415,12 @@ public partial class MainViewModel
                 catch (Exception ex)
                 {
                     if (string.IsNullOrWhiteSpace(profile.LastLatencyError))
-                        profile.LastLatencyError = ex.Message;
+                    {
+                        profile.LastLatencyError = LocalizationService.Instance.T(
+                            Socks5LatencyProbe.IsOutboundProbeFailure(ex)
+                                ? Socks5LatencyProbe.NoResponseMessage
+                                : ex.Message);
+                    }
                 }
                 finally
                 {
@@ -494,7 +499,12 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             Logger.Warning($"[PING] real-delay failed: {ex}");
-            profile.LastLatencyError = LocalizationService.Instance.T(ex.Message);
+            // Keep the SOCKS CONNECT code in the log (inner exception). The row shows the
+            // same ping-target message as close/reset after a successful CONNECT.
+            var userMessage = Socks5LatencyProbe.IsOutboundProbeFailure(ex)
+                ? Socks5LatencyProbe.NoResponseMessage
+                : ex.Message;
+            profile.LastLatencyError = LocalizationService.Instance.T(userMessage);
         }
     }
 
