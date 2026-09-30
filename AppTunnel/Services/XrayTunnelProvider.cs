@@ -120,37 +120,108 @@ public class XrayTunnelProvider : ITunnelProvider
             loopbackBridgePortReservation.Dispose();
             mixedProxyPortReservation.Dispose();
 
+            var capturedLogs = new StringBuilder();
             _xrayProcess = StartProcess(
                 _xrayExe,
                 $"run -c \"{_xrayConfigPath}\"",
                 "[xray]",
-                "[xray stderr]");
+                "[xray stderr]",
+                capturedLogs);
 
             Logger.Info($"xray started (PID {_xrayProcess.Id})");
             ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Complete, "راه‌اندازی هسته تونل (Xray/V2Ray)");
-
-            ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
-            _singBoxProcess = StartProcess(
-                _singBoxExe,
-                $"run -c \"{_singBoxConfigPath}\"",
-                "[sing-box bridge]",
-                "[sing-box bridge stderr]");
-
-            Logger.Info($"sing-box TUN bridge started (PID {_singBoxProcess.Id})");
             WatchProcessExit(_xrayProcess, "xray");
-            WatchProcessExit(_singBoxProcess, "sing-box bridge");
-            ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Complete, "راه‌اندازی پل TUN (sing-box)");
 
-            ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
-            Status.Message = LocalizationService.Instance.T("در حال انتظار برای interface TunnelX-V2Ray...");
+            const int maxTunAttempts = 2;
+            int interfaceIndex = -1;
+            for (var attempt = 1; attempt <= maxTunAttempts; attempt++)
+            {
+                capturedLogs = new StringBuilder();
 
-            var interfaceIndex = await WaitForTunInterfaceAsync(ct);
+                await WintunAdapterHealth.PrepareForTunOpenAsync(
+                    attempt == 1 ? "xray-pre-connect" : $"xray-retry-{attempt}",
+                    ct);
+
+                ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
+                _singBoxProcess = StartProcess(
+                    _singBoxExe,
+                    $"run -c \"{_singBoxConfigPath}\"",
+                    "[sing-box bridge]",
+                    "[sing-box bridge stderr]",
+                    capturedLogs);
+
+                Logger.Info($"sing-box TUN bridge started (PID {_singBoxProcess.Id}) attempt={attempt}/{maxTunAttempts}");
+                WatchProcessExit(_singBoxProcess, "sing-box bridge");
+                ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Complete, "راه‌اندازی پل TUN (sing-box)");
+
+                ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
+                Status.Message = LocalizationService.Instance.T("در حال انتظار برای interface TunnelX-V2Ray...");
+
+                try
+                {
+                    interfaceIndex = await WaitForTunInterfaceAsync(ct);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    var logs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
+                    var xrayExited = _xrayProcess?.HasExited == true;
+                    var singBoxExited = _singBoxProcess?.HasExited == true;
+                    var singBoxCode = singBoxExited ? _singBoxProcess!.ExitCode : 0;
+                    await KillTrackedProcessAsync(_singBoxProcess);
+                    _singBoxProcess = null;
+
+                    if (xrayExited)
+                    {
+                        await KillProcessAsync();
+                        ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, ex.Message);
+                        return Fail(ex.Message);
+                    }
+
+                    var tunFailure = SingBoxTunFailure.IsReadinessFailure(logs);
+                    if (attempt < maxTunAttempts && tunFailure)
+                    {
+                        Logger.Warning($"[WINTUN] Xray TUN bridge failed ({ex.Message}); retrying after backoff");
+                        Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
+                        await Task.Delay(1500, ct);
+                        continue;
+                    }
+
+                    await KillProcessAsync();
+                    var classified = tunFailure
+                        ? SingBoxTunFailure.FormatEarlyExitMessage(singBoxCode, logs, isBridge: true)
+                        : LocalizationService.Instance.T(ex.Message);
+                    ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, classified);
+                    return Fail(classified);
+                }
+
+                if (interfaceIndex > 0)
+                    break;
+
+                var waitLogs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
+                await KillTrackedProcessAsync(_singBoxProcess);
+                _singBoxProcess = null;
+                WintunAdapterHealth.LogInventory("xray-after-tun-timeout");
+
+                if (attempt < maxTunAttempts && SingBoxTunFailure.ShouldRetryTunOpen(waitLogs, processExited: false))
+                {
+                    Logger.Warning("[WINTUN] Xray TUN interface wait failed; retrying after backoff");
+                    Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
+                    await Task.Delay(1500, ct);
+                    continue;
+                }
+
+                await KillProcessAsync();
+                var tunTimeoutMessage = SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, waitLogs);
+                ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, tunTimeoutMessage);
+                return Fail(tunTimeoutMessage);
+            }
+
             if (interfaceIndex <= 0)
             {
                 await KillProcessAsync();
-                var tunTimeoutMessage = LocalizationService.Instance.Format(
-                    "interface TunnelX-V2Ray ظاهر نشد (timeout {0}s)",
-                    TunInterfaceWaitSeconds);
+                var tunTimeoutMessage = SingBoxTunFailure.FormatInterfaceWaitFailure(
+                    TunInterfaceWaitSeconds,
+                    WintunAdapterHealth.FormatCapturedLogs(capturedLogs));
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, tunTimeoutMessage);
                 return Fail(tunTimeoutMessage);
             }
@@ -982,7 +1053,13 @@ public class XrayTunnelProvider : ITunnelProvider
             if (_xrayProcess?.HasExited == true)
                 throw new InvalidOperationException(LocalizationService.Instance.Format("xray زودتر خارج شد (exit code {0})", _xrayProcess.ExitCode));
             if (_singBoxProcess?.HasExited == true)
-                throw new InvalidOperationException(LocalizationService.Instance.Format("sing-box bridge زودتر خارج شد (exit code {0})", _singBoxProcess.ExitCode));
+            {
+                try { await Task.Delay(400, ct); } catch (OperationCanceledException) { throw; }
+                throw new InvalidOperationException(
+                    LocalizationService.Instance.Format(
+                        "sing-box bridge زودتر خارج شد (exit code {0})",
+                        _singBoxProcess.ExitCode));
+            }
 
             var idx = FindInterfaceIndex(TunInterfaceName);
             if (idx > 0) return idx;
@@ -1011,7 +1088,12 @@ public class XrayTunnelProvider : ITunnelProvider
         Task.Run(() => OnTunnelFailed?.Invoke());
     }
 
-    private static Process StartProcess(string fileName, string arguments, string stdoutPrefix, string stderrPrefix)
+    private static Process StartProcess(
+        string fileName,
+        string arguments,
+        string stdoutPrefix,
+        string stderrPrefix,
+        StringBuilder? capturedLogs = null)
     {
         var process = new Process
         {
@@ -1030,11 +1112,17 @@ public class XrayTunnelProvider : ITunnelProvider
 
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data != null) Logger.ProcessOutput(stdoutPrefix, e.Data, isError: false);
+            if (e.Data == null) return;
+            if (capturedLogs != null)
+                WintunAdapterHealth.AppendCaptured(capturedLogs, e.Data);
+            Logger.ProcessOutput(stdoutPrefix, e.Data, isError: false);
         };
         process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data != null) Logger.ProcessOutput(stderrPrefix, e.Data, isError: true);
+            if (e.Data == null) return;
+            if (capturedLogs != null)
+                WintunAdapterHealth.AppendCaptured(capturedLogs, e.Data);
+            Logger.ProcessOutput(stderrPrefix, e.Data, isError: true);
         };
 
         process.Start();

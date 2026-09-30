@@ -132,6 +132,7 @@ public static class TunnelPrerequisiteService
 
         var core = requiresXray ? "Xray-core + sing-box" : "sing-box";
         LogV2RayReadinessSummary(singBoxExe, requiresXray);
+        WintunAdapterHealth.LogInventory("prereq");
         return Ok(loc.Format("پیش‌نیازهای V2Ray آماده است (هسته: {0}).", core));
     }
 

@@ -15,6 +15,8 @@ public static class ConnectionFailureInsight
         ["فایل sing-box.exe پیدا نشد: {0}"] = "پیش‌نیاز اتصال آماده نیست",
         ["خطا در پارس کانفیگ: {0}"] = "خطا در کانفیگ",
         ["sing-box زودتر خارج شد (exit code {0}) — کانفیگ را بررسی کنید"] = "اتصال V2Ray ناموفق",
+        ["آداپتر TUN/Wintun آماده نشد (exit {0}). این خطای کانفیگ نیست. TunnelX را با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl آداپتر گیرکرده TunnelX-V2Ray یا Wintun را حذف کنید؛ برنامه‌های دیگر Wintun را ببندید؛ ویندوز را ری‌استارت کنید و دوباره وصل شوید."] = "آداپتر VPN بالا نیامد",
+        ["آداپتر TUN/Wintun در زمان انتظار ظاهر نشد. این معمولاً مشکل درایور/محیط است نه کانفیگ. TunnelX را با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl آداپتر گیرکرده TunnelX-V2Ray یا Wintun را حذف کنید؛ برنامه‌های دیگر Wintun را ببندید؛ سپس ری‌استارت کنید."] = "آداپتر VPN بالا نیامد",
         ["interface TunnelX-V2Ray ظاهر نشد (timeout {0}s)"] = "آداپتر VPN بالا نیامد",
         ["خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}"] = "خطا در اسپلیت‌تانلینگ",
         ["تأیید مسیر تونل ناموفق بود"] = "بررسی سلامت ناموفق",
@@ -97,6 +99,11 @@ public static class ConnectionFailureInsight
         if (string.Equals(resolvedKey, "sing-box زودتر خارج شد (exit code {0}) — کانفیگ را بررسی کنید", StringComparison.Ordinal) &&
             tunnelType == TunnelType.SocksProxy)
             return LocalizationService.Instance.T("اتصال پراکسی ناموفق");
+
+        if ((string.Equals(resolvedKey, SingBoxTunFailure.TunNotReadyExitKey, StringComparison.Ordinal) ||
+             string.Equals(resolvedKey, SingBoxTunFailure.TunNotReadyTimeoutKey, StringComparison.Ordinal)) &&
+            tunnelType == TunnelType.SocksProxy)
+            return LocalizationService.Instance.T("آداپتر VPN بالا نیامد");
 
         if (string.Equals(resolvedKey, "خطا در پارس کانفیگ: {0}", StringComparison.Ordinal) &&
             tunnelType == TunnelType.SocksProxy)
