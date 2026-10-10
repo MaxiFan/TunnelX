@@ -267,6 +267,17 @@ public partial class TrafficRouterService : IDisposable
         CleanupRoutesForCurrentMode(dropStaleNat: true);
     }
 
+    private void NoteSplitAppTraffic(string processName, long sent, long received)
+    {
+        if (string.IsNullOrWhiteSpace(processName) || (sent <= 0 && received <= 0))
+            return;
+        var counter = _trafficCounters.GetOrAdd(processName, _ => new TrafficCounter());
+        if (sent > 0)
+            Interlocked.Add(ref counter.BytesSent, sent);
+        if (received > 0)
+            Interlocked.Add(ref counter.BytesReceived, received);
+    }
+
     public (long sent, long received) GetTraffic(string executableName)
     {
         if (_trafficCounters.TryGetValue(executableName, out var counter))
@@ -529,6 +540,7 @@ public partial class TrafficRouterService : IDisposable
                 ? new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, _splitUpstreamProxyPort)
                 : null;
             _splitForwarder = new SplitAppForwarder();
+            _splitForwarder.AppBytesObserved = NoteSplitAppTraffic;
             _splitForwarder.Start(vpnBind, _vpnInterfaceIndex, upstream);
             EnsureRelayInterfaceRoute();
         }

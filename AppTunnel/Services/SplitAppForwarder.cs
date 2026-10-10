@@ -31,6 +31,13 @@ internal sealed class SplitAppForwarder : IDisposable
     private long _dialFail;
     private long _bytesToProxy;
     private long _bytesToApp;
+    private Action<string, long, long>? _onAppBytes;
+
+    public Action<string, long, long>? AppBytesObserved
+    {
+        get => _onAppBytes;
+        set => _onAppBytes = value;
+    }
 
     public SplitForwarderSessions Sessions => _sessions;
     public bool IsRunning { get; private set; }
@@ -92,7 +99,8 @@ internal sealed class SplitAppForwarder : IDisposable
         ushort originalDestPort,
         uint forwardDestIp,
         ushort forwardDestPort,
-        uint originalIfIdx = 0)
+        uint originalIfIdx = 0,
+        string? processName = null)
     {
         _sessions.Register(
             protocol,
@@ -102,7 +110,8 @@ internal sealed class SplitAppForwarder : IDisposable
             originalDestPort,
             forwardDestIp,
             forwardDestPort,
-            originalIfIdx);
+            originalIfIdx,
+            processName);
     }
 
     public void Dispose() => Stop();
@@ -207,8 +216,10 @@ internal sealed class SplitAppForwarder : IDisposable
             {
                 using var app = client.GetStream();
                 using var vpn = new NetworkStream(outbound, ownsSocket: false);
-                var toProxy = PumpAsync(app, vpn, "app->proxy", dialTarget, detail, started, linked.Token);
-                var toApp = PumpAsync(vpn, app, "proxy->app", dialTarget, detail, started, linked.Token);
+                var toProxy = PumpAsync(app, vpn, "app->proxy", dialTarget, detail, started, linked.Token,
+                    n => NoteApp(session.ProcessName, n, 0));
+                var toApp = PumpAsync(vpn, app, "proxy->app", dialTarget, detail, started, linked.Token,
+                    n => NoteApp(session.ProcessName, 0, n));
                 try
                 {
                     await Task.WhenAny(toProxy, toApp);
@@ -225,8 +236,6 @@ internal sealed class SplitAppForwarder : IDisposable
                 proxyToApp = await ReadPumpCount(toApp);
             }
 
-            Interlocked.Add(ref _bytesToProxy, appToProxy);
-            Interlocked.Add(ref _bytesToApp, proxyToApp);
             if (detail)
                 Logger.Info($"[SPLIT-FWD] TCP close {dialTarget} appToProxy={appToProxy} proxyToApp={proxyToApp} {started.ElapsedMilliseconds}ms");
         }
@@ -273,7 +282,7 @@ internal sealed class SplitAppForwarder : IDisposable
             var flowKey = ((byte)17, clientIp, clientPort);
             if (!_udpFlows.TryGetValue(flowKey, out var flow))
             {
-                var created = await CreateUdpFlowAsync(result.RemoteEndPoint, ct);
+                var created = await CreateUdpFlowAsync(result.RemoteEndPoint, session.ProcessName, ct);
                 if (created == null)
                     continue;
                 if (!_udpFlows.TryAdd(flowKey, created))
@@ -290,7 +299,7 @@ internal sealed class SplitAppForwarder : IDisposable
             try
             {
                 flow.Send(session.ForwardDestIp, session.ForwardDestPort, result.Buffer, result.Buffer.Length);
-                Interlocked.Add(ref _bytesToProxy, result.Buffer.Length);
+                NoteApp(session.ProcessName, result.Buffer.Length, 0);
                 if (flow.NoteSend())
                     Logger.Info($"[SPLIT-FWD] UDP {result.RemoteEndPoint} -> {FormatNbo(session.ForwardDestIp)}:{session.ForwardDestPort} via {UpstreamLabel()} ({result.Buffer.Length} bytes)");
             }
@@ -302,7 +311,7 @@ internal sealed class SplitAppForwarder : IDisposable
         }
     }
 
-    private async Task<UdpFlow?> CreateUdpFlowAsync(IPEndPoint client, CancellationToken ct)
+    private async Task<UdpFlow?> CreateUdpFlowAsync(IPEndPoint client, string? processName, CancellationToken ct)
     {
         if (_upstream != null)
         {
@@ -310,7 +319,7 @@ internal sealed class SplitAppForwarder : IDisposable
             {
                 var started = Stopwatch.StartNew();
                 var channel = await Socks5TunnelDial.AssociateUdpAsync(_upstream, ct);
-                var flow = new UdpFlow(client, channel);
+                var flow = new UdpFlow(client, channel, processName);
                 if (Interlocked.Increment(ref _associateLogs) <= 8)
                     Logger.Info($"[SPLIT-FWD] UDP associate ok {started.ElapsedMilliseconds}ms relay={channel.Relay} via socks5://127.0.0.1:{_upstream.Port}");
                 _ = Task.Run(() => UdpReturnLoop(flow, ct));
@@ -336,7 +345,7 @@ internal sealed class SplitAppForwarder : IDisposable
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             Ipv4UnicastInterface.Bind(socket, _vpnAddress, _vpnInterfaceIndex);
-            var flow = new UdpFlow(client, socket);
+            var flow = new UdpFlow(client, socket, processName);
             _ = Task.Run(() => UdpReturnLoop(flow, ct));
             return flow;
         }
@@ -367,7 +376,7 @@ internal sealed class SplitAppForwarder : IDisposable
                 continue;
 
             flow.Touch();
-            Interlocked.Add(ref _bytesToApp, read);
+            NoteApp(flow.ProcessName, 0, read);
             if (flow.NoteReceive())
                 Logger.Info($"[SPLIT-FWD] UDP first reply -> {flow.Client} +{started.ElapsedMilliseconds}ms len={read}");
             try
@@ -460,7 +469,8 @@ internal sealed class SplitAppForwarder : IDisposable
         string dialTarget,
         bool detail,
         Stopwatch started,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<long>? onBytes = null)
     {
         var buffer = new byte[16384];
         long total = 0;
@@ -496,6 +506,7 @@ internal sealed class SplitAppForwarder : IDisposable
             }
 
             total += read;
+            onBytes?.Invoke(read);
             try
             {
                 await to.WriteAsync(buffer.AsMemory(0, read), ct);
@@ -521,6 +532,16 @@ internal sealed class SplitAppForwarder : IDisposable
         }
     }
 
+    private void NoteApp(string? processName, long sent, long received)
+    {
+        if (sent > 0)
+            Interlocked.Add(ref _bytesToProxy, sent);
+        if (received > 0)
+            Interlocked.Add(ref _bytesToApp, received);
+        if (!string.IsNullOrWhiteSpace(processName))
+            _onAppBytes?.Invoke(processName, sent, received);
+    }
+
     private string UpstreamLabel()
         => _upstream == null ? $"vpn-bind if {_vpnInterfaceIndex}" : $"socks5://127.0.0.1:{_upstream.Port}";
 
@@ -542,21 +563,24 @@ internal sealed class SplitAppForwarder : IDisposable
         private int _sends;
         private int _receives;
 
-        public UdpFlow(IPEndPoint client, Socket vpnSocket)
+        public UdpFlow(IPEndPoint client, Socket vpnSocket, string? processName)
         {
             Client = client;
+            ProcessName = processName;
             _vpnSocket = vpnSocket;
             LastSeenTick = Environment.TickCount64;
         }
 
-        public UdpFlow(IPEndPoint client, Socks5UdpChannel socks)
+        public UdpFlow(IPEndPoint client, Socks5UdpChannel socks, string? processName)
         {
             Client = client;
+            ProcessName = processName;
             _socks = socks;
             LastSeenTick = Environment.TickCount64;
         }
 
         public IPEndPoint Client { get; }
+        public string? ProcessName { get; }
         public long LastSeenTick;
 
         public void Touch() => LastSeenTick = Environment.TickCount64;

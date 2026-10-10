@@ -14,7 +14,8 @@ internal sealed class SplitForwarderSessions
         uint ForwardDestIp,
         ushort ForwardDestPort,
         uint OriginalClientIp,
-        uint OriginalIfIdx);
+        uint OriginalIfIdx,
+        string? ProcessName);
 
     private readonly ConcurrentDictionary<(byte Proto, uint ClientIp, ushort ClientPort), Session> _sessions = new();
 
@@ -26,15 +27,21 @@ internal sealed class SplitForwarderSessions
         ushort originalDestPort,
         uint forwardDestIp,
         ushort forwardDestPort,
-        uint originalIfIdx = 0)
+        uint originalIfIdx = 0,
+        string? processName = null)
     {
+        if (string.IsNullOrWhiteSpace(processName) &&
+            _sessions.TryGetValue((protocol, clientIp, clientPort), out var existing))
+            processName = existing.ProcessName;
+
         var session = new Session(
             originalDestIp,
             originalDestPort,
             forwardDestIp,
             forwardDestPort,
             clientIp,
-            originalIfIdx);
+            originalIfIdx,
+            processName);
         _sessions[(protocol, clientIp, clientPort)] = session;
 
         // Windows may deliver the redirected socket as 127.0.0.1:<clientPort>

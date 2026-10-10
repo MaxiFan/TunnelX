@@ -215,15 +215,7 @@ public partial class TrafficRouterService
                     bool connectivityProbeIp = !_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(dstNbo);
                     if (_splitForwarder?.IsRunning == true && !connectivityProbeQuery && !connectivityProbeIp)
                     {
-                        if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
-                        {
-                            connCache.Refresh();
-                            lastRefresh = DateTime.UtcNow;
-                        }
-
-                        var slowPid = connCache.GetOwningPid(tuple2);
-                        var slowProc = slowPid > 0 ? ResolveTargetOwner(slowPid) : null;
-                        slowProc ??= connCache.GetProcessName(tuple2);
+                        var slowProc = LookupPacketOwner(connCache, tuple2, buffer, readLen, ref lastRefresh);
                         if (tuple2.RemotePort == 53 && string.IsNullOrWhiteSpace(slowProc))
                             slowProc = ResolveDnsProcessOwner(connCache, tuple2);
 
@@ -312,15 +304,7 @@ public partial class TrafficRouterService
 
                         if (!shouldRoute)
                         {
-                            if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
-                            {
-                                connCache.Refresh();
-                                lastRefresh = DateTime.UtcNow;
-                            }
-
-                            var pid = connCache.GetOwningPid(tuple2);
-                            procName = pid > 0 ? ResolveTargetOwner(pid) : null;
-                            procName ??= connCache.GetProcessName(tuple2);
+                            procName = LookupPacketOwner(connCache, tuple2, buffer, readLen, ref lastRefresh);
 
                             // Check if source app is in target tunnel apps
                             if (!string.IsNullOrWhiteSpace(procName) && IsExecutableTargeted(procName))
@@ -928,6 +912,41 @@ public partial class TrafficRouterService
     }
 
     /// <summary>
+    /// The connection table is refreshed every 300ms. A TCP SYN is often
+    /// diverted before that row exists, so the handshake leaves on the
+    /// physical NIC and only later ACK/data segments are redirected.
+    /// A listener never accepts those segments. Refresh once on a SYN miss.
+    /// </summary>
+    private string? LookupPacketOwner(
+        ConnectionProcessCache connCache,
+        ConnectionTuple tuple,
+        byte[] buffer,
+        uint readLen,
+        ref DateTime lastRefresh)
+    {
+        int ihl = (buffer[0] & 0x0F) * 4;
+        bool syn = tuple.Protocol == 6 && readLen >= ihl + 14 && (buffer[ihl + 13] & 2) != 0;
+
+        if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
+        {
+            connCache.Refresh();
+            lastRefresh = DateTime.UtcNow;
+        }
+
+        int pid = connCache.GetOwningPid(tuple);
+        if (pid <= 0 && syn)
+        {
+            connCache.Refresh();
+            lastRefresh = DateTime.UtcNow;
+            pid = connCache.GetOwningPid(tuple);
+        }
+
+        var name = pid > 0 ? ResolveTargetOwner(pid) : null;
+        name ??= connCache.GetProcessName(tuple);
+        return name;
+    }
+
+    /// <summary>
     /// Sends one selected-app packet to the local forwarder. The forwarder
     /// dials the real destination from the VPN interface. No /32 is installed,
     /// so other processes keep the physical default route.
@@ -994,9 +1013,15 @@ public partial class TrafficRouterService
             tuple.RemotePort,
             forwardNbo,
             forwardPort,
-            addr.IfIdx);
+            addr.IfIdx,
+            procName);
 
         if (!Ipv4PacketRewrite.TryRewriteDestination(buffer, (int)readLen, Ipv4PacketRewrite.LoopbackBytes, relayPort))
+            return false;
+        // A SYN to 127.0.0.1 whose source is the LAN address is dropped by the
+        // stack: WinDivertSend succeeds, the same ports are retransmitted, and
+        // the listener never accepts. Both ends must be loopback.
+        if (!Ipv4PacketRewrite.TryRewriteSource(buffer, (int)readLen, Ipv4PacketRewrite.LoopbackBytes, tuple.LocalPort))
             return false;
 
         // Checksum-valid bits still describe the pre-rewrite packet, so the
@@ -1040,8 +1065,11 @@ public partial class TrafficRouterService
 
         try
         {
+            // The listener's SYN-ACK leaves as outbound from 127.0.0.1:<forwarder>
+            // before any inbound reflection. An inbound-only filter never sees
+            // it, so the app retransmits and Accept never returns.
             string filter =
-                $"inbound and ip.SrcAddr == 127.0.0.1 and (tcp.SrcPort == {forwarder.TcpPort} or udp.SrcPort == {forwarder.UdpPort})";
+                $"(inbound or outbound) and not impostor and ip.SrcAddr == 127.0.0.1 and (tcp.SrcPort == {forwarder.TcpPort} or udp.SrcPort == {forwarder.UdpPort})";
             IntPtr h;
             lock (_handleLock)
             {
@@ -1115,6 +1143,7 @@ public partial class TrafficRouterService
                         }
                     }
 
+                    addr.Impostor = true;
                     if (!WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr))
                     {
                         int err = Marshal.GetLastWin32Error();
@@ -1129,7 +1158,12 @@ public partial class TrafficRouterService
                         packetErrorLogs++;
                         Logger.Warning($"[SPLIT-DIRECT] Return path error: {ex.Message}");
                     }
-                    try { WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr); } catch { }
+                    try
+                    {
+                        addr.Impostor = true;
+                        WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
+                    }
+                    catch { }
                 }
             }
         }
