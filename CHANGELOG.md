@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.5 - 2026-10-10
+
 ### English
 
 - Selected apps such as Chrome still loaded nothing in Split mode on v2.2.4 after the relay route stayed up. The tunnel itself was healthy (`CONN-VERIFY` through the sing-box mixed proxy succeeded, and include-list `/32` routes still worked). Selected-app TCP, UDP/QUIC, and DNS now dial the sing-box/xray mixed proxy that `CONN-VERIFY` already uses (`127.0.0.1`, usually port 2080), including SOCKS5 UDP associate. Unselected apps stay on the direct connection. The #60 default-route guard and TUN address handling are unchanged. WireGuard and OpenVPN, which have no mixed proxy, still dial from the VPN address.
@@ -471,6 +473,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
