@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### English
+
+- Selected apps in Split mode can load pages through the VPN again. v2.2.3 (PR #81) added a high-metric `0.0.0.0/0` relay route so the per-app forwarder could send TCP, UDP, and DNS from the VPN adapter without a host route that captures every process. The older split guard then deleted that route every few seconds: Windows reports it as 9000 plus the interface metric, not the exact metric 9000 the guard allowed, so the forwarder had no route and selected apps such as Chrome opened nothing. The guard now keeps relay-band metrics and still removes capturing defaults (metric 0, 1, 25, and anything below the relay floor). Unselected apps stay on the direct connection. Regression of PR #81.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- برنامه‌های انتخاب‌شده در حالت Split دوباره صفحه را از داخل VPN باز می‌کنند. نسخهٔ ۲.۲.۳ (PR #81) یک مسیر `0.0.0.0/0` با متریک بالا می‌گذاشت تا فوروارد هر برنامه TCP، UDP و DNS را از آداپتر VPN بفرستد، بدون مسیر `/32` که همهٔ برنامه‌ها را می‌گرفت. نگهبان قدیمی Split هر چند ثانیه آن مسیر را پاک می‌کرد: ویندوز متریک را به‌صورت ۹۰۰۰ به‌اضافهٔ متریک اینترفیس گزارش می‌کند، نه دقیقاً ۹۰۰۰ که نگهبان مجاز می‌دانست؛ فوروارد مسیر نداشت و برنامه‌ای مثل Chrome چیزی باز نمی‌کرد. حالا نگهبان متریک‌های باند رله را نگه می‌دارد و همچنان مسیرهای پیش‌فرضِ تسخیرکننده (متریک ۰، ۱، ۲۵ و هر متریک پایین‌تر از کف رله) را برمی‌دارد. برنامه‌های انتخاب‌نشده روی اتصال مستقیم می‌مانند. این پسرفت PR #81 است.
+
+</div>
+
+### Русский
+
+- Выбранные приложения в режиме Split снова открывают страницы через VPN. v2.2.3 (PR #81) добавляла маршрут `0.0.0.0/0` с высокой метрикой, чтобы пересыльщик выбранных приложений отправлял TCP, UDP и DNS с VPN-адаптера без маршрута `/32`, который захватывал все процессы. Старый split-сторож удалял этот маршрут каждые несколько секунд: Windows показывает его как 9000 плюс метрика интерфейса, а не ровно 9000, которые сторож оставлял. У пересыльщика не было маршрута, и выбранные приложения вроде Chrome ничего не открывали. Сторож теперь сохраняет relay-диапазон метрик и по-прежнему снимает захватывающие маршруты по умолчанию (метрика 0, 1, 25 и всё ниже нижней границы relay). Невыбранные приложения остаются на прямом подключении. Регрессия PR #81.
+
 ## 2.2.3 - 2026-10-10
 
 ### English

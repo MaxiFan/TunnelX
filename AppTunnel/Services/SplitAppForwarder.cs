@@ -138,7 +138,7 @@ internal sealed class SplitAppForwarder : IDisposable
             if (outbound == null)
             {
                 if (Interlocked.Increment(ref _connectLogs) <= 8)
-                    Logger.Warning($"[SPLIT-DIRECT] TCP dial via VPN failed: {error}");
+                    Logger.Warning($"[SPLIT-DIRECT] TCP dial via VPN if {_vpnInterfaceIndex} failed: {error}. Selected-app TCP needs the relay route (metric >= {SplitDirectPathPolicy.RelayMetricFloor}).");
                 return;
             }
 
@@ -214,7 +214,7 @@ internal sealed class SplitAppForwarder : IDisposable
             catch (Exception ex)
             {
                 if (Interlocked.Increment(ref _connectLogs) <= 8)
-                    Logger.Warning($"[SPLIT-DIRECT] UDP send via VPN failed: {ex.Message}");
+                    Logger.Warning($"[SPLIT-DIRECT] UDP send via VPN if {_vpnInterfaceIndex} failed: {ex.Message}. Selected-app UDP/DNS needs the relay route (metric >= {SplitDirectPathPolicy.RelayMetricFloor}).");
             }
         }
     }
