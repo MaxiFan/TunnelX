@@ -44,9 +44,59 @@ internal struct WinDivertAddress
     [FieldOffset(70)] public ushort Flow_RemotePort;
     [FieldOffset(72)] public byte  Flow_Protocol;
 
-    public byte   Event    => (byte)((LayerEventFlags >> 8) & 0xFF);
-    public bool   IsIPv6   => ((LayerEventFlags >> 20) & 0x1) != 0;
-    public bool   Outbound => ((LayerEventFlags >> 17) & 0x1) != 0;
+    public byte Event => (byte)((LayerEventFlags >> 8) & 0xFF);
+    public bool IsIPv6 => ReadFlag(20);
+
+    /// <summary>
+    /// Bit 17 of the WinDivert 2.x address flags. A setter is required when a
+    /// rewritten reply must be injected inbound.
+    /// </summary>
+    public bool Outbound
+    {
+        get => ReadFlag(17);
+        set => WriteFlag(17, value);
+    }
+
+    /// <summary>Bit 18. Required when a captured external packet is reinjected onto 127.0.0.1.</summary>
+    public bool Loopback
+    {
+        get => ReadFlag(18);
+        set => WriteFlag(18, value);
+    }
+
+    /// <summary>
+    /// Bit 19. Injected packets with this set are not captured again, so
+    /// NET-IN (udp.SrcPort == 53) cannot steal a restored DNS reply.
+    /// </summary>
+    public bool Impostor
+    {
+        get => ReadFlag(19);
+        set => WriteFlag(19, value);
+    }
+
+    public bool IpChecksum => ReadFlag(21);
+    public bool TcpChecksum => ReadFlag(22);
+    public bool UdpChecksum => ReadFlag(23);
+
+    /// <summary>
+    /// WinDivertHelperCalcChecksums skips a checksum whose flag is already set.
+    /// After rewriting an address, those bits still describe the original packet.
+    /// </summary>
+    public void ClearChecksumFlags()
+    {
+        LayerEventFlags &= ~((1UL << 21) | (1UL << 22) | (1UL << 23));
+    }
+
+    private bool ReadFlag(int bit) => ((LayerEventFlags >> bit) & 0x1) != 0;
+
+    private void WriteFlag(int bit, bool value)
+    {
+        var mask = 1UL << bit;
+        if (value)
+            LayerEventFlags |= mask;
+        else
+            LayerEventFlags &= ~mask;
+    }
 }
 
 internal static class WinDivertNative

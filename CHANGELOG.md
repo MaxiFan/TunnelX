@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### English
+
+- Selected apps such as Chrome still loaded nothing in Split mode on v2.2.4 after the relay route stayed up. The tunnel itself was healthy (`CONN-VERIFY` through the sing-box mixed proxy succeeded, and include-list `/32` routes still worked). Selected-app TCP, UDP/QUIC, and DNS now dial the sing-box/xray mixed proxy that `CONN-VERIFY` already uses (`127.0.0.1`, usually port 2080), including SOCKS5 UDP associate. Unselected apps stay on the direct connection. The #60 default-route guard and TUN address handling are unchanged. WireGuard and OpenVPN, which have no mixed proxy, still dial from the VPN address.
+- That redirect still never completed a TCP handshake. The first SYN left before Windows listed the socket owner, so only later ACK segments were redirected and the listener ignored them. A packet to `127.0.0.1` whose source was the LAN address was dropped even when WinDivert reported a successful send. The listener's SYN-ACK is outbound, and the return path only watched inbound packets, so the application kept retransmitting. The connection table is refreshed for an unowned SYN, both addresses are rewritten to `127.0.0.1`, and outbound replies from the forwarder are restored to the real server and client. Per-app usage in the Apps tab counts bytes carried by this forwarder, because those flows no longer appear on the VPN adapter under the application's own socket.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- برنامه‌های انتخاب‌شده مثل Chrome در حالت Split روی نسخهٔ ۲.۲.۴ هنوز هیچ صفحه‌ای باز نمی‌کردند، حتی وقتی مسیر رله سر جایش می‌ماند. خود تونل سالم بود (`CONN-VERIFY` از mixed proxy سینک‌باکس موفق بود و مسیرهای `/32` فهرست include هم کار می‌کردند). حالا TCP، UDP/QUIC و DNS برنامه‌های انتخاب‌شده از همان mixed proxy سینک‌باکس/اکس‌ری که `CONN-VERIFY` استفاده می‌کند شماره‌گیری می‌شوند (`127.0.0.1`، معمولاً پورت ۲۰۸۰)، از جمله UDP associate در SOCKS5. برنامه‌های انتخاب‌نشده روی اتصال مستقیم می‌مانند. نگهبان مسیر پیش‌فرض #60 و رسیدگی به آدرس TUN عوض نشده است. WireGuard و OpenVPN که mixed proxy ندارند همچنان از آدرس VPN شماره‌گیری می‌کنند.
+- همان هدایت هنوز handshake را تمام نمی‌کرد. SYN اول قبل از ثبت مالک سوکت در ویندوز خارج می‌شد و فقط ACKهای بعدی منحرف می‌شدند، که listener آن‌ها را قبول نمی‌کند. بستهٔ مقصد `127.0.0.1` با مبدأ آدرس شبکهٔ محلی، حتی پس از ارسال موفق WinDivert، دور ریخته می‌شد. SYN-ACK شنونده خروجی است و مسیر بازگشت فقط بسته‌های ورودی را می‌دید، پس برنامه SYN را تکرار می‌کرد. برای SYN بدون مالک، جدول اتصال فوراً تازه می‌شود، هر دو آدرس به `127.0.0.1` بازنویسی می‌شوند، و پاسخ خروجی فوروارد به سرور و کلاینت واقعی برمی‌گردد. مصرف هر برنامه در تب برنامه‌ها بایت‌های همین فوروارد را می‌شمارد، چون این جریان‌ها دیگر با سوکت خود برنامه روی آداپتر VPN دیده نمی‌شوند.
+
+</div>
+
+### Русский
+
+- Выбранные приложения вроде Chrome в режиме Split на v2.2.4 по-прежнему ничего не открывали, хотя relay-маршрут оставался на месте. Сам туннель был исправен (`CONN-VERIFY` через mixed proxy sing-box проходил, маршруты `/32` из списка include тоже работали). TCP, UDP/QUIC и DNS выбранных приложений теперь идут через mixed proxy sing-box/xray, который уже проверяет `CONN-VERIFY` (`127.0.0.1`, обычно порт 2080), включая SOCKS5 UDP associate. Невыбранные приложения остаются на прямом подключении. Сторож маршрута по умолчанию из #60 и обработка адреса TUN не изменились. WireGuard и OpenVPN без mixed proxy по-прежнему дозвоняются с адреса VPN.
+- Этого перенаправления всё ещё не хватало для TCP-рукопожатия. Первый SYN уходил до того, как Windows записывала владельца сокета, поэтому переписывались только последующие ACK, а слушатель их не принимает. Пакет на `127.0.0.1` с источником в локальной сети отбрасывался, даже когда WinDivert сообщал об успешной отправке. SYN-ACK слушателя исходящий, а обратный путь смотрел только входящие пакеты, и приложение повторяло SYN. Таблица соединений обновляется для SYN без владельца, оба адреса переписываются на `127.0.0.1`, а исходящие ответы пересыльщика восстанавливаются к реальному серверу и клиенту. Расход приложения на вкладке приложений считает байты этого пересыльщика: такие потоки больше не видны на VPN-адаптере как сокет самого приложения.
+
 ## 2.2.4 - 2026-10-10
 
 ### English
