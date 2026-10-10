@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.3 - 2026-10-10
+
 ### English
 
 - Split mode no longer publishes a VPN host route for destinations a selected app is using, or for public DNS/DoH resolvers such as `8.8.8.8` and `1.1.1.1`. Those routes captured every process. Unselected packets kept their physical source address, Windows dropped them on the VPN adapter, and other apps — especially browser DNS and Google search — looked offline. Selected apps are forwarded out the VPN interface without that route, so everything you did not select stays on the normal connection (`Fixes #79`).
@@ -429,6 +431,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
