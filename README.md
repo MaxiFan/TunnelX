@@ -163,6 +163,7 @@ Destination include/exclude rules match both the entered domain and its subdomai
 
 - Excluded destinations stay direct even for selected apps.
 - Included destinations use the tunnel even when the matching app is not selected.
+- In split mode, unselected apps keep the normal direct connection, including DNS and browser search. TunnelX does not publish a VPN host route for a destination just because a selected app is using it. Selected-app packets are forwarded out the VPN interface on their own, so other apps are not dragged onto that route or dropped.
 - For Store/MSIX, WebView2, or multi-process apps, keep the app open and refresh the app list.
 - In full-route mode, the whole system uses the tunnel; direct/exclude rules are still useful for keeping specific destinations on the normal route.
 

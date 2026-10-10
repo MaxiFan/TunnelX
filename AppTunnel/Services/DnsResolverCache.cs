@@ -22,6 +22,8 @@ internal enum DestinationDnsPolicy
 internal sealed class TunnelDnsResolveOptions
 {
     public IPAddress? BindLocalAddress { get; init; }
+    /// <summary>VPN interface index for IP_UNICAST_IF. Avoids a capturing /32.</summary>
+    public int VpnInterfaceIndex { get; init; }
     /// <summary>Skip filtered system DNS; use DoH through the tunnel first.</summary>
     public bool PreferDohFirst { get; init; }
     /// <summary>Do not fall back to system DNS after tunnel DoH (INCLUDE lists).</summary>
@@ -47,7 +49,7 @@ internal static class DnsResolverCache
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromSeconds(20);
     private static readonly HttpClient DohHttp = CreateDohHttpClient(bindLocal: null);
 
-    private static HttpClient CreateDohHttpClient(IPAddress? bindLocal, TimeSpan? timeout = null)
+    private static HttpClient CreateDohHttpClient(IPAddress? bindLocal, TimeSpan? timeout = null, int vpnInterfaceIndex = 0)
     {
         var handler = new SocketsHttpHandler
         {
@@ -59,7 +61,7 @@ internal static class DnsResolverCache
                     var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                     try
                     {
-                        socket.Bind(new IPEndPoint(bindLocal, 0));
+                        Ipv4UnicastInterface.Bind(socket, bindLocal, vpnInterfaceIndex);
                         await socket.ConnectAsync(context.DnsEndPoint, ct).ConfigureAwait(false);
                         return new NetworkStream(socket, ownsSocket: true);
                     }
@@ -314,7 +316,7 @@ internal static class DnsResolverCache
             return Array.Empty<IPAddress>();
 
         using var boundClient = tunnel?.BindLocalAddress != null
-            ? CreateDohHttpClient(tunnel.BindLocalAddress, tunnel.Timeout)
+            ? CreateDohHttpClient(tunnel.BindLocalAddress, tunnel.Timeout, tunnel.VpnInterfaceIndex)
             : null;
 
         var client = boundClient ?? DohHttp;

@@ -184,22 +184,20 @@ public partial class TrafficRouterService
                             return;
                         }
 
-                        bool routeAdded = false;
-                        if (!routeAlreadyPresent)
-                        {
-                            EnsureHostRouteViaVpn(intlNbo, intlIp);
-                            routeAdded = true;
-                        }
-
+                        // Do not install a /32 for the health-check IP. google.com
+                        // and cloudflare.com are exactly what an unselected
+                        // browser needs, and that route drops them.
                         var sw = System.Diagnostics.Stopwatch.StartNew();
-                        using var tcp = new System.Net.Sockets.TcpClient();
+                        using var probe = new System.Net.Sockets.Socket(
+                            System.Net.Sockets.AddressFamily.InterNetwork,
+                            System.Net.Sockets.SocketType.Stream,
+                            System.Net.Sockets.ProtocolType.Tcp);
+                        if (IPAddress.TryParse(_vpnLocalIp, out var vpnBind))
+                            Ipv4UnicastInterface.Bind(probe, vpnBind, _vpnInterfaceIndex);
                         using var tcpCts = new System.Threading.CancellationTokenSource(3000);
-                        await tcp.ConnectAsync(intlIp, intlPort, tcpCts.Token);
+                        await probe.ConnectAsync(intlIp, intlPort, tcpCts.Token);
                         sw.Stop();
-                        Logger.Info($"[CONN-CHECK] TCP {intlHost} ({intlIp}:{intlPort}, via VPN tunnel): {sw.ElapsedMilliseconds}ms (raw TCP — may be lower than SOCKS/TLS probes)");
-
-                        if (routeAdded && !_ipToProcess.ContainsKey(intlNbo))
-                            ScheduleDelayedRouteRemoval(intlNbo);
+                        Logger.Info($"[CONN-CHECK] TCP {intlHost} ({intlIp}:{intlPort}, via VPN interface {_vpnInterfaceIndex}): {sw.ElapsedMilliseconds}ms (no host route)");
                     }
                     catch (OperationCanceledException) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN: timeout (3000ms)"); }
                     catch (Exception ex) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN failed: {ex.Message}"); }

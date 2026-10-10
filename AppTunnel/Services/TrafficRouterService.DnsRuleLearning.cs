@@ -137,7 +137,10 @@ public partial class TrafficRouterService
                 !IsExcludedDestination(nbo))
             {
                 _ipToProcess[nbo] = query.TargetOwner;
-                QueueHostRouteViaVpn(nbo, ip);
+                // The forwarder carries this app's later packets. A /32 here
+                // would also capture the browser and other unselected apps.
+                if (_splitForwarder?.IsRunning != true)
+                    QueueHostRouteViaVpn(nbo, ip);
             }
         }
 

@@ -7,8 +7,13 @@ public partial class TrafficRouterService
 {
     private IntPtr _networkOutHandle = IntPtr.Zero;
     private IntPtr _networkInHandle = IntPtr.Zero;
+    private IntPtr _loopbackReturnHandle = IntPtr.Zero;
     private Task? _networkOutTask;
     private Task? _networkInTask;
+    private Task? _loopbackReturnTask;
+    private SplitAppForwarder? _splitForwarder;
+    private int _splitRelayLogCount;
+    private int _splitRouteStripLogCount;
 
     /// <summary>
     /// Intercepts outbound packets from the physical NIC that are destined for
@@ -105,18 +110,26 @@ public partial class TrafficRouterService
                         included: isIncluded,
                         blockedProc: !_fullRouteEnabled && IsExecutableBlocked(packetProc),
                         processIsTarget: !string.IsNullOrWhiteSpace(packetProc) && IsExecutableTargeted(packetProc),
-                        ipRefCount: ipRefs);
+                        ipRefCount: ipRefs,
+                        forwarderReady: _splitForwarder?.IsRunning == true);
 
-                    // Non-tunnel packets are reinjected on the physical NIC.
-                    // Route deletion is never done here: route.exe takes the
-                    // Windows routing lock and, after a long per-app session,
-                    // that stall drops NCSI/DHCP/DNS until Wi-Fi shows
-                    // "Connected, no internet".
+                    // Outbound IfIdx is ignored by WinDivert, so a leftover VPN
+                    // /32 would send this packet at the VPN adapter. Strip it
+                    // with one IP-helper delete (not route.exe per packet)
+                    // before reinjecting, or the strong-host model drops it.
+                    if (decision.RemoveRouteNow && _addedRoutes.ContainsKey(dstNbo))
+                        StripCapturingHostRoute(dstNbo);
+
+                    if (decision.RelaySelectedApp &&
+                        TryParseConnectionTuple(buffer, readLen, out var relayTuple) &&
+                        TryRelaySelectedAppPacket(h, buffer, readLen, ref addr, relayTuple, packetProc))
+                    {
+                        continue;
+                    }
+
                     if (!decision.SendViaVpn)
                     {
-                        if (decision.RemoveRouteNow)
-                            ScheduleImmediateHostRouteRemoval(dstNbo);
-                        else if (decision.ScheduleDelayedRemovalIfIdle)
+                        if (decision.ScheduleDelayedRemovalIfIdle)
                             ScheduleDelayedRouteRemovalIfIdle(dstNbo);
 
                         WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
@@ -196,7 +209,36 @@ public partial class TrafficRouterService
                     bool classicDnsCandidate = tuple2.RemotePort == 53 && (isPrivate || IsExcludedDestination(dstNbo));
                     bool connectivityProbeQuery = IsSplitModeConnectivityProbeQuery(buffer, readLen);
                     bool connectivityProbeIp = !_fullRouteEnabled && WindowsConnectivityGuard.IsProbeIpv4(dstNbo);
-                    if (!connectivityProbeQuery && !connectivityProbeIp &&
+                    if (_splitForwarder?.IsRunning == true && !connectivityProbeQuery && !connectivityProbeIp)
+                    {
+                        if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
+                        {
+                            connCache.Refresh();
+                            lastRefresh = DateTime.UtcNow;
+                        }
+
+                        var slowPid = connCache.GetOwningPid(tuple2);
+                        var slowProc = slowPid > 0 ? ResolveTargetOwner(slowPid) : null;
+                        slowProc ??= connCache.GetProcessName(tuple2);
+                        if (tuple2.RemotePort == 53 && string.IsNullOrWhiteSpace(slowProc))
+                            slowProc = ResolveDnsProcessOwner(connCache, tuple2);
+
+                        bool slowTarget = !string.IsNullOrWhiteSpace(slowProc) && IsExecutableTargeted(slowProc);
+                        if (slowTarget &&
+                            !_fullRouteEnabled &&
+                            !IsIncludedDestination(dstNbo) &&
+                            !IsExecutableBlocked(slowProc) &&
+                            TryRelaySelectedAppPacket(h, buffer, readLen, ref addr, tuple2, slowProc))
+                        {
+                            continue;
+                        }
+                    }
+
+                    // Legacy DNS rewrite publishes a /32 for the public resolver.
+                    // That route also captures unselected apps. The forwarder
+                    // above sends only the selected app's DNS via the VPN.
+                    if (_splitForwarder?.IsRunning != true &&
+                        !connectivityProbeQuery && !connectivityProbeIp &&
                         EnableDnsRedirect && (wireGuardDnsCandidate || classicDnsCandidate))
                     {
                         if ((DateTime.UtcNow - lastRefresh).TotalMilliseconds > 300)
@@ -283,6 +325,19 @@ public partial class TrafficRouterService
                             }
                         }
 
+                        if (shouldRoute &&
+                            _splitForwarder?.IsRunning == true &&
+                            !_fullRouteEnabled &&
+                            !isIncluded)
+                        {
+                            if (TryRelaySelectedAppPacket(h, buffer, readLen, ref addr, tuple2, procName))
+                                continue;
+
+                            // A failed relay must not fall back to a /32.
+                            // That route would take unselected apps offline.
+                            shouldRoute = false;
+                        }
+
                         if (shouldRoute)
                         {
                             if (_vpnServerIsUdpOnly &&
@@ -297,8 +352,12 @@ public partial class TrafficRouterService
                                 continue;
                             }
 
-                            bool shouldInstallHostRoute = !_fullRouteEnabled || isIncluded ||
-                                IsExecutableTargeted(procName);
+                            // Per-app /32s are only the legacy path (forwarder down).
+                            // Full-route already has a default route; include rules
+                            // still need a /32 while split mode is selected.
+                            bool shouldInstallHostRoute = isIncluded ||
+                                (_splitForwarder?.IsRunning != true && !_fullRouteEnabled) ||
+                                (_fullRouteEnabled && IsExecutableTargeted(procName));
 
                             if (shouldInstallHostRoute)
                             {
@@ -850,6 +909,187 @@ public partial class TrafficRouterService
         catch (Exception ex)
         {
             if (_isRunning) Logger.Warning($"[WG-OUT] Loop error: {ex.Message}");
+        }
+    }
+
+    private void StripCapturingHostRoute(uint dstIpNbo)
+    {
+        if (_splitRouteStripLogCount < 8)
+        {
+            _splitRouteStripLogCount++;
+            Logger.Info($"[SPLIT-DIRECT] Removing VPN /32 {new IPAddress(BitConverter.GetBytes(dstIpNbo))} so unselected apps stay on the direct path");
+        }
+
+        TryRemoveHostRoute(dstIpNbo);
+    }
+
+    /// <summary>
+    /// Sends one selected-app packet to the local forwarder. The forwarder
+    /// dials the real destination from the VPN interface. No /32 is installed,
+    /// so other processes keep the physical default route.
+    /// </summary>
+    private bool TryRelaySelectedAppPacket(
+        IntPtr handle,
+        byte[] buffer,
+        uint readLen,
+        ref WinDivertAddress addr,
+        ConnectionTuple tuple,
+        string? procName)
+    {
+        var forwarder = _splitForwarder;
+        if (forwarder == null || !forwarder.IsRunning || _vpnLocalIpBytes == null)
+            return false;
+
+        if (tuple.RemotePort == 53 && IsSplitModeConnectivityProbeQuery(buffer, readLen))
+            return false;
+
+        uint destNbo = BitConverter.ToUInt32(buffer, 16);
+        byte b0 = buffer[16];
+        byte b1 = buffer[17];
+        bool isPrivate = b0 == 0 || b0 == 127 || b0 >= 224 ||
+            b0 == 10 || (b0 == 172 && b1 >= 16 && b1 <= 31) ||
+            (b0 == 192 && b1 == 168) || (b0 == 169 && b1 == 254);
+        if (isPrivate && !(EnableDnsRedirect && tuple.RemotePort == 53))
+            return false;
+
+        if (IsExcludedDestination(destNbo) && tuple.RemotePort != 53)
+            return false;
+
+        if (_vpnServerIsUdpOnly &&
+            tuple.Protocol == 17 &&
+            tuple.RemotePort == 443 &&
+            !string.IsNullOrWhiteSpace(procName) &&
+            ShouldForceTcpFallbackForWireGuard(procName))
+        {
+            var dropped = Interlocked.Increment(ref _statWgQuicDropped);
+            if (dropped <= 8)
+                Logger.Info($"[WG-QUIC-DROP] {procName} UDP/443 → {tuple.RemoteIp}:443 dropped to force TCP fallback");
+            return true;
+        }
+
+        uint clientNbo = BitConverter.ToUInt32(buffer, 12);
+        uint forwardNbo = destNbo;
+        ushort forwardPort = tuple.RemotePort;
+        if (EnableDnsRedirect && tuple.RemotePort == 53)
+        {
+            if (!string.IsNullOrWhiteSpace(procName))
+                LearnTargetDnsQueryFromOutboundPacket(buffer, readLen, procName);
+            forwardNbo = _dnsRedirectIpNbo;
+            forwardPort = 53;
+        }
+
+        ushort relayPort = tuple.Protocol == 6 ? forwarder.TcpPort : forwarder.UdpPort;
+        if (relayPort == 0)
+            return false;
+
+        forwarder.Register(
+            tuple.Protocol,
+            clientNbo,
+            tuple.LocalPort,
+            destNbo,
+            tuple.RemotePort,
+            forwardNbo,
+            forwardPort);
+
+        if (!Ipv4PacketRewrite.TryRewriteDestination(buffer, (int)readLen, Ipv4PacketRewrite.LoopbackBytes, relayPort))
+            return false;
+
+        WinDivertNative.WinDivertHelperCalcChecksums(buffer, readLen, ref addr, 0);
+        if (_splitRelayLogCount < 8)
+        {
+            _splitRelayLogCount++;
+            var forwardIp = new IPAddress(BitConverter.GetBytes(forwardNbo));
+            Logger.Info($"[SPLIT-DIRECT] {procName ?? "app"} {tuple.RemoteIp}:{tuple.RemotePort} → VPN if {_vpnInterfaceIndex} via 127.0.0.1:{relayPort} (dial {forwardIp}:{forwardPort}, no /32)");
+        }
+
+        Interlocked.Increment(ref _statNetOutRewritten);
+        Interlocked.Increment(ref _redirectCount);
+        if (!WinDivertNative.WinDivertSend(handle, buffer, readLen, IntPtr.Zero, ref addr))
+        {
+            long failed = Interlocked.Increment(ref _statNetOutSendFailed);
+            if (failed <= 5)
+                Logger.Warning($"[SPLIT-DIRECT] Relay inject failed: {Marshal.GetLastWin32Error()}");
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Selected-app sockets still think they are talking to the real server.
+    /// The forwarder's loopback replies are rewritten so the source is that server.
+    /// </summary>
+    private void SplitLoopbackReturnLoop(CancellationToken ct)
+    {
+        var forwarder = _splitForwarder;
+        if (forwarder == null || !forwarder.IsRunning)
+            return;
+
+        try
+        {
+            string filter =
+                $"inbound and ip.SrcAddr == 127.0.0.1 and (tcp.SrcPort == {forwarder.TcpPort} or udp.SrcPort == {forwarder.UdpPort})";
+            IntPtr h;
+            lock (_handleLock)
+            {
+                h = WinDivertNative.WinDivertOpen(filter, WinDivertLayer.Network, -50, 0);
+                _loopbackReturnHandle = h;
+            }
+
+            if (h == IntPtr.Zero || h == new IntPtr(-1))
+            {
+                int err = Marshal.GetLastWin32Error();
+                Logger.Warning($"[SPLIT-DIRECT] Return path open failed: {err} ({GetWinDivertErrorMessage(err)})");
+                return;
+            }
+
+            Logger.Info($"[SPLIT-DIRECT] Return path opened (filter='{filter}')");
+            var buffer = new byte[65535];
+            var addr = new WinDivertAddress();
+            int packetErrorLogs = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                uint readLen = 0;
+                if (!WinDivertNative.WinDivertRecv(h, buffer, (uint)buffer.Length, ref readLen, ref addr))
+                {
+                    if (ct.IsCancellationRequested || !_isRunning) break;
+                    continue;
+                }
+
+                try
+                {
+                    if (readLen >= 20 && TryParseConnectionTuple(buffer, readLen, out var tuple))
+                    {
+                        uint clientNbo = BitConverter.ToUInt32(buffer, 16);
+                        if (forwarder.Sessions.TryGet(tuple.Protocol, clientNbo, tuple.RemotePort, out var session))
+                        {
+                            var original = BitConverter.GetBytes(session.OriginalDestIp);
+                            if (Ipv4PacketRewrite.TryRewriteSource(buffer, (int)readLen, original, session.OriginalDestPort))
+                                WinDivertNative.WinDivertHelperCalcChecksums(buffer, readLen, ref addr, 0);
+                        }
+                    }
+
+                    WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    if (packetErrorLogs < 5)
+                    {
+                        packetErrorLogs++;
+                        Logger.Warning($"[SPLIT-DIRECT] Return path error: {ex.Message}");
+                    }
+                    try { WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr); } catch { }
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (_isRunning) Logger.Warning($"[SPLIT-DIRECT] Return path stopped: {ex.Message}");
+        }
+        finally
+        {
+            FailOpenCaptureHandle(ref _loopbackReturnHandle, "SPLIT-DIRECT");
         }
     }
 

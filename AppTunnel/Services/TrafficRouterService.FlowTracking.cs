@@ -377,12 +377,16 @@ public partial class TrafficRouterService
                 if (_pendingRouteRemoval.TryRemove(remoteNbo, out var pendingCts))
                     try { pendingCts.Cancel(); } catch { }
 
-                bool newRoute = EnsureHostRouteViaVpn(remoteNbo, remoteIp);
+                bool newRoute = false;
+                if (SplitDirectPathPolicy.ShouldInstallCapturingHostRoute(_fullRouteEnabled, isIncluded) ||
+                    _splitForwarder?.IsRunning != true)
+                    newRoute = EnsureHostRouteViaVpn(remoteNbo, remoteIp);
                 if ((newRoute || _loggedMatchIps.TryAdd(remoteNbo, true)) && _flowMatchLogCount < 20)
                 {
                     Interlocked.Increment(ref _flowMatchLogCount);
                     string reason = isIncluded ? "(included destination)" : $"(proc={processName ?? "?"})";
-                    Logger.Info($"[FLOW-MATCH] {ownerForFlow} pid={pid} {reason} → {remoteIp}:{addr.Flow_RemotePort}  (route installed)");
+                    var how = newRoute ? "route installed" : "no capturing /32";
+                    Logger.Info($"[FLOW-MATCH] {ownerForFlow} pid={pid} {reason} → {remoteIp}:{addr.Flow_RemotePort}  ({how})");
                 }
             }
         }

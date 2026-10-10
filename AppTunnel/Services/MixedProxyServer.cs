@@ -23,6 +23,7 @@ internal sealed class MixedProxyServer
     private long _connCount;
     private long _connActive;
     private Action<IPAddress>? _ensureRoute;
+    private int _vpnInterfaceIndex;
     private readonly ProxyClientSessionTable _sessions = new();
 
     public MixedProxyServer(int listenPort = 1080, string? username = null, string? password = null)
@@ -38,7 +39,7 @@ internal sealed class MixedProxyServer
     public long ActiveConnections => Interlocked.Read(ref _connActive);
     internal bool AuthEnabled => _auth.IsEnabled;
 
-    public void Start(string vpnLocalIp, Action<IPAddress>? ensureRoute = null)
+    public void Start(string vpnLocalIp, Action<IPAddress>? ensureRoute = null, int vpnInterfaceIndex = 0)
     {
         if (_listener != null) return;
         if (!IPAddress.TryParse(vpnLocalIp, out var bindIp))
@@ -48,6 +49,7 @@ internal sealed class MixedProxyServer
         }
         _bindEndpoint = new IPEndPoint(bindIp, 0);
         _ensureRoute = ensureRoute;
+        _vpnInterfaceIndex = vpnInterfaceIndex;
 
         var announced = false;
         try
@@ -260,7 +262,10 @@ internal sealed class MixedProxyServer
                 }
             }
 
-            try { _ensureRoute?.Invoke(remoteIp); } catch { }
+            if (_vpnInterfaceIndex <= 0)
+            {
+                try { _ensureRoute?.Invoke(remoteIp); } catch { }
+            }
 
             upstream = await DialUpstreamAsync(remoteIp, port, connId, ct);
             if (upstream == null)
@@ -410,7 +415,10 @@ internal sealed class MixedProxyServer
                 }
             }
 
-            try { _ensureRoute?.Invoke(remoteIp); } catch { }
+            if (_vpnInterfaceIndex <= 0)
+            {
+                try { _ensureRoute?.Invoke(remoteIp); } catch { }
+            }
 
             upstream = await DialUpstreamAsync(remoteIp, port, connId, ct);
             if (upstream == null)
@@ -505,6 +513,8 @@ internal sealed class MixedProxyServer
             try
             {
                 client.Client.Bind(_bindEndpoint!);
+                if (_vpnInterfaceIndex > 0)
+                    Ipv4UnicastInterface.Apply(client.Client, _vpnInterfaceIndex);
             }
             catch (Exception bex)
             {
