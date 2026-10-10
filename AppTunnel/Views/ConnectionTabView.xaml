@@ -364,7 +364,8 @@
                                                 BorderThickness="1"
                                                 CornerRadius="8"
                                                 Padding="8,5"
-                                                Margin="0,0,0,6">
+                                                Margin="0,0,0,6"
+                                                FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
@@ -382,18 +383,19 @@
                                                            MaxWidth="240"
                                                            Foreground="{StaticResource TextPrimaryBrush}"
                                                            TextTrimming="CharacterEllipsis"
-                                                           FlowDirection="LeftToRight"
-                                                           TextAlignment="Left"
+                                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            ToolTip="{Binding Url}"/>
                                                 <StackPanel Grid.Column="2"
                                                             Orientation="Horizontal"
-                                                            VerticalAlignment="Center">
+                                                            VerticalAlignment="Center"
+                                                            FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                                     <TextBlock Text="{Binding StatusText}"
                                                                FontSize="10"
                                                                VerticalAlignment="Center"
                                                                TextTrimming="CharacterEllipsis"
                                                                MaxWidth="200"
-                                                               Foreground="{Binding StatusColor, Converter={StaticResource StringToColor}}"/>
+                                                               Foreground="{Binding StatusColor, Converter={StaticResource StringToColor}}"
+                                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                                     <TextBlock Text="  ·  "
                                                                FontSize="10"
                                                                VerticalAlignment="Center"
@@ -409,7 +411,8 @@
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="5"
                                                             Orientation="Horizontal"
-                                                            VerticalAlignment="Center">
+                                                            VerticalAlignment="Center"
+                                                            FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                                     <Button Style="{StaticResource SecondaryButton}"
                                                             Content="{Binding DataContext.RefreshSubscriptionButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             FontSize="10"
@@ -500,11 +503,14 @@
                         <DataTemplate>
                             <!--
                               Packed from layout start (right in FA / left in EN):
-                              checkbox · name · badges · endpoint · status · ping · actions
-                              Star columns (MinWidth=0) ellipsize long names/results;
-                              Auto action column keeps ping/edit/delete reachable.
+                              checkbox · name · badges · endpoint · status · ping · actions.
+                              Star columns (MinWidth=0) ellipsize; the Auto column keeps actions reachable.
+                              The row binds AppFlowDirection because a DataTemplate root does not inherit
+                              the ListBox direction (#82). Checkbox stays LTR so the glyph is not mirrored.
                             -->
-                            <Grid MinWidth="0" VerticalAlignment="Center">
+                            <Grid MinWidth="0"
+                                  VerticalAlignment="Center"
+                                  FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=ListBox}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="8"/>
@@ -542,8 +548,7 @@
                                            FontSize="12.5"
                                            FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           FlowDirection="LeftToRight"
-                                           TextAlignment="Left"
+                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                            ToolTip="{Binding Name}"/>
 
                                 <Border Grid.Column="4"
@@ -554,8 +559,7 @@
                                     <TextBlock Text="{Binding TunnelTypeDisplay}"
                                                FontSize="9"
                                                Foreground="{StaticResource AccentBrush}"
-                                               FlowDirection="LeftToRight"
-                                               TextAlignment="Left"/>
+                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
                                 </Border>
 
                                 <Border Grid.Column="6"
@@ -567,8 +571,7 @@
                                     <TextBlock Text="{Binding SubscriptionBadgeText}"
                                                FontSize="9"
                                                Foreground="#7EB6FF"
-                                               FlowDirection="LeftToRight"
-                                               TextAlignment="Left"/>
+                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
                                 </Border>
 
                                 <TextBlock Grid.Column="8"
@@ -576,8 +579,7 @@
                                            Text="{Binding EndpointDisplay}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                           FlowDirection="LeftToRight"
-                                           TextAlignment="Left"
+                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                            ToolTip="{Binding EndpointDisplay}"/>
 
                                 <TextBlock Grid.Column="10"
@@ -586,6 +588,7 @@
                                            Foreground="{Binding ReadinessColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
+                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                            ToolTip="{Binding ReadinessText}"/>
 
                                 <TextBlock Grid.Column="12"
@@ -594,8 +597,7 @@
                                            Foreground="{Binding LatencyColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           FlowDirection="LeftToRight"
-                                           TextAlignment="Left"
+                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                            Visibility="{Binding SupportsServerPing, Converter={StaticResource BoolToVis}}"
                                            ToolTip="{Binding LatencyDisplayText}"/>
 
@@ -605,14 +607,14 @@
                                            Foreground="{Binding ServerLatencyColor, Converter={StaticResource StringToColor}}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           FlowDirection="LeftToRight"
-                                           TextAlignment="Left"
+                                           TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                            Visibility="{Binding ShowsServerPingButton, Converter={StaticResource BoolToVis}}"
                                            ToolTip="{Binding ServerLatencyDisplayText}"/>
 
                                 <StackPanel Grid.Column="16"
                                             Orientation="Horizontal"
-                                            VerticalAlignment="Center">
+                                            VerticalAlignment="Center"
+                                            FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=ListBox}}">
                                     <Button FontSize="10"
                                             Padding="7,4"
                                             Margin="0,0,4,0"

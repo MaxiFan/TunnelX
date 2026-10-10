@@ -56,7 +56,6 @@
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
             <Setter Property="MinHeight" Value="48"/>
-            <Setter Property="FlowDirection" Value="LeftToRight"/>
         </Style>
 
         <Style x:Key="AppIconFrame" TargetType="Border">
@@ -139,7 +138,9 @@
                           ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <Border Style="{StaticResource AppRowCard}" Cursor="Arrow">
+                            <Border Style="{StaticResource AppRowCard}"
+                                    Cursor="Arrow"
+                                    FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -170,15 +171,13 @@
                                                        TextOptions.TextRenderingMode="ClearType"
                                                        TextOptions.TextHintingMode="Fixed"
                                                        TextTrimming="CharacterEllipsis"
-                                                       FlowDirection="LeftToRight"
-                                                       TextAlignment="Left"/>
+                                                       TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                             <TextBlock Text="{Binding ExecutableName}"
                                                        Foreground="{StaticResource TextSecondaryBrush}"
                                                        FontSize="9.5"
                                                        Margin="0,1,0,0"
                                                        TextTrimming="CharacterEllipsis"
-                                                       FlowDirection="LeftToRight"
-                                                       TextAlignment="Left"/>
+                                                       TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                         </StackPanel>
                                         <Border Grid.Column="2"
                                                 Background="#15121212"
@@ -188,7 +187,8 @@
                                             <TextBlock Text="{Binding TrafficDisplay}"
                                                        Foreground="{StaticResource AccentBrush}"
                                                        FontSize="8.5"
-                                                       FlowDirection="LeftToRight"/>
+                                                       FlowDirection="LeftToRight"
+                                                       TextAlignment="Left"/>
                                         </Border>
                                     </Grid>
 
@@ -196,8 +196,7 @@
                                     <StackPanel Grid.Column="4"
                                           Orientation="Horizontal"
                                           VerticalAlignment="Center"
-                                          HorizontalAlignment="Right"
-                                          FlowDirection="LeftToRight">
+                                          FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                         <CheckBox Style="{StaticResource CompactToggleSwitch}"
                                                   IsChecked="{Binding IsEnabled, Mode=OneWay}"
                                                   Command="{Binding DataContext.ToggleAppCommand,
@@ -285,6 +284,7 @@
                             <Border x:Name="itemBorder"
                                     Style="{StaticResource AppRowCard}"
                                     Cursor="Hand"
+                                    FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     MouseLeftButtonUp="OnAvailableAppClick">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -308,15 +308,13 @@
                                                    TextOptions.TextRenderingMode="ClearType"
                                                    TextOptions.TextHintingMode="Fixed"
                                                    TextTrimming="CharacterEllipsis"
-                                                   FlowDirection="LeftToRight"
-                                                   TextAlignment="Left"/>
+                                                   TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                         <TextBlock Text="{Binding ExecutableName}"
                                                    Foreground="{StaticResource TextSecondaryBrush}"
                                                    FontSize="9.5"
                                                    Margin="0,1,0,0"
                                                    TextTrimming="CharacterEllipsis"
-                                                   FlowDirection="LeftToRight"
-                                                   TextAlignment="Left"/>
+                                                   TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                     </StackPanel>
 
                                     <Button Grid.Column="4"
