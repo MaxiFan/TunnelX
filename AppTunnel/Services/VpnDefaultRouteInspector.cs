@@ -87,7 +87,10 @@ internal static class VpnDefaultRouteInspector
 
     /// <summary>
     /// Deletes 0.0.0.0/0 rows on <paramref name="ifIndex"/>.
-    /// Capturing-only keeps the high-metric relay route used by split mode.
+    /// Capturing-only keeps relay-band metrics
+    /// (<see cref="SplitDirectPathPolicy.RelayMetricFloor"/> and above).
+    /// Those are the split-mode forwarder route; <c>GetIpForwardTable</c>
+    /// reports them as 9000 plus the interface metric, not exactly 9000.
     /// </summary>
     public static int DeleteDefaultRoutesOnInterface(int ifIndex, bool capturingOnly)
     {
