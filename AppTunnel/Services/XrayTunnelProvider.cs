@@ -13,6 +13,8 @@ public class XrayTunnelProvider : ITunnelProvider
     private const string TunInterfaceName = "TunnelX-V2Ray";
     private const string TunAddress = "172.18.0.1/30";
     private const string VpnLocalIp = "172.18.0.1";
+    private string _activeTunInterfaceName = TunInterfaceName;
+    private string _activeTunLocalIp = VpnLocalIp;
     private const int DefaultTunMtu = 1500;
     private const int DefaultMixedProxyPort = 2080;
     private const int DefaultXraySocksPort = 2081;
@@ -104,17 +106,7 @@ public class XrayTunnelProvider : ITunnelProvider
                 $"[PORT] Xray SOCKS=127.0.0.1:{xraySocksPort}, HTTP bridge=127.0.0.1:{loopbackBridgePort}, mixed proxy=127.0.0.1:{mixedProxyPort}");
 
             var xrayJson = BuildXrayBridgeConfig(outbound, xraySocksPort, loopbackBridgePort);
-            var singBoxJson = BuildTunBridgeConfig(
-                tunMtu,
-                mixedProxyPort,
-                xraySocksPort,
-                loopbackBridgePort,
-                resolvedServerIp,
-                tlsServerName,
-                serverHost);
-
             await File.WriteAllTextAsync(_xrayConfigPath, xrayJson, new UTF8Encoding(false), ct);
-            await File.WriteAllTextAsync(_singBoxConfigPath, singBoxJson, new UTF8Encoding(false), ct);
 
             xraySocksPortReservation.Dispose();
             loopbackBridgePortReservation.Dispose();
@@ -132,15 +124,33 @@ public class XrayTunnelProvider : ITunnelProvider
             ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Complete, "راه‌اندازی هسته تونل (Xray/V2Ray)");
             WatchProcessExit(_xrayProcess, "xray");
 
-            const int maxTunAttempts = 2;
+            var tunSession = new TunEndpointSession();
             int interfaceIndex = -1;
-            for (var attempt = 1; attempt <= maxTunAttempts; attempt++)
+            for (var attempt = 1; attempt <= TunEndpointSession.MaxAttempts; attempt++)
             {
+                var attemptReason = attempt == 1 ? "xray-pre-connect" : $"xray-retry-{attempt}";
+                tunSession.PrepareForAttempt(attemptReason);
+                _activeTunInterfaceName = tunSession.InterfaceName;
+                _activeTunLocalIp = tunSession.Address.Host;
+                var singBoxJson = BuildTunBridgeConfig(
+                    tunMtu,
+                    mixedProxyPort,
+                    xraySocksPort,
+                    loopbackBridgePort,
+                    resolvedServerIp,
+                    tlsServerName,
+                    serverHost,
+                    tunSession.Address.Cidr,
+                    tunSession.InterfaceName);
+                await File.WriteAllTextAsync(_singBoxConfigPath, singBoxJson, new UTF8Encoding(false), ct);
+                Logger.Info($"Xray TUN bridge config written tun={tunSession.Address.Cidr} iface={tunSession.InterfaceName}");
+
                 capturedLogs = new StringBuilder();
 
                 await WintunAdapterHealth.PrepareForTunOpenAsync(
-                    attempt == 1 ? "xray-pre-connect" : $"xray-retry-{attempt}",
-                    ct);
+                    attemptReason,
+                    ct,
+                    tunSession.InterfaceName);
 
                 ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
                 _singBoxProcess = StartProcess(
@@ -150,7 +160,9 @@ public class XrayTunnelProvider : ITunnelProvider
                     "[sing-box bridge stderr]",
                     capturedLogs);
 
-                Logger.Info($"sing-box TUN bridge started (PID {_singBoxProcess.Id}) attempt={attempt}/{maxTunAttempts}");
+                Logger.Info(
+                    $"sing-box TUN bridge started (PID {_singBoxProcess.Id}) attempt={attempt}/{TunEndpointSession.MaxAttempts} " +
+                    $"tun={tunSession.Address.Cidr} iface={tunSession.InterfaceName}");
                 WatchProcessExit(_singBoxProcess, "sing-box bridge");
                 ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Complete, "راه‌اندازی پل TUN (sing-box)");
 
@@ -177,19 +189,24 @@ public class XrayTunnelProvider : ITunnelProvider
                         return Fail(ex.Message);
                     }
 
-                    var tunFailure = SingBoxTunFailure.IsReadinessFailure(logs);
-                    if (attempt < maxTunAttempts && tunFailure)
+                    var disposition = tunSession.Classify(logs, attempt, singBoxExited);
+                    if (disposition is TunFailureDisposition.RetryAddress or TunFailureDisposition.RetryReadiness)
                     {
-                        Logger.Warning($"[WINTUN] Xray TUN bridge failed ({ex.Message}); retrying after backoff");
-                        Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
-                        await Task.Delay(1500, ct);
+                        Logger.Warning($"[WINTUN] Xray TUN bridge failed ({ex.Message}, disposition={disposition}); retrying after backoff");
+                        Status.Message = LocalizationService.Instance.T(
+                            disposition == TunFailureDisposition.RetryAddress
+                                ? SingBoxTunFailure.TunAddressRetryKey
+                                : "تلاش مجدد برای ساخت آداپتر TUN...");
+                        await Task.Delay(disposition == TunFailureDisposition.RetryAddress ? 700 : 1500, ct);
                         continue;
                     }
 
                     await KillProcessAsync();
-                    var classified = tunFailure
-                        ? SingBoxTunFailure.FormatEarlyExitMessage(singBoxCode, logs, isBridge: true)
-                        : LocalizationService.Instance.T(ex.Message);
+                    var classified = disposition == TunFailureDisposition.FailAddressConflict
+                        ? SingBoxTunFailure.FormatAddressConflict($"{tunSession.Address.Cidr} (exit {singBoxCode})")
+                        : SingBoxTunFailure.IsReadinessFailure(logs)
+                            ? SingBoxTunFailure.FormatEarlyExitMessage(singBoxCode, logs, isBridge: true)
+                            : LocalizationService.Instance.T(ex.Message);
                     ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, classified);
                     return Fail(classified);
                 }
@@ -202,16 +219,22 @@ public class XrayTunnelProvider : ITunnelProvider
                 _singBoxProcess = null;
                 WintunAdapterHealth.LogInventory("xray-after-tun-timeout");
 
-                if (attempt < maxTunAttempts && SingBoxTunFailure.ShouldRetryTunOpen(waitLogs, processExited: false))
+                var waitDisposition = tunSession.Classify(waitLogs, attempt, processExited: false);
+                if (waitDisposition is TunFailureDisposition.RetryAddress or TunFailureDisposition.RetryReadiness)
                 {
-                    Logger.Warning("[WINTUN] Xray TUN interface wait failed; retrying after backoff");
-                    Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
-                    await Task.Delay(1500, ct);
+                    Logger.Warning($"[WINTUN] Xray TUN interface wait failed (disposition={waitDisposition}); retrying after backoff");
+                    Status.Message = LocalizationService.Instance.T(
+                        waitDisposition == TunFailureDisposition.RetryAddress
+                            ? SingBoxTunFailure.TunAddressRetryKey
+                            : "تلاش مجدد برای ساخت آداپتر TUN...");
+                    await Task.Delay(waitDisposition == TunFailureDisposition.RetryAddress ? 700 : 1500, ct);
                     continue;
                 }
 
                 await KillProcessAsync();
-                var tunTimeoutMessage = SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, waitLogs);
+                var tunTimeoutMessage = waitDisposition == TunFailureDisposition.FailAddressConflict
+                    ? SingBoxTunFailure.FormatAddressConflict($"{tunSession.Address.Cidr} (exit 1)")
+                    : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, waitLogs);
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, tunTimeoutMessage);
                 return Fail(tunTimeoutMessage);
             }
@@ -219,9 +242,10 @@ public class XrayTunnelProvider : ITunnelProvider
             if (interfaceIndex <= 0)
             {
                 await KillProcessAsync();
-                var tunTimeoutMessage = SingBoxTunFailure.FormatInterfaceWaitFailure(
-                    TunInterfaceWaitSeconds,
-                    WintunAdapterHealth.FormatCapturedLogs(capturedLogs));
+                var tailLogs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
+                var tunTimeoutMessage = SingBoxTunFailure.ShouldRetryAsAddressConflict(tailLogs)
+                    ? SingBoxTunFailure.FormatAddressConflict($"{tunSession.Address.Cidr} (exit 1)")
+                    : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, tailLogs);
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, tunTimeoutMessage);
                 return Fail(tunTimeoutMessage);
             }
@@ -236,7 +260,7 @@ public class XrayTunnelProvider : ITunnelProvider
             _vpnInterfaceIndex = interfaceIndex;
             Status.State = ConnectionState.Connected;
             Status.ConnectedSince = DateTime.Now;
-            Status.VpnLocalIp = VpnLocalIp;
+            Status.VpnLocalIp = _activeTunLocalIp;
             Status.VpnServerHost = ExtractServerHost(config.V2RayConfig);
             Status.VpnServerIp = Status.VpnServerHost;
             Status.VpnServerPort = ExtractServerPort(config.V2RayConfig);
@@ -246,7 +270,7 @@ public class XrayTunnelProvider : ITunnelProvider
             LocalProxyAnnouncements.Connected(mixedProxyPort, xraySocksPort);
             Status.Message = "Xray connected";
 
-            Logger.Info($"Xray tunnel up via sing-box TUN bridge — interface index {interfaceIndex}, server={Status.VpnServerIp}");
+            Logger.Info($"Xray tunnel up via sing-box TUN bridge — interface index {interfaceIndex}, tun={_activeTunLocalIp}, server={Status.VpnServerIp}");
             return true;
         }
         catch (OperationCanceledException)
@@ -735,7 +759,9 @@ public class XrayTunnelProvider : ITunnelProvider
         int loopbackBridgePort,
         string? resolvedServerIp,
         string? tlsServerName,
-        string serverHost)
+        string serverHost,
+        string? tunAddress = null,
+        string? tunInterfaceName = null)
     {
         var routeRules = new JsonArray
         {
@@ -799,8 +825,8 @@ public class XrayTunnelProvider : ITunnelProvider
                 {
                     ["type"] = "tun",
                     ["tag"] = "tun-in",
-                    ["interface_name"] = TunInterfaceName,
-                    ["address"] = new JsonArray { TunAddress },
+                    ["interface_name"] = string.IsNullOrWhiteSpace(tunInterfaceName) ? TunInterfaceName : tunInterfaceName,
+                    ["address"] = new JsonArray { string.IsNullOrWhiteSpace(tunAddress) ? TunAddress : tunAddress },
                     ["mtu"] = TunnelPerformanceTuner.ClampTunMtu(tunMtu),
                     ["auto_route"] = false,
                     ["strict_route"] = false,
@@ -1061,7 +1087,7 @@ public class XrayTunnelProvider : ITunnelProvider
                         _singBoxProcess.ExitCode));
             }
 
-            var idx = FindInterfaceIndex(TunInterfaceName);
+            var idx = FindInterfaceIndex(_activeTunInterfaceName);
             if (idx > 0) return idx;
             await Task.Delay(500, ct);
         }

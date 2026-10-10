@@ -1,3 +1,4 @@
+using AppTunnel.Models;
 using AppTunnel.Services;
 using Xunit;
 
@@ -9,11 +10,106 @@ public class SingBoxTunFailureTests
         "INFO inbound/tun[tun-in]: open interface take too much time to finish!\n" +
         "FATAL start inbound/tun[tun-in]: configure tun interface: The device is not ready for use.";
 
+    private const string Issue78Log =
+        "FATAL[0000] start service: start inbound/tun[tun-in]: configure tun interface: set ipv4 address: The object already exists.";
+
     [Fact]
     public void Issue67_log_is_tun_readiness_not_config()
     {
         Assert.True(SingBoxTunFailure.IsReadinessFailure(Issue67Log));
         Assert.False(SingBoxTunFailure.LooksLikeConfigError(Issue67Log));
+    }
+
+    [Fact]
+    public void Issue78_log_is_ipv4_conflict_not_missing_adapter_or_bad_config()
+    {
+        Assert.True(SingBoxTunFailure.IsIpv4AddressConflict(Issue78Log));
+        Assert.True(SingBoxTunFailure.ShouldRetryAsAddressConflict(Issue78Log));
+        Assert.False(SingBoxTunFailure.IsReadinessFailure(Issue78Log));
+        Assert.False(SingBoxTunFailure.LooksLikeConfigError(Issue78Log));
+        Assert.False(SingBoxTunFailure.ShouldRetryTunOpen(Issue78Log, processExited: true));
+    }
+
+    [Fact]
+    public void Localized_set_ipv4_failure_still_retries_as_address_conflict()
+    {
+        const string log = "FATAL start inbound/tun[tun-in]: configure tun interface: set ipv4 address: Объект уже существует.";
+        Assert.False(SingBoxTunFailure.IsIpv4AddressConflict(log));
+        Assert.True(SingBoxTunFailure.ShouldRetryAsAddressConflict(log));
+        Assert.False(SingBoxTunFailure.IsReadinessFailure(log));
+    }
+
+    [Fact]
+    public void Set_ipv4_access_denied_stays_a_readiness_failure()
+    {
+        const string log = "FATAL configure tun interface: set ipv4 address: Access is denied.";
+        Assert.False(SingBoxTunFailure.ShouldRetryAsAddressConflict(log));
+        Assert.True(SingBoxTunFailure.IsReadinessFailure(log));
+    }
+
+    [Fact]
+    public void Issue78_message_names_the_address_collision()
+    {
+        var loc = LocalizationService.Instance;
+        loc.SetLanguage(LocalizationService.EnglishLanguage);
+        try
+        {
+            var message = SingBoxTunFailure.FormatAddressConflict("172.18.0.1/30 (exit 1)");
+            Assert.Contains("172.18.0.1/30", message, StringComparison.Ordinal);
+            Assert.Contains("already in use", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("exit 1", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("check the config", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("was not ready", message, StringComparison.OrdinalIgnoreCase);
+
+            var early = SingBoxTunFailure.FormatEarlyExitMessage(1, Issue78Log);
+            Assert.Contains("already in use", early, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("check the config", early, StringComparison.OrdinalIgnoreCase);
+
+            var shortStatus = ConnectionFailureInsight.GetShortStatus(TunnelType.SocksProxy, message);
+            Assert.Equal("TUN address already in use", shortStatus);
+        }
+        finally
+        {
+            loc.SetLanguage(LocalizationService.PersianLanguage);
+        }
+    }
+
+    [Fact]
+    public void Issue78_message_is_localized_in_russian()
+    {
+        var loc = LocalizationService.Instance;
+        loc.SetLanguage(LocalizationService.RussianLanguage);
+        try
+        {
+            var message = SingBoxTunFailure.FormatAddressConflict("172.19.0.1/30 (exit 1)");
+            Assert.Contains("уже занят", message, StringComparison.Ordinal);
+            Assert.Contains("172.19.0.1/30", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("check the config", message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            loc.SetLanguage(LocalizationService.PersianLanguage);
+        }
+    }
+
+    [Fact]
+    public void Address_conflict_retries_then_stops_with_conflict_disposition()
+    {
+        var session = new TunEndpointSession();
+        Assert.Equal(TunFailureDisposition.RetryAddress, session.Classify(Issue78Log, 1, true));
+        Assert.Equal(TunFailureDisposition.RetryAddress, session.Classify(Issue78Log, 2, true));
+        Assert.Equal(TunFailureDisposition.RetryAddress, session.Classify(Issue78Log, 3, true));
+        Assert.Equal(TunFailureDisposition.FailAddressConflict, session.Classify(Issue78Log, 4, true));
+        Assert.Equal(4, session.AddressConflicts);
+    }
+
+    [Fact]
+    public void Readiness_failure_retries_only_once()
+    {
+        var session = new TunEndpointSession();
+        Assert.Equal(TunFailureDisposition.RetryReadiness, session.Classify(Issue67Log, 1, true));
+        Assert.Equal(TunFailureDisposition.FailOther, session.Classify(Issue67Log, 2, true));
+        Assert.Equal(0, session.AddressConflicts);
     }
 
     [Fact]

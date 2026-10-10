@@ -542,7 +542,10 @@ public partial class MainViewModel
 
         if (message.Contains("TunnelX-V2Ray", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("interface", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("آداپتر", StringComparison.Ordinal))
+            message.Contains("آداپتر", StringComparison.Ordinal) ||
+            message.Contains("TUN IPv4", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("از قبل روی ویندوز", StringComparison.Ordinal) ||
+            message.Contains("уже занят", StringComparison.Ordinal))
             return "tun_interface";
 
         return "tunnel_engine";
