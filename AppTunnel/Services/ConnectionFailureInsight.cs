@@ -16,6 +16,7 @@ public static class ConnectionFailureInsight
         ["خطا در پارس کانفیگ: {0}"] = "خطا در کانفیگ",
         ["sing-box زودتر خارج شد (exit code {0}) — کانفیگ را بررسی کنید"] = "اتصال V2Ray ناموفق",
         ["آداپتر TUN/Wintun آماده نشد (exit {0}). این خطای کانفیگ نیست. TunnelX را با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl آداپتر گیرکرده TunnelX-V2Ray یا Wintun را حذف کنید؛ برنامه‌های دیگر Wintun را ببندید؛ ویندوز را ری‌استارت کنید و دوباره وصل شوید."] = "آداپتر VPN بالا نیامد",
+        [SingBoxTunFailure.TunAddressConflictKey] = "آدرس TUN تکراری است",
         ["آداپتر TUN/Wintun در زمان انتظار ظاهر نشد. این معمولاً مشکل درایور/محیط است نه کانفیگ. TunnelX را با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl آداپتر گیرکرده TunnelX-V2Ray یا Wintun را حذف کنید؛ برنامه‌های دیگر Wintun را ببندید؛ سپس ری‌استارت کنید."] = "آداپتر VPN بالا نیامد",
         ["interface TunnelX-V2Ray ظاهر نشد (timeout {0}s)"] = "آداپتر VPN بالا نیامد",
         ["خطا در راه‌اندازی اسپلیت‌تانلینگ: {0}"] = "خطا در اسپلیت‌تانلینگ",

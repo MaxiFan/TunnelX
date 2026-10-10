@@ -55,15 +55,16 @@ internal static class WintunAdapterHealth
         }
     }
 
-    public static async Task PrepareForTunOpenAsync(string reason, CancellationToken ct)
+    public static async Task PrepareForTunOpenAsync(string reason, CancellationToken ct, string? interfaceName = null)
     {
         LogInventory(reason);
+        var name = string.IsNullOrWhiteSpace(interfaceName) ? TunnelXInterfaceName : interfaceName;
 
         NetworkInterface? leftover = null;
         try
         {
             leftover = NetworkInterface.GetAllNetworkInterfaces()
-                .FirstOrDefault(n => n.Name.Equals(TunnelXInterfaceName, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {
@@ -86,6 +87,7 @@ internal static class WintunAdapterHealth
 
     private static bool IsRelevant(NetworkInterface nic) =>
         nic.Name.Equals(TunnelXInterfaceName, StringComparison.OrdinalIgnoreCase) ||
+        nic.Name.StartsWith(TunnelXInterfaceName + "-", StringComparison.OrdinalIgnoreCase) ||
         nic.Name.Contains("Wintun", StringComparison.OrdinalIgnoreCase) ||
         nic.Name.Contains("WireGuard", StringComparison.OrdinalIgnoreCase) ||
         DescriptionLooksLikeWintun(nic.Description);

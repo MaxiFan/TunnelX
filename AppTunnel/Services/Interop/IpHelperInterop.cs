@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace AppTunnel.Services;
 
@@ -36,4 +37,24 @@ internal static class IpHelperNative
 
     [DllImport("iphlpapi.dll", SetLastError = true)]
     public static extern int GetIpForwardTable(IntPtr pIpForwardTable, ref int pdwSize, bool bOrder);
+
+    public const ushort AfInet = 2;
+
+    [DllImport("iphlpapi.dll")]
+    public static extern uint GetUnicastIpAddressTable(ushort family, out IntPtr table);
+
+    [DllImport("iphlpapi.dll")]
+    public static extern uint DeleteUnicastIpAddressEntry(ref MIB_UNICASTIPADDRESS_ROW row);
+
+    [DllImport("iphlpapi.dll")]
+    public static extern void FreeMibTable(IntPtr memory);
+
+    [DllImport("iphlpapi.dll")]
+    public static extern uint ConvertInterfaceIndexToLuid(uint interfaceIndex, out ulong interfaceLuid);
+
+    [DllImport("iphlpapi.dll", CharSet = CharSet.Unicode)]
+    public static extern uint ConvertInterfaceLuidToAlias(
+        ref ulong interfaceLuid,
+        StringBuilder interfaceAlias,
+        nuint length);
 }

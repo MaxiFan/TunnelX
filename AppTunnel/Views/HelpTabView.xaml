@@ -379,8 +379,12 @@
                     </Expander>
 
                     <Expander Header="آداپتر مجازی TUN/Wintun بالا نمی‌آید" Style="{StaticResource HelpExpander}">
-                        <TextBlock Text="اگر sing-box با «device is not ready» یا «open interface take too much time» خارج شد، کانفیگ خراب نیست. با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl یا Device Manager آداپترهای گیرکرده Wintun/TunnelX-V2Ray را حذف کنید؛ WireGuard/WARP/Outline و سایر برنامه‌های Wintun را ببندید؛ ویندوز را ری‌استارت کنید و دوباره وصل شوید."
-                                   Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="اگر sing-box با «device is not ready» یا «open interface take too much time» خارج شد، کانفیگ خراب نیست. با Administrator اجرا کنید؛ آنتی‌ویروس را بررسی کنید؛ در ncpa.cpl یا Device Manager آداپترهای گیرکرده Wintun/TunnelX-V2Ray را حذف کنید؛ WireGuard/WARP/Outline و سایر برنامه‌های Wintun را ببندید؛ ویندوز را ری‌استارت کنید و دوباره وصل شوید."
+                                       Style="{StaticResource HelpBody}"/>
+                            <TextBlock Text="اگر sing-box با «set ipv4 address» یا «The object already exists» خارج شد، آداپتر Wintun ساخته نشده چون آدرس IPv4 تونل (پیش‌فرض 172.18.0.1/30) از قبل روی ویندوز وجود دارد؛ باقی‌ماندهٔ اتصال قبلی یا Docker/Hyper-V/WSL/VPN دیگر. TunnelX آدرس و مسیر باقی‌ماندهٔ خودش را پاک می‌کند و یک آدرس آزاد را امتحان می‌کند. اگر تکرار شد، PowerShell را با Administrator باز کنید و Get-NetIPAddress را برای همان آدرس ببینید."
+                                       Style="{StaticResource HelpBody}" Margin="0,8,0,0"/>
+                        </StackPanel>
                     </Expander>
 
                     <Expander Header="ترافیک برنامه از تونل عبور نمی‌کند" Style="{StaticResource HelpExpander}">
