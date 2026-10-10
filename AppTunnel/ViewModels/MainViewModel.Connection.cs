@@ -648,6 +648,7 @@ public partial class MainViewModel
         }
 
         _trafficRouter.Socks5Port = MixedProxyPort;
+        _trafficRouter.SplitUpstreamProxyPort = _vpnService.Status.SingBoxMixedPort;
         ApplyLocalProxyAuthToRouter();
         _trafficRouter.EnableDnsOptimization = IsDnsOptimizationEnabled;
         _trafficRouter.DnsRedirectOverrideIp = CurrentTunnelType == TunnelType.WireGuard

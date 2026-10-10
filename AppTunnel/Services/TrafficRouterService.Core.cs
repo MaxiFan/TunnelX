@@ -58,6 +58,7 @@ public partial class TrafficRouterService : IDisposable
     private int _vpnServerPort = 443;     // original server port from config — used for TCP health checks
     private bool _vpnServerIsUdpOnly;     // true for WireGuard etc. — skip TCP probe in CONN-CHECK
     private bool _vpnServerSkipBareTcpProbe; // VMess/VLESS-WS: port may not accept raw TCP
+    private int _splitUpstreamProxyPort;      // sing-box/xray mixed inbound; 0 = VPN-bound dial
     private bool _pinVpnServerOnPhysicalNic; // keep OpenVPN TCP / WireGuard UDP control on physical NIC
     private string _vpnGatewayIp = "";    // optional next hop for TAP/OpenVPN host routes
     private byte[]? _vpnLocalIpBytes;
@@ -107,6 +108,8 @@ public partial class TrafficRouterService : IDisposable
     private long _statWgDnsRedirect;
     private long _statWgQuicDropped;
     private long _statNetInRewritten;
+    private long _statSplitReturnRewritten;
+    private long _statSplitReturnMiss;
     private long _statNetOutPassthrough;
     private long _statNetOutSendFailed;
     private long _statVpnEgressSniffed;
@@ -172,6 +175,13 @@ public partial class TrafficRouterService : IDisposable
 
     /// <summary>Listener port for the built-in mixed proxy (SOCKS5 + HTTP).</summary>
     public int Socks5Port { get; set; } = 1080;
+
+    /// <summary>
+    /// sing-box/xray mixed inbound (usually 2080). Selected apps dial this
+    /// instead of binding a socket to the TUN address. 0 keeps the VPN-bound
+    /// dial for tunnels that have no mixed proxy.
+    /// </summary>
+    public int SplitUpstreamProxyPort { get; set; }
 
     /// <summary>Optional username for local mixed-proxy client authentication.</summary>
     public string MixedProxyUsername { get; set; } = "";
@@ -512,8 +522,14 @@ public partial class TrafficRouterService : IDisposable
         {
             if (!IPAddress.TryParse(_vpnLocalIp, out var vpnBind))
                 throw new InvalidOperationException($"VPN address '{_vpnLocalIp}' is not IPv4.");
+            _splitUpstreamProxyPort = SplitDirectPathPolicy.SelectedAppUsesMixedProxy(SplitUpstreamProxyPort)
+                ? SplitUpstreamProxyPort
+                : 0;
+            var upstream = _splitUpstreamProxyPort > 0
+                ? new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, _splitUpstreamProxyPort)
+                : null;
             _splitForwarder = new SplitAppForwarder();
-            _splitForwarder.Start(vpnBind, _vpnInterfaceIndex);
+            _splitForwarder.Start(vpnBind, _vpnInterfaceIndex, upstream);
             EnsureRelayInterfaceRoute();
         }
         catch (Exception ex)
@@ -683,8 +699,10 @@ public partial class TrafficRouterService : IDisposable
             _lastStatsHealthSignature = healthSignature;
             var forwarder = _splitForwarder;
             var splitFwd = forwarder != null && forwarder.IsRunning
-                ? $"on:{forwarder.TcpPort}/{forwarder.UdpPort}"
+                ? forwarder.Diagnostics
                 : "off";
+            long splitRet = Interlocked.Read(ref _statSplitReturnRewritten);
+            long splitRetMiss = Interlocked.Read(ref _statSplitReturnMiss);
             Logger.Info(
                 $"[STATS] mode={mode} health={leakState} " +
                 $"flows={flowEst}/{flowDel} targetHit={flowHit} excluded={flowExcl} ipv6Drop={ipv6Blocked} " +
@@ -694,7 +712,7 @@ public partial class TrafficRouterService : IDisposable
                 $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
                 $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count} " +
                 $"vpnIfDefault={(_hasVpnDefaultRoute ? "yes" : "no")} unexpectedDefaultEvents={_unexpectedVpnDefaultRouteEvents} " +
-                $"splitFwd={splitFwd}");
+                $"splitFwd={splitFwd} splitRet={splitRet}/{splitRetMiss}");
         }
 
         var splitWatchTick = Interlocked.Increment(ref _splitDefaultWatchTick);
@@ -1186,6 +1204,8 @@ public partial class TrafficRouterService : IDisposable
         Interlocked.Exchange(ref _statWgDnsRedirect, 0);
         Interlocked.Exchange(ref _statWgQuicDropped, 0);
         Interlocked.Exchange(ref _statNetInRewritten, 0);
+        Interlocked.Exchange(ref _statSplitReturnRewritten, 0);
+        Interlocked.Exchange(ref _statSplitReturnMiss, 0);
         Interlocked.Exchange(ref _statNetOutPassthrough, 0);
         Interlocked.Exchange(ref _statNetOutSendFailed, 0);
         Interlocked.Exchange(ref _statVpnEgressSniffed, 0);

@@ -31,8 +31,12 @@ public partial class TrafficRouterService
         {
             // Capture outbound IPv4 TCP/UDP not already from VPN IP.
             // Packets sourced from VPN IP are correctly routed natively.
+            // Source 127.0.0.1 is the per-app forwarder. Capturing those
+            // replies steals the SYN-ACK before the return path restores the
+            // server address the selected app is waiting on.
             string filter = $"outbound and ip and (tcp or udp) " +
                 $"and ip.SrcAddr != {_vpnLocalIp} " +
+                $"and ip.SrcAddr != 127.0.0.1 " +
                 $"and ip.DstAddr != {_vpnServerIp} " +
                 $"and ip.DstAddr != 127.0.0.1";
 
@@ -989,17 +993,27 @@ public partial class TrafficRouterService
             destNbo,
             tuple.RemotePort,
             forwardNbo,
-            forwardPort);
+            forwardPort,
+            addr.IfIdx);
 
         if (!Ipv4PacketRewrite.TryRewriteDestination(buffer, (int)readLen, Ipv4PacketRewrite.LoopbackBytes, relayPort))
             return false;
 
+        // Checksum-valid bits still describe the pre-rewrite packet, so the
+        // helper would skip them and the stack would drop the inject. Loopback
+        // + impostor are what actually deliver a rewritten external packet to
+        // the socket listening on 127.0.0.1.
+        SplitLoopbackInject.PrepareOutboundRedirect(ref addr);
         WinDivertNative.WinDivertHelperCalcChecksums(buffer, readLen, ref addr, 0);
+        addr.Outbound = true;
+        addr.Loopback = true;
+        addr.Impostor = true;
         if (_splitRelayLogCount < 8)
         {
             _splitRelayLogCount++;
             var forwardIp = new IPAddress(BitConverter.GetBytes(forwardNbo));
-            Logger.Info($"[SPLIT-DIRECT] {procName ?? "app"} {tuple.RemoteIp}:{tuple.RemotePort} → VPN if {_vpnInterfaceIndex} via 127.0.0.1:{relayPort} (dial {forwardIp}:{forwardPort}, no /32)");
+            var via = forwarder.UsesMixedProxy ? "mixed proxy" : $"VPN if {_vpnInterfaceIndex}";
+            Logger.Info($"[SPLIT-DIRECT] {procName ?? "app"} {tuple.RemoteIp}:{tuple.RemotePort} → {via} via 127.0.0.1:{relayPort} (dial {forwardIp}:{forwardPort}, loopback inject, no /32)");
         }
 
         Interlocked.Increment(ref _statNetOutRewritten);
@@ -1063,13 +1077,50 @@ public partial class TrafficRouterService
                         uint clientNbo = BitConverter.ToUInt32(buffer, 16);
                         if (forwarder.Sessions.TryGet(tuple.Protocol, clientNbo, tuple.RemotePort, out var session))
                         {
-                            var original = BitConverter.GetBytes(session.OriginalDestIp);
-                            if (Ipv4PacketRewrite.TryRewriteSource(buffer, (int)readLen, original, session.OriginalDestPort))
+                            if (Ipv4PacketRewrite.TryRestoreSelectedAppReply(
+                                    buffer,
+                                    (int)readLen,
+                                    session.OriginalClientIp,
+                                    session.OriginalDestIp,
+                                    session.OriginalDestPort))
+                            {
+                                SplitLoopbackInject.PrepareReturn(ref addr, session.OriginalIfIdx);
                                 WinDivertNative.WinDivertHelperCalcChecksums(buffer, readLen, ref addr, 0);
+                                addr.Impostor = true;
+                                addr.Outbound = false;
+                                if (session.OriginalIfIdx > 0)
+                                {
+                                    addr.Loopback = false;
+                                    addr.IfIdx = session.OriginalIfIdx;
+                                }
+                                else
+                                {
+                                    addr.Loopback = true;
+                                }
+
+                                var restored = Interlocked.Increment(ref _statSplitReturnRewritten);
+                                if (restored <= 8)
+                                {
+                                    var client = new IPAddress(BitConverter.GetBytes(session.OriginalClientIp));
+                                    var server = new IPAddress(BitConverter.GetBytes(session.OriginalDestIp));
+                                    Logger.Info($"[SPLIT-FWD] return proto={tuple.Protocol} restored {server}:{session.OriginalDestPort} -> {client}:{tuple.RemotePort} if {session.OriginalIfIdx}");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var missed = Interlocked.Increment(ref _statSplitReturnMiss);
+                            if (missed <= 8)
+                                Logger.Warning($"[SPLIT-FWD] return proto={tuple.Protocol} {tuple.LocalIp}:{tuple.LocalPort} -> {tuple.RemoteIp}:{tuple.RemotePort} has no session");
                         }
                     }
 
-                    WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr);
+                    if (!WinDivertNative.WinDivertSend(h, buffer, readLen, IntPtr.Zero, ref addr))
+                    {
+                        int err = Marshal.GetLastWin32Error();
+                        if (Interlocked.Increment(ref _statNetOutSendFailed) <= 5)
+                            Logger.Warning($"[SPLIT-FWD] return inject failed: {err} ({GetWinDivertErrorMessage(err)})");
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

@@ -7,6 +7,7 @@ namespace AppTunnel.Services;
 internal static class Ipv4PacketRewrite
 {
     internal static readonly byte[] LoopbackBytes = [127, 0, 0, 1];
+    internal static readonly uint LoopbackNbo = BitConverter.ToUInt32(LoopbackBytes, 0);
 
     public static bool TryRewriteDestination(byte[] packet, int length, byte[] newAddress, ushort newPort)
         => TryRewrite(packet, length, addressOffset: 16, portOffset: 2, newAddress, newPort);
@@ -44,5 +45,39 @@ internal static class Ipv4PacketRewrite
         packet[portAt] = (byte)(newPort >> 8);
         packet[portAt + 1] = (byte)(newPort & 0xFF);
         return true;
+    }
+
+    /// <summary>
+    /// Makes a forwarder reply look like the server the app connected to.
+    /// When Windows delivered the redirected flow as loopback-to-loopback,
+    /// the destination is restored to the app's real local address as well.
+    /// </summary>
+    public static bool TryRestoreSelectedAppReply(
+        byte[] packet,
+        int length,
+        uint originalClientIp,
+        uint originalDestIp,
+        ushort originalDestPort)
+    {
+        if (length < 20 || packet.Length < length)
+            return false;
+
+        var dest = new byte[4];
+        Buffer.BlockCopy(packet, 16, dest, 0, 4);
+        int ipHeaderLen = (packet[0] & 0x0F) * 4;
+        if (ipHeaderLen < 20 || length < ipHeaderLen + 4)
+            return false;
+
+        ushort destPort = (ushort)((packet[ipHeaderLen + 2] << 8) | packet[ipHeaderLen + 3]);
+        var server = BitConverter.GetBytes(originalDestIp);
+        if (!TryRewriteSource(packet, length, server, originalDestPort))
+            return false;
+
+        bool destIsLoopback = dest[0] == 127 && dest[1] == 0 && dest[2] == 0 && dest[3] == 1;
+        if (!destIsLoopback || originalClientIp == 0 || originalClientIp == LoopbackNbo)
+            return true;
+
+        var client = BitConverter.GetBytes(originalClientIp);
+        return TryRewriteDestination(packet, length, client, destPort);
     }
 }

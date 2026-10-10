@@ -12,7 +12,9 @@ internal sealed class SplitForwarderSessions
         uint OriginalDestIp,
         ushort OriginalDestPort,
         uint ForwardDestIp,
-        ushort ForwardDestPort);
+        ushort ForwardDestPort,
+        uint OriginalClientIp,
+        uint OriginalIfIdx);
 
     private readonly ConcurrentDictionary<(byte Proto, uint ClientIp, ushort ClientPort), Session> _sessions = new();
 
@@ -23,18 +25,41 @@ internal sealed class SplitForwarderSessions
         uint originalDestIp,
         ushort originalDestPort,
         uint forwardDestIp,
-        ushort forwardDestPort)
+        ushort forwardDestPort,
+        uint originalIfIdx = 0)
     {
-        _sessions[(protocol, clientIp, clientPort)] = new Session(
+        var session = new Session(
             originalDestIp,
             originalDestPort,
             forwardDestIp,
-            forwardDestPort);
+            forwardDestPort,
+            clientIp,
+            originalIfIdx);
+        _sessions[(protocol, clientIp, clientPort)] = session;
+
+        // Windows may deliver the redirected socket as 127.0.0.1:<clientPort>
+        // even though the app's packet used the physical source address.
+        var loopback = Ipv4PacketRewrite.LoopbackNbo;
+        if (clientIp != loopback)
+            _sessions[(protocol, loopback, clientPort)] = session;
     }
 
     public bool TryGet(byte protocol, uint clientIp, ushort clientPort, out Session session)
         => _sessions.TryGetValue((protocol, clientIp, clientPort), out session);
 
     public bool Remove(byte protocol, uint clientIp, ushort clientPort)
-        => _sessions.TryRemove((protocol, clientIp, clientPort), out _);
+    {
+        var removed = _sessions.TryRemove((protocol, clientIp, clientPort), out var session);
+        var loopback = Ipv4PacketRewrite.LoopbackNbo;
+        if (clientIp != loopback)
+        {
+            _sessions.TryRemove((protocol, loopback, clientPort), out _);
+        }
+        else if (removed && session.OriginalClientIp != loopback)
+        {
+            _sessions.TryRemove((protocol, session.OriginalClientIp, clientPort), out _);
+        }
+
+        return removed;
+    }
 }

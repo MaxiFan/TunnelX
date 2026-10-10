@@ -52,6 +52,15 @@ public class SplitDirectPathPolicyTests
 public class Ipv4PacketRewriteTests
 {
     [Fact]
+    public void SelectedApps_UseTheMixedProxyPortConnVerifyAlreadyProved()
+    {
+        Assert.True(SplitDirectPathPolicy.SelectedAppUsesMixedProxy(2080));
+        Assert.False(SplitDirectPathPolicy.SelectedAppUsesMixedProxy(0));
+        Assert.False(SplitDirectPathPolicy.SelectedAppUsesMixedProxy(-1));
+        Assert.False(SplitDirectPathPolicy.SelectedAppUsesMixedProxy(70000));
+    }
+
+    [Fact]
     public void DestinationRewrite_ChangesAddressAndPortOnly()
     {
         var packet = UdpPacket(src: "10.0.0.5", srcPort: 53000, dst: "8.8.8.8", dstPort: 53);
@@ -71,6 +80,36 @@ public class Ipv4PacketRewriteTests
 
         Assert.Equal("8.8.8.8", new IPAddress(packet[12..16]).ToString());
         Assert.Equal(53, (packet[20] << 8) | packet[21]);
+        Assert.Equal("10.0.0.5", new IPAddress(packet[16..20]).ToString());
+        Assert.Equal(53000, (packet[22] << 8) | packet[23]);
+    }
+
+    [Fact]
+    public void LoopbackReply_RestoresTheServerAndTheAppsRealAddress()
+    {
+        var packet = UdpPacket(src: "127.0.0.1", srcPort: 40000, dst: "127.0.0.1", dstPort: 53000);
+        uint client = BitConverter.ToUInt32(IPAddress.Parse("10.0.0.5").GetAddressBytes(), 0);
+        uint server = BitConverter.ToUInt32(IPAddress.Parse("8.8.8.8").GetAddressBytes(), 0);
+
+        Assert.True(Ipv4PacketRewrite.TryRestoreSelectedAppReply(packet, packet.Length, client, server, 53));
+
+        Assert.Equal("8.8.8.8", new IPAddress(packet[12..16]).ToString());
+        Assert.Equal(53, (packet[20] << 8) | packet[21]);
+        Assert.Equal("10.0.0.5", new IPAddress(packet[16..20]).ToString());
+        Assert.Equal(53000, (packet[22] << 8) | packet[23]);
+    }
+
+    [Fact]
+    public void ReplyAlreadyAddressedToTheApp_OnlyRestoresTheServer()
+    {
+        var packet = UdpPacket(src: "127.0.0.1", srcPort: 40000, dst: "10.0.0.5", dstPort: 53000);
+        uint client = BitConverter.ToUInt32(IPAddress.Parse("10.0.0.5").GetAddressBytes(), 0);
+        uint server = BitConverter.ToUInt32(IPAddress.Parse("1.1.1.1").GetAddressBytes(), 0);
+
+        Assert.True(Ipv4PacketRewrite.TryRestoreSelectedAppReply(packet, packet.Length, client, server, 443));
+
+        Assert.Equal("1.1.1.1", new IPAddress(packet[12..16]).ToString());
+        Assert.Equal(443, (packet[20] << 8) | packet[21]);
         Assert.Equal("10.0.0.5", new IPAddress(packet[16..20]).ToString());
         Assert.Equal(53000, (packet[22] << 8) | packet[23]);
     }
@@ -119,6 +158,15 @@ public class SplitForwarderSessionTests
         Assert.Equal((ushort)53, session.OriginalDestPort);
         Assert.Equal(tunnelDns, session.ForwardDestIp);
         Assert.False(sessions.TryGet(17, client, 53001, out _));
+
+        uint loopback = Ipv4PacketRewrite.LoopbackNbo;
+        Assert.True(sessions.TryGet(17, loopback, 53000, out var viaLoopback));
+        Assert.Equal(client, viaLoopback.OriginalClientIp);
+        Assert.Equal(router, viaLoopback.OriginalDestIp);
+
+        Assert.True(sessions.Remove(17, loopback, 53000));
+        Assert.False(sessions.TryGet(17, client, 53000, out _));
+        Assert.False(sessions.TryGet(17, loopback, 53000, out _));
     }
 
     [Theory]

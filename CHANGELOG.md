@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### English
+
+- Selected apps such as Chrome still loaded nothing in Split mode on v2.2.4 after the relay route stayed up. The tunnel itself was healthy (`CONN-VERIFY` through the sing-box mixed proxy succeeded, and include-list `/32` routes still worked). Two gaps dropped the selected-app data. Redirected packets were reinjected toward the local forwarder without WinDivert's loopback and impostor flags, and with the captured "checksum already valid" bits still set, so the stack discarded them before a socket was accepted (`rewriteOut` climbed and there was no accept or dial line). The forwarder's TCP dial then had the same dead end as `CONN-CHECK`: it bound to the TUN address and set `IP_UNICAST_IF`, which does not override the physical default for a stream socket. The relay route is metric 9000 so unselected apps stay direct, Windows sent the SYN out the physical NIC with source `172.18.0.1`, and LEAK-GUARD dropped it. Selected-app TCP, UDP/QUIC, and DNS now dial the sing-box/xray mixed proxy that `CONN-VERIFY` already uses (`127.0.0.1`, usually port 2080), including SOCKS5 UDP associate. Unselected apps stay on the direct connection. The #60 default-route guard and TUN address handling are unchanged. WireGuard and OpenVPN, which have no mixed proxy, still dial from the VPN address. The forwarder logs each accept, dial result, first byte, and byte counts in both directions.
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- برنامه‌های انتخاب‌شده مثل Chrome در حالت Split روی نسخهٔ ۲.۲.۴ هنوز هیچ صفحه‌ای باز نمی‌کردند، حتی وقتی مسیر رله سر جایش می‌ماند. خود تونل سالم بود (`CONN-VERIFY` از mixed proxy سینک‌باکس موفق بود و مسیرهای `/32` فهرست include هم کار می‌کردند). دو شکاف دادهٔ برنامهٔ انتخاب‌شده را قطع می‌کرد. بسته‌های هدایت‌شده بدون پرچم‌های loopback و impostor وین‌دیورت، و با بیت‌های «چک‌سام از قبل معتبر»، دوباره تزریق می‌شدند؛ پشته آن‌ها را قبل از accept سوکت دور می‌ریخت (`rewriteOut` بالا می‌رفت و هیچ خط accept یا dial نبود). شماره‌گیری TCP فوروارد هم به همان بن‌بست `CONN-CHECK` می‌خورد: سوکت به آدرس TUN وصل می‌شد و `IP_UNICAST_IF` گذاشته می‌شد، که برای سوکت TCP مسیر پیش‌فرض فیزیکی را عوض نمی‌کند. مسیر رله متریک ۹۰۰۰ است تا برنامه‌های انتخاب‌نشده مستقیم بمانند؛ ویندوز SYN را با مبدأ `172.18.0.1` از کارت فیزیکی بیرون می‌فرستاد و LEAK-GUARD آن را حذف می‌کرد. حالا TCP، UDP/QUIC و DNS برنامه‌های انتخاب‌شده از همان mixed proxy سینک‌باکس/اکس‌ری که `CONN-VERIFY` استفاده می‌کند شماره‌گیری می‌شوند (`127.0.0.1`، معمولاً پورت ۲۰۸۰)، از جمله UDP associate در SOCKS5. برنامه‌های انتخاب‌نشده روی اتصال مستقیم می‌مانند. نگهبان مسیر پیش‌فرض #60 و رسیدگی به آدرس TUN عوض نشده است. WireGuard و OpenVPN که mixed proxy ندارند همچنان از آدرس VPN شماره‌گیری می‌کنند. فوروارد هر accept، نتیجهٔ dial، اولین بایت و حجم هر دو جهت را لاگ می‌کند.
+
+</div>
+
+### Русский
+
+- Выбранные приложения вроде Chrome в режиме Split на v2.2.4 по-прежнему ничего не открывали, хотя relay-маршрут оставался на месте. Сам туннель был исправен (`CONN-VERIFY` через mixed proxy sing-box проходил, маршруты `/32` из списка include тоже работали). Данные выбранного приложения обрывались в двух местах. Переписанные пакеты вставлялись обратно к локальному пересыльщику без флагов loopback и impostor WinDivert и с ещё установленными битами «контрольная сумма уже верна», поэтому стек отбрасывал их до accept сокета (`rewriteOut` рос, строк accept или dial не было). TCP-дозвон пересыльщика упирался в ту же стену, что и `CONN-CHECK`: сокет привязывался к адресу TUN и ставил `IP_UNICAST_IF`, а для потокового сокета это не перебивает физический маршрут по умолчанию. Relay-маршрут имеет метрику 9000, чтобы невыбранные приложения оставались прямыми; Windows отправляла SYN с источником `172.18.0.1` через физический адаптер, и LEAK-GUARD его отбрасывал. TCP, UDP/QUIC и DNS выбранных приложений теперь идут через mixed proxy sing-box/xray, который уже проверяет `CONN-VERIFY` (`127.0.0.1`, обычно порт 2080), включая SOCKS5 UDP associate. Невыбранные приложения остаются на прямом подключении. Сторож маршрута по умолчанию из #60 и обработка адреса TUN не изменились. WireGuard и OpenVPN без mixed proxy по-прежнему дозвоняются с адреса VPN. Пересыльщик пишет в лог каждый accept, результат дозвона, первый байт и счётчики байт в обе стороны.
+
 ## 2.2.4 - 2026-10-10
 
 ### English

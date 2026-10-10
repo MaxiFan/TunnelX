@@ -187,6 +187,34 @@ public partial class TrafficRouterService
                         // Do not install a /32 for the health-check IP. google.com
                         // and cloudflare.com are exactly what an unselected
                         // browser needs, and that route drops them.
+                        // A TCP socket bound to the TUN address does not follow
+                        // the high-metric relay route (IP_UNICAST_IF loses to
+                        // the physical default) and LEAK-GUARD drops the SYN.
+                        // sing-box/xray selected apps use the mixed proxy, so
+                        // probe that path instead of the VPN address.
+                        if (!_fullRouteEnabled &&
+                            SplitDirectPathPolicy.SelectedAppUsesMixedProxy(_splitUpstreamProxyPort))
+                        {
+                            try
+                            {
+                                var swProxy = System.Diagnostics.Stopwatch.StartNew();
+                                using var proxySocket = await Socks5TunnelDial.ConnectTcpAsync(
+                                    new IPEndPoint(IPAddress.Loopback, _splitUpstreamProxyPort),
+                                    intlIp,
+                                    intlPort,
+                                    CancellationToken.None,
+                                    timeoutMs: 3000);
+                                swProxy.Stop();
+                                Logger.Info($"[CONN-CHECK] TCP {intlHost} ({intlIp}:{intlPort}) via mixed proxy 127.0.0.1:{_splitUpstreamProxyPort}: {swProxy.ElapsedMilliseconds}ms");
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warning($"[CONN-CHECK] TCP {intlHost} via mixed proxy 127.0.0.1:{_splitUpstreamProxyPort} failed: {ex.Message}");
+                            }
+
+                            return;
+                        }
+
                         var sw = System.Diagnostics.Stopwatch.StartNew();
                         using var probe = new System.Net.Sockets.Socket(
                             System.Net.Sockets.AddressFamily.InterNetwork,

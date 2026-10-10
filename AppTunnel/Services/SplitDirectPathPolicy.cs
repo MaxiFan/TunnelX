@@ -11,10 +11,11 @@ namespace AppTunnel.Services;
 internal static class SplitDirectPathPolicy
 {
     /// <summary>
-    /// Route metric passed to <c>route.exe</c>. Sockets bound to the VPN
-    /// address with IP_UNICAST_IF (selected-app TCP, UDP, and DNS) need a
-    /// default on that adapter. It must lose to the physical default route
-    /// or split mode becomes a full tunnel.
+    /// Route metric passed to <c>route.exe</c>. Tunnels without a mixed
+    /// proxy (WireGuard, OpenVPN) still bind selected-app sockets to the VPN
+    /// address. That default must lose to the physical default route or
+    /// split mode becomes a full tunnel. sing-box and xray do not use it
+    /// for selected apps: <see cref="SelectedAppUsesMixedProxy"/>.
     /// </summary>
     public const uint RelayInterfaceRouteMetric = 9000;
 
@@ -90,9 +91,9 @@ internal static class SplitDirectPathPolicy
         => !vpnDefaultMetrics.Any(IsRelayInterfaceRoute);
 
     /// <summary>
-    /// Selected-app TCP (6), UDP (17), and DNS (either protocol, port 53)
-    /// dial from a socket bound to the VPN address. That dial has a route
-    /// when the relay default is still installed after the guard runs.
+    /// VPN-bound dials (WireGuard, OpenVPN, the local mixed proxy) have a
+    /// route when the relay default is still installed after the guard runs.
+    /// sing-box/xray selected apps dial the mixed proxy and do not need it.
     /// Full-route keeps its own capturing default and does not run the guard.
     /// </summary>
     public static bool ForwardedFlowHasVpnRoute(bool fullRoute, IEnumerable<uint> vpnDefaultMetrics)
@@ -105,6 +106,17 @@ internal static class SplitDirectPathPolicy
 
     public static bool TransportUsesRelaySocket(byte ipProtocol)
         => ipProtocol is 6 or 17;
+
+    /// <summary>
+    /// sing-box and xray already accept SOCKS5/HTTP on the mixed inbound, and
+    /// CONN-VERIFY proves that path. Selected-app TCP must not bind to the
+    /// TUN address instead: IP_UNICAST_IF does not win the route lookup for a
+    /// stream socket, the high-metric relay route loses to the physical
+    /// default, and LEAK-GUARD drops the SYN (source is the TUN address,
+    /// egress is the physical NIC).
+    /// </summary>
+    public static bool SelectedAppUsesMixedProxy(int mixedProxyPort)
+        => mixedProxyPort is > 0 and <= 65535;
 
     /// <summary>
     /// Host routes are only for modes that are supposed to capture every

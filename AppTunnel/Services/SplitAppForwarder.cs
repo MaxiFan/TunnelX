@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO; // explicit: the WPF markup compile does not import System.IO
 using System.Net;
 using System.Net.Sockets;
@@ -6,9 +7,11 @@ using System.Net.Sockets;
 namespace AppTunnel.Services;
 
 /// <summary>
-/// Carries selected-app TCP/UDP to the VPN interface without a destination
-/// /32. Unselected apps never see that route, so they keep the physical
-/// default path (including DNS and browser search).
+/// Carries selected-app TCP/UDP without a destination /32. When a sing-box or
+/// xray mixed proxy is up, the dial goes through that SOCKS5 inbound (the
+/// same path CONN-VERIFY uses). Binding the dial to the TUN address does not
+/// work for TCP: IP_UNICAST_IF loses to the physical default, and LEAK-GUARD
+/// drops the SYN. Tunnels with no mixed proxy keep the VPN-bound dial.
 /// </summary>
 internal sealed class SplitAppForwarder : IDisposable
 {
@@ -18,15 +21,37 @@ internal sealed class SplitAppForwarder : IDisposable
     private UdpClient? _udp;
     private CancellationTokenSource? _cts;
     private IPAddress? _vpnAddress;
+    private IPEndPoint? _upstream;
     private int _vpnInterfaceIndex;
-    private int _connectLogs;
+    private int _detailLogs;
+    private int _failLogs;
+    private int _associateLogs;
+    private long _accepts;
+    private long _dialOk;
+    private long _dialFail;
+    private long _bytesToProxy;
+    private long _bytesToApp;
 
     public SplitForwarderSessions Sessions => _sessions;
     public bool IsRunning { get; private set; }
     public ushort TcpPort { get; private set; }
     public ushort UdpPort { get; private set; }
+    public bool UsesMixedProxy => _upstream != null;
 
-    public void Start(IPAddress vpnAddress, int vpnInterfaceIndex)
+    public string Diagnostics
+    {
+        get
+        {
+            var mode = _upstream == null
+                ? $"vpn-bind/{_vpnInterfaceIndex}"
+                : $"socks5/{_upstream.Port}";
+            return $"{mode} tcp/{TcpPort} udp/{UdpPort} " +
+                   $"acc={Interlocked.Read(ref _accepts)} ok={Interlocked.Read(ref _dialOk)} fail={Interlocked.Read(ref _dialFail)} " +
+                   $"appToProxy={Interlocked.Read(ref _bytesToProxy)} proxyToApp={Interlocked.Read(ref _bytesToApp)}";
+        }
+    }
+
+    public void Start(IPAddress vpnAddress, int vpnInterfaceIndex, IPEndPoint? upstreamProxy = null)
     {
         if (IsRunning)
             return;
@@ -35,6 +60,7 @@ internal sealed class SplitAppForwarder : IDisposable
 
         _vpnAddress = vpnAddress;
         _vpnInterfaceIndex = vpnInterfaceIndex;
+        _upstream = upstreamProxy;
         _cts = new CancellationTokenSource();
 
         _tcp = new TcpListener(IPAddress.Loopback, 0);
@@ -48,7 +74,14 @@ internal sealed class SplitAppForwarder : IDisposable
         _ = Task.Run(() => AcceptLoop(_cts.Token));
         _ = Task.Run(() => UdpReceiveLoop(_cts.Token));
         _ = Task.Run(() => SweepUdpFlows(_cts.Token));
-        Logger.Info($"[SPLIT-DIRECT] App forwarder listening on 127.0.0.1 tcp/{TcpPort} udp/{UdpPort} via VPN if {vpnInterfaceIndex}");
+        if (_upstream != null)
+        {
+            Logger.Info($"[SPLIT-FWD] App forwarder listening on 127.0.0.1 tcp/{TcpPort} udp/{UdpPort} upstream=socks5://127.0.0.1:{_upstream.Port} (selected apps do not bind to the VPN address)");
+        }
+        else
+        {
+            Logger.Info($"[SPLIT-FWD] App forwarder listening on 127.0.0.1 tcp/{TcpPort} udp/{UdpPort} upstream=vpn-bind if {vpnInterfaceIndex} (no mixed proxy; relay route required)");
+        }
     }
 
     public void Register(
@@ -58,7 +91,8 @@ internal sealed class SplitAppForwarder : IDisposable
         uint originalDestIp,
         ushort originalDestPort,
         uint forwardDestIp,
-        ushort forwardDestPort)
+        ushort forwardDestPort,
+        uint originalIfIdx = 0)
     {
         _sessions.Register(
             protocol,
@@ -67,7 +101,8 @@ internal sealed class SplitAppForwarder : IDisposable
             originalDestIp,
             originalDestPort,
             forwardDestIp,
-            forwardDestPort);
+            forwardDestPort,
+            originalIfIdx);
     }
 
     public void Dispose() => Stop();
@@ -110,51 +145,95 @@ internal sealed class SplitAppForwarder : IDisposable
             catch (Exception ex)
             {
                 if (!ct.IsCancellationRequested)
-                    Logger.Warning($"[SPLIT-DIRECT] TCP accept failed: {ex.Message}");
+                    Logger.Warning($"[SPLIT-FWD] TCP accept failed: {ex.Message}");
                 break;
             }
 
+            Interlocked.Increment(ref _accepts);
             _ = Task.Run(() => HandleTcpAsync(client, ct));
         }
     }
 
     private async Task HandleTcpAsync(TcpClient client, CancellationToken ct)
     {
+        var started = Stopwatch.StartNew();
+        var detail = ShouldDetail();
+        long appToProxy = 0;
+        long proxyToApp = 0;
+        string dialTarget = "";
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
             client.NoDelay = true;
             if (client.Client.RemoteEndPoint is not IPEndPoint remote)
+            {
+                Logger.Warning("[SPLIT-FWD] TCP accept has no remote endpoint");
                 return;
+            }
 
             var clientIp = ToNbo(remote.Address);
             if (!_sessions.TryGet(6, clientIp, (ushort)remote.Port, out var session))
             {
-                Logger.Warning($"[SPLIT-DIRECT] TCP from {remote} has no selected-app session");
+                Logger.Warning($"[SPLIT-FWD] TCP from {remote} has no selected-app session");
                 return;
             }
 
-            using var outbound = ConnectVpn(session.ForwardDestIp, session.ForwardDestPort, out var error);
-            if (outbound == null)
+            dialTarget = $"{FormatNbo(session.ForwardDestIp)}:{session.ForwardDestPort}";
+            if (detail)
+                Logger.Info($"[SPLIT-FWD] TCP accept {remote} dial {dialTarget} via {UpstreamLabel()} +{started.ElapsedMilliseconds}ms");
+
+            Socket outbound;
+            try
             {
-                if (Interlocked.Increment(ref _connectLogs) <= 8)
-                    Logger.Warning($"[SPLIT-DIRECT] TCP dial via VPN if {_vpnInterfaceIndex} failed: {error}. Selected-app TCP needs the relay route (metric >= {SplitDirectPathPolicy.RelayMetricFloor}).");
+                outbound = await ConnectUpstreamAsync(session.ForwardDestIp, session.ForwardDestPort, linked.Token);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _dialFail);
+                if (ShouldLogFailure())
+                    Logger.Warning($"[SPLIT-FWD] TCP dial {dialTarget} via {UpstreamLabel()} failed after {started.ElapsedMilliseconds}ms: {ex.Message}");
                 return;
             }
 
-            using var app = client.GetStream();
-            using var vpn = new NetworkStream(outbound, ownsSocket: false);
-            var inbound = PumpAsync(vpn, app, linked.Token);
-            var outboundPump = PumpAsync(app, vpn, linked.Token);
-            var finished = await Task.WhenAny(inbound, outboundPump);
-            linked.Cancel();
-            try { await Task.WhenAll(inbound, outboundPump); } catch { }
-            _ = finished;
+            Interlocked.Increment(ref _dialOk);
+            if (detail)
+                Logger.Info($"[SPLIT-FWD] TCP dial {dialTarget} ok {started.ElapsedMilliseconds}ms via {UpstreamLabel()}");
+
+            using (outbound)
+            {
+                using var app = client.GetStream();
+                using var vpn = new NetworkStream(outbound, ownsSocket: false);
+                var toProxy = PumpAsync(app, vpn, "app->proxy", dialTarget, detail, started, linked.Token);
+                var toApp = PumpAsync(vpn, app, "proxy->app", dialTarget, detail, started, linked.Token);
+                try
+                {
+                    await Task.WhenAny(toProxy, toApp);
+                    linked.Cancel();
+                    try { await Task.WhenAll(toProxy, toApp); } catch { }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    if (detail)
+                        Logger.Warning($"[SPLIT-FWD] TCP relay {dialTarget} ended: {ex.Message}");
+                }
+
+                appToProxy = await ReadPumpCount(toProxy);
+                proxyToApp = await ReadPumpCount(toApp);
+            }
+
+            Interlocked.Add(ref _bytesToProxy, appToProxy);
+            Interlocked.Add(ref _bytesToApp, proxyToApp);
+            if (detail)
+                Logger.Info($"[SPLIT-FWD] TCP close {dialTarget} appToProxy={appToProxy} proxyToApp={proxyToApp} {started.ElapsedMilliseconds}ms");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            if (Interlocked.Increment(ref _connectLogs) <= 8)
-                Logger.Warning($"[SPLIT-DIRECT] TCP relay ended: {ex.Message}");
+            if (ShouldLogFailure())
+                Logger.Warning($"[SPLIT-FWD] TCP relay {dialTarget} ended: {ex.Message}");
         }
         finally
         {
@@ -182,7 +261,7 @@ internal sealed class SplitAppForwarder : IDisposable
             catch (Exception ex)
             {
                 if (!ct.IsCancellationRequested)
-                    Logger.Warning($"[SPLIT-DIRECT] UDP receive failed: {ex.Message}");
+                    Logger.Warning($"[SPLIT-FWD] UDP receive failed: {ex.Message}");
                 break;
             }
 
@@ -194,33 +273,62 @@ internal sealed class SplitAppForwarder : IDisposable
             var flowKey = ((byte)17, clientIp, clientPort);
             if (!_udpFlows.TryGetValue(flowKey, out var flow))
             {
-                flow = CreateUdpFlow(result.RemoteEndPoint, ct);
-                if (flow == null)
+                var created = await CreateUdpFlowAsync(result.RemoteEndPoint, ct);
+                if (created == null)
                     continue;
-                if (!_udpFlows.TryAdd(flowKey, flow))
+                if (!_udpFlows.TryAdd(flowKey, created))
                 {
-                    flow.Dispose();
-                    if (!_udpFlows.TryGetValue(flowKey, out flow))
+                    created.Dispose();
+                    if (!_udpFlows.TryGetValue(flowKey, out created))
                         continue;
                 }
+
+                flow = created;
             }
 
             flow.Touch();
             try
             {
-                var dest = new IPEndPoint(new IPAddress(BitConverter.GetBytes(session.ForwardDestIp)), session.ForwardDestPort);
-                flow.Socket.SendTo(result.Buffer, dest);
+                flow.Send(session.ForwardDestIp, session.ForwardDestPort, result.Buffer, result.Buffer.Length);
+                Interlocked.Add(ref _bytesToProxy, result.Buffer.Length);
+                if (flow.NoteSend())
+                    Logger.Info($"[SPLIT-FWD] UDP {result.RemoteEndPoint} -> {FormatNbo(session.ForwardDestIp)}:{session.ForwardDestPort} via {UpstreamLabel()} ({result.Buffer.Length} bytes)");
             }
             catch (Exception ex)
             {
-                if (Interlocked.Increment(ref _connectLogs) <= 8)
-                    Logger.Warning($"[SPLIT-DIRECT] UDP send via VPN if {_vpnInterfaceIndex} failed: {ex.Message}. Selected-app UDP/DNS needs the relay route (metric >= {SplitDirectPathPolicy.RelayMetricFloor}).");
+                if (ShouldLogFailure())
+                    Logger.Warning($"[SPLIT-FWD] UDP send via {UpstreamLabel()} failed: {ex.Message}");
             }
         }
     }
 
-    private UdpFlow? CreateUdpFlow(IPEndPoint client, CancellationToken ct)
+    private async Task<UdpFlow?> CreateUdpFlowAsync(IPEndPoint client, CancellationToken ct)
     {
+        if (_upstream != null)
+        {
+            try
+            {
+                var started = Stopwatch.StartNew();
+                var channel = await Socks5TunnelDial.AssociateUdpAsync(_upstream, ct);
+                var flow = new UdpFlow(client, channel);
+                if (Interlocked.Increment(ref _associateLogs) <= 8)
+                    Logger.Info($"[SPLIT-FWD] UDP associate ok {started.ElapsedMilliseconds}ms relay={channel.Relay} via socks5://127.0.0.1:{_upstream.Port}");
+                _ = Task.Run(() => UdpReturnLoop(flow, ct));
+                return flow;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _dialFail);
+                if (ShouldLogFailure())
+                    Logger.Warning($"[SPLIT-FWD] UDP associate via socks5://127.0.0.1:{_upstream.Port} failed: {ex.Message}");
+                return null;
+            }
+        }
+
         if (_vpnAddress == null)
             return null;
 
@@ -228,14 +336,14 @@ internal sealed class SplitAppForwarder : IDisposable
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             Ipv4UnicastInterface.Bind(socket, _vpnAddress, _vpnInterfaceIndex);
-            var flow = new UdpFlow(socket, client);
+            var flow = new UdpFlow(client, socket);
             _ = Task.Run(() => UdpReturnLoop(flow, ct));
             return flow;
         }
         catch (Exception ex)
         {
-            if (Interlocked.Increment(ref _connectLogs) <= 8)
-                Logger.Warning($"[SPLIT-DIRECT] UDP VPN socket failed: {ex.Message}");
+            if (ShouldLogFailure())
+                Logger.Warning($"[SPLIT-FWD] UDP VPN socket failed: {ex.Message}");
             return null;
         }
     }
@@ -243,12 +351,13 @@ internal sealed class SplitAppForwarder : IDisposable
     private async Task UdpReturnLoop(UdpFlow flow, CancellationToken ct)
     {
         var buffer = new byte[65535];
+        var started = Stopwatch.StartNew();
         while (!ct.IsCancellationRequested && IsRunning)
         {
             int read;
             try
             {
-                read = flow.Socket.Receive(buffer);
+                read = flow.Receive(buffer);
             }
             catch (OperationCanceledException) { break; }
             catch (SocketException) { break; }
@@ -258,6 +367,9 @@ internal sealed class SplitAppForwarder : IDisposable
                 continue;
 
             flow.Touch();
+            Interlocked.Add(ref _bytesToApp, read);
+            if (flow.NoteReceive())
+                Logger.Info($"[SPLIT-FWD] UDP first reply -> {flow.Client} +{started.ElapsedMilliseconds}ms len={read}");
             try
             {
                 await _udp.SendAsync(buffer.AsMemory(0, read), flow.Client, ct);
@@ -266,8 +378,8 @@ internal sealed class SplitAppForwarder : IDisposable
             catch (ObjectDisposedException) { break; }
             catch (Exception ex)
             {
-                if (Interlocked.Increment(ref _connectLogs) <= 8)
-                    Logger.Warning($"[SPLIT-DIRECT] UDP return to app failed: {ex.Message}");
+                if (ShouldLogFailure())
+                    Logger.Warning($"[SPLIT-FWD] UDP return to app failed: {ex.Message}");
             }
         }
     }
@@ -296,6 +408,18 @@ internal sealed class SplitAppForwarder : IDisposable
         }
     }
 
+    private async Task<Socket> ConnectUpstreamAsync(uint destIp, ushort destPort, CancellationToken ct)
+    {
+        var dest = new IPAddress(BitConverter.GetBytes(destIp));
+        if (_upstream != null)
+            return await Socks5TunnelDial.ConnectTcpAsync(_upstream, dest, destPort, ct);
+
+        var socket = ConnectVpn(destIp, destPort, out var error);
+        if (socket == null)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "VPN dial failed" : error);
+        return socket;
+    }
+
     private Socket? ConnectVpn(uint destIp, ushort destPort, out string error)
     {
         error = "";
@@ -311,7 +435,7 @@ internal sealed class SplitAppForwarder : IDisposable
             Ipv4UnicastInterface.Bind(socket, _vpnAddress, _vpnInterfaceIndex);
             var dest = new IPEndPoint(new IPAddress(BitConverter.GetBytes(destIp)), destPort);
             var result = socket.BeginConnect(dest, null, null);
-            if (!result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(15)))
+            if (!result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(12)))
             {
                 error = "timeout";
                 socket.Dispose();
@@ -329,41 +453,137 @@ internal sealed class SplitAppForwarder : IDisposable
         }
     }
 
-    private static async Task PumpAsync(Stream from, Stream to, CancellationToken ct)
+    private async Task<long> PumpAsync(
+        Stream from,
+        Stream to,
+        string direction,
+        string dialTarget,
+        bool detail,
+        Stopwatch started,
+        CancellationToken ct)
     {
         var buffer = new byte[16384];
+        long total = 0;
+        var loggedFirst = false;
         while (!ct.IsCancellationRequested)
         {
-            int read = await from.ReadAsync(buffer, ct);
+            int read;
+            try
+            {
+                read = await from.ReadAsync(buffer, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (IOException)
+            {
+                break;
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+
             if (read == 0)
                 break;
-            await to.WriteAsync(buffer.AsMemory(0, read), ct);
+
+            if (!loggedFirst)
+            {
+                loggedFirst = true;
+                if (detail)
+                    Logger.Info($"[SPLIT-FWD] TCP first-byte {direction} {dialTarget} +{started.ElapsedMilliseconds}ms len={read}");
+            }
+
+            total += read;
+            try
+            {
+                await to.WriteAsync(buffer.AsMemory(0, read), ct);
+            }
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+            {
+                break;
+            }
+        }
+
+        return total;
+    }
+
+    private static async Task<long> ReadPumpCount(Task<long> pump)
+    {
+        try
+        {
+            return await pump;
+        }
+        catch
+        {
+            return 0;
         }
     }
 
+    private string UpstreamLabel()
+        => _upstream == null ? $"vpn-bind if {_vpnInterfaceIndex}" : $"socks5://127.0.0.1:{_upstream.Port}";
+
+    private bool ShouldDetail() => Interlocked.Increment(ref _detailLogs) <= 32;
+
+    private bool ShouldLogFailure() => Interlocked.Increment(ref _failLogs) <= 32;
+
+    private static string FormatNbo(uint nbo) => new IPAddress(BitConverter.GetBytes(nbo)).ToString();
+
     private static uint ToNbo(IPAddress address)
-        => address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+        => address.AddressFamily == AddressFamily.InterNetwork
             ? BitConverter.ToUInt32(address.GetAddressBytes(), 0)
             : 0;
 
     private sealed class UdpFlow : IDisposable
     {
-        public UdpFlow(Socket socket, IPEndPoint client)
+        private readonly Socket? _vpnSocket;
+        private readonly Socks5UdpChannel? _socks;
+        private int _sends;
+        private int _receives;
+
+        public UdpFlow(IPEndPoint client, Socket vpnSocket)
         {
-            Socket = socket;
             Client = client;
+            _vpnSocket = vpnSocket;
             LastSeenTick = Environment.TickCount64;
         }
 
-        public Socket Socket { get; }
+        public UdpFlow(IPEndPoint client, Socks5UdpChannel socks)
+        {
+            Client = client;
+            _socks = socks;
+            LastSeenTick = Environment.TickCount64;
+        }
+
         public IPEndPoint Client { get; }
         public long LastSeenTick;
 
         public void Touch() => LastSeenTick = Environment.TickCount64;
 
+        public bool NoteSend() => Interlocked.Increment(ref _sends) <= 4;
+
+        public bool NoteReceive() => Interlocked.Increment(ref _receives) == 1;
+
+        public void Send(uint destIp, ushort destPort, byte[] data, int length)
+        {
+            var dest = new IPAddress(BitConverter.GetBytes(destIp));
+            if (_socks != null)
+            {
+                _socks.SendPayload(dest, destPort, data, length);
+                return;
+            }
+
+            _vpnSocket!.SendTo(data.AsSpan(0, length), SocketFlags.None, new IPEndPoint(dest, destPort));
+        }
+
+        public int Receive(byte[] buffer)
+            => _socks != null ? _socks.ReceivePayload(buffer) : _vpnSocket!.Receive(buffer);
+
         public void Dispose()
         {
-            try { Socket.Dispose(); } catch { }
+            try { _vpnSocket?.Dispose(); } catch { }
+            try { _socks?.Dispose(); } catch { }
         }
     }
 }

@@ -313,7 +313,10 @@ public partial class TrafficRouterService
             return;
 
         _loggedRelayRouteKept = true;
-        Logger.Info($"[SPLIT-DIRECT] Keeping relay route on VPN IF {_vpnInterfaceIndex}; #60 guard ignores metric >= {SplitDirectPathPolicy.RelayMetricFloor}. {VpnDefaultRouteInspector.FormatSummary(relay, _vpnInterfaceIndex)}");
+        var relayRole = SplitDirectPathPolicy.SelectedAppUsesMixedProxy(_splitUpstreamProxyPort)
+            ? " Selected apps use the mixed proxy; this route is only for other VPN-bound sockets."
+            : "";
+        Logger.Info($"[SPLIT-DIRECT] Keeping relay route on VPN IF {_vpnInterfaceIndex}; #60 guard ignores metric >= {SplitDirectPathPolicy.RelayMetricFloor}.{relayRole} {VpnDefaultRouteInspector.FormatSummary(relay, _vpnInterfaceIndex)}");
     }
 
     /// <summary>
@@ -595,7 +598,10 @@ public partial class TrafficRouterService
             tableMetric = $"unread ({ex.Message})";
         }
 
-        Logger.Info($"[SPLIT-DIRECT] Relay route 0.0.0.0/0 metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} on VPN IF {_vpnInterfaceIndex} (table metric {tableMetric}; physical default stays preferred)");
+        var relayRole = SplitDirectPathPolicy.SelectedAppUsesMixedProxy(_splitUpstreamProxyPort)
+            ? "selected apps use the mixed proxy; this route is only for other VPN-bound sockets"
+            : "VPN-bound selected-app sockets use this route";
+        Logger.Info($"[SPLIT-DIRECT] Relay route 0.0.0.0/0 metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} on VPN IF {_vpnInterfaceIndex} (table metric {tableMetric}; physical default stays preferred; {relayRole})");
     }
 
     private void RemoveRelayInterfaceRoute()
