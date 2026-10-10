@@ -45,7 +45,7 @@ public class ProfileRowLayoutTests
     [Fact]
     public void List_row_templates_bind_app_flow_direction()
     {
-        var connection = File.ReadAllText(RepoFile("AppTunnel/Views/ConnectionTabView.xaml"));
+        var connection = System.IO.File.ReadAllText(RepoFile("AppTunnel/Views/ConnectionTabView.xaml"));
         var profiles = Slice(connection, "<ListBox x:Name=\"ProfilesList\"", "</ListBox.ItemTemplate>");
         Assert.Contains(
             "FlowDirection=\"{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=ListBox}}\"",
@@ -59,12 +59,12 @@ public class ProfileRowLayoutTests
             subscriptions,
             StringComparison.Ordinal);
 
-        var apps = File.ReadAllText(RepoFile("AppTunnel/Views/AppsTabView.xaml"));
+        var apps = System.IO.File.ReadAllText(RepoFile("AppTunnel/Views/AppsTabView.xaml"));
         var cardStyle = Slice(apps, "<Style x:Key=\"AppRowCard\"", "</Style>");
         Assert.DoesNotContain("FlowDirection", cardStyle, StringComparison.Ordinal);
         Assert.Equal(3, CountOf(apps, "FlowDirection=\"{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}\""));
 
-        var history = File.ReadAllText(RepoFile("AppTunnel/Views/HistoryTabView.xaml"));
+        var history = System.IO.File.ReadAllText(RepoFile("AppTunnel/Views/HistoryTabView.xaml"));
         Assert.Contains(
             "FlowDirection=\"{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}\"",
             history,
@@ -260,11 +260,11 @@ public class ProfileRowLayoutTests
 
     private static string RepoFile(string relative)
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "AppTunnel.sln")))
-                return Path.Combine(dir.FullName, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "AppTunnel.sln")))
+                return System.IO.Path.Combine(dir.FullName, relative.Replace('/', System.IO.Path.DirectorySeparatorChar));
 
             dir = dir.Parent;
         }
