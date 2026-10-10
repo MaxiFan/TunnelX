@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### English
+
+- Persian UI mirrors VPN config rows: the profile name and type sit on the right, ping/server/edit/delete sit on the left, and row text aligns to the start. English and Russian stay left-to-right. Subscription rows, app lists, history, and per-app traffic rows follow the same direction (`Fixes #82`).
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- در رابط فارسی ردیف کانفیگ‌ها راست‌به‌چپ است: نام و نوع سمت راست، دکمه‌های پینگ/سرور/ویرایش/حذف سمت چپ، و متن‌ها از لبهٔ شروع (راست) چیده می‌شوند. انگلیسی و روسی چپ‌به‌راست می‌مانند. ردیف اشتراک، فهرست برنامه‌ها، سوابق و مصرف هر برنامه هم همین جهت را می‌گیرند (رفع #82).
+
+</div>
+
+### Русский
+
+- В персидском интерфейсе строки конфигов зеркалятся: имя и тип справа, кнопки пинга/сервера/правки/удаления слева, текст выровнен по началу строки. Английский и русский остаются слева направо. Строки подписок, список приложений, история и трафик по приложениям следуют тому же направлению (`Fixes #82`).
+
 ## 2.2.3 - 2026-10-10
 
 ### English

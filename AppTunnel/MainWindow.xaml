@@ -773,7 +773,8 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Background="#11FFFFFF" CornerRadius="8"
-                                                Padding="12,10" Margin="0,3" Cursor="Arrow">
+                                                Padding="12,10" Margin="0,3" Cursor="Arrow"
+                                                FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=Window}}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
@@ -805,17 +806,21 @@
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding DisplayName}"
                                                                Foreground="{StaticResource TextPrimaryBrush}"
-                                                               FontSize="13"/>
+                                                               FontSize="13"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
-                                                                FlowDirection="LeftToRight">
+                                                                FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=Window}}">
                                                         <TextBlock Text="↑ " Foreground="{StaticResource WarningBrush}"
                                                                    FontSize="10"/>
                                                         <TextBlock Text="{Binding SentTrafficDisplay, StringFormat={}{0} ↑}"
                                                                    Foreground="{StaticResource WarningBrush}"
-                                                                   FontSize="10" Margin="0,0,10,0"/>
+                                                                   FontSize="10" Margin="0,0,10,0"
+                                                                   FlowDirection="LeftToRight"/>
                                                         <TextBlock Text="{Binding ReceivedTrafficDisplay, StringFormat={}{0} ↓}"
                                                                    Foreground="{StaticResource SuccessBrush}"
-                                                                   FontSize="10"/>
+                                                                   FontSize="10"
+                                                                   FlowDirection="LeftToRight"/>
                                                     </StackPanel>
                                                 </StackPanel>
 

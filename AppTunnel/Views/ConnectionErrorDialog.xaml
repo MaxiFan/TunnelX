@@ -97,7 +97,8 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal"
-                                                Margin="0,0,0,4">
+                                                Margin="0,0,0,4"
+                                                FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=Window}}">
                                         <TextBlock Style="{StaticResource DialogGlyphText}"
                                                    Text="{Binding StateGlyph}"
                                                    Width="16"

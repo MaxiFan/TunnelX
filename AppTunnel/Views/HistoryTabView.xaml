@@ -29,7 +29,8 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Background="#12FFFFFF" BorderBrush="#10FFFFFF" BorderThickness="1" CornerRadius="9"
-                                Padding="12,9" Margin="0,0,0,6">
+                                Padding="12,9" Margin="0,0,0,6"
+                                FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -42,6 +43,7 @@
                                                FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}"
                                                TextTrimming="CharacterEllipsis"
+                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1"
                                                Text=" → "
@@ -52,37 +54,42 @@
                                                Text="{Binding ServerAddress}"
                                                FontSize="11"
                                                Foreground="{StaticResource AccentBrush}"
-                                               FlowDirection="LeftToRight"
                                                TextTrimming="CharacterEllipsis"
+                                               TextAlignment="{Binding DataContext.AppTextAlignment, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
-                                            FlowDirection="LeftToRight">
+                                            FlowDirection="{Binding DataContext.AppFlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                     <TextBlock Text="🕐 " FontSize="11"/>
                                     <TextBlock Text="{Binding ConnectedAt, StringFormat={}{0:yyyy/MM/dd HH:mm}}"
                                                Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="11"/>
+                                               FontSize="11"
+                                               FlowDirection="LeftToRight"/>
                                     <TextBlock Text="  ·  ⏱ " FontSize="11"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="{Binding DurationText}"
                                                Foreground="{StaticResource SuccessBrush}"
-                                               FontSize="11"/>
+                                               FontSize="11"
+                                               FlowDirection="LeftToRight"/>
                                     <TextBlock Text="  ·  📊 " FontSize="11"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="{Binding TotalDataText}"
                                                Foreground="{StaticResource WarningBrush}"
-                                               FontSize="11"/>
+                                               FontSize="11"
+                                               FlowDirection="LeftToRight"/>
                                     <TextBlock Text="  ·  ↑ " Foreground="#E07820" FontSize="10"
                                                VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding SentText}"
                                                Foreground="#E07820" FontSize="10"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center"
+                                               FlowDirection="LeftToRight"/>
                                     <TextBlock Text="  ↓ " Foreground="#4CAF50" FontSize="10"
                                                VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding ReceivedText}"
                                                Foreground="#4CAF50" FontSize="10"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center"
+                                               FlowDirection="LeftToRight"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
