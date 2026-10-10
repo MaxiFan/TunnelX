@@ -199,7 +199,13 @@ public partial class TrafficRouterService
                         sw.Stop();
                         Logger.Info($"[CONN-CHECK] TCP {intlHost} ({intlIp}:{intlPort}, via VPN interface {_vpnInterfaceIndex}): {sw.ElapsedMilliseconds}ms (no host route)");
                     }
-                    catch (OperationCanceledException) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN: timeout (3000ms)"); }
+                    catch (OperationCanceledException)
+                    {
+                        var relayHint = !_fullRouteEnabled
+                            ? $" Split relay route must remain on IF {_vpnInterfaceIndex} (metric >= {SplitDirectPathPolicy.RelayMetricFloor})."
+                            : "";
+                        Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN: timeout (3000ms).{relayHint}");
+                    }
                     catch (Exception ex) { Logger.Warning($"[CONN-CHECK] TCP {intlHost} via VPN failed: {ex.Message}"); }
                 }
             }

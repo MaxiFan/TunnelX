@@ -11,6 +11,7 @@ public partial class TrafficRouterService
     private volatile bool _hasVpnDefaultRoute;
     private bool _loggedInitialDefaultSnapshot;
     private bool _loggedSplitDefaultPresent;
+    private bool _loggedRelayRouteKept;
 
     public bool IsFullRouteEnabled => _fullRouteEnabled;
 
@@ -235,10 +236,11 @@ public partial class TrafficRouterService
             return;
         }
 
-        var vpnDefaults = VpnDefaultRouteInspector.OnInterface(defaults, _vpnInterfaceIndex)
-            .Where(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric))
-            .ToList();
+        var onVpn = VpnDefaultRouteInspector.OnInterface(defaults, _vpnInterfaceIndex).ToList();
+        var plan = SplitDirectPathPolicy.ClassifyVpnDefaults(onVpn.Select(r => r.Metric));
+        var vpnDefaults = onVpn.Where(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric)).ToList();
         _hasVpnDefaultRoute = vpnDefaults.Count > 0;
+        NoteRelayRouteKept(onVpn);
 
         if (verboseLog || !_loggedInitialDefaultSnapshot)
         {
@@ -257,15 +259,18 @@ public partial class TrafficRouterService
             return;
         }
 
-        Logger.Warning($"[ROUTE] Unexpected 0.0.0.0/0 on VPN IF {_vpnInterfaceIndex} while split; stripping. {VpnDefaultRouteInspector.FormatSummary(vpnDefaults, _vpnInterfaceIndex)}");
+        Logger.Warning($"[ROUTE] Unexpected capturing 0.0.0.0/0 on VPN IF {_vpnInterfaceIndex} while split; stripping those only (relay metrics >= {SplitDirectPathPolicy.RelayMetricFloor} stay). keptRelay=[{string.Join(",", plan.KeptRelayMetrics)}] {VpnDefaultRouteInspector.FormatSummary(vpnDefaults, _vpnInterfaceIndex)}");
         var deleted = VpnDefaultRouteInspector.DeleteDefaultRoutesOnInterface(_vpnInterfaceIndex);
         RemoveVpnDefaultRouteByInterface();
 
         var remaining = 0;
+        var keptRelay = plan.KeptRelayMetrics.Length;
         try
         {
-            remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex)
-                .Count(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric));
+            var afterHelper = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex);
+            var afterPlan = SplitDirectPathPolicy.ClassifyVpnDefaults(afterHelper.Select(r => r.Metric));
+            remaining = afterPlan.StripMetrics.Length;
+            keptRelay = afterPlan.KeptRelayMetrics.Length;
         }
         catch { }
 
@@ -277,8 +282,12 @@ public partial class TrafficRouterService
                 Logger.Warning($"[ROUTE] route.exe delete stderr={stderr.Trim()}");
             try
             {
-                remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex)
-                    .Count(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric));
+                var afterRouteExe = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex);
+                var afterPlan = SplitDirectPathPolicy.ClassifyVpnDefaults(afterRouteExe.Select(r => r.Metric));
+                remaining = afterPlan.StripMetrics.Length;
+                keptRelay = afterPlan.KeptRelayMetrics.Length;
+                if (plan.RelaySurvives && !afterPlan.RelaySurvives)
+                    Logger.Warning($"[SPLIT-DIRECT] route.exe delete removed the relay route on VPN IF {_vpnInterfaceIndex}; it will be re-added");
             }
             catch { }
         }
@@ -291,7 +300,20 @@ public partial class TrafficRouterService
             Interlocked.Increment(ref _unexpectedVpnDefaultRouteEvents);
         _loggedSplitDefaultPresent = remaining > 0;
 
-        Logger.Info($"[ROUTE] Split strip result helperDeleted={deleted} vpnDefaultRemaining={remaining} unexpectedEvents={_unexpectedVpnDefaultRouteEvents}");
+        Logger.Info($"[ROUTE] Split strip result helperDeleted={deleted} vpnDefaultRemaining={remaining} keptRelay={keptRelay} unexpectedEvents={_unexpectedVpnDefaultRouteEvents}");
+    }
+
+    private void NoteRelayRouteKept(IReadOnlyList<VpnDefaultRouteInspector.Ipv4RouteRow> onVpn)
+    {
+        if (_loggedRelayRouteKept || _fullRouteEnabled)
+            return;
+
+        var relay = onVpn.Where(r => SplitDirectPathPolicy.IsRelayInterfaceRoute(r.Metric)).ToList();
+        if (relay.Count == 0)
+            return;
+
+        _loggedRelayRouteKept = true;
+        Logger.Info($"[SPLIT-DIRECT] Keeping relay route on VPN IF {_vpnInterfaceIndex}; #60 guard ignores metric >= {SplitDirectPathPolicy.RelayMetricFloor}. {VpnDefaultRouteInspector.FormatSummary(relay, _vpnInterfaceIndex)}");
     }
 
     /// <summary>
@@ -522,11 +544,12 @@ public partial class TrafficRouterService
 
         try
         {
-            var existing = VpnDefaultRouteInspector.ReadDefaultRoutes();
-            if (existing.Any(r => r.IfIndex == (uint)_vpnInterfaceIndex &&
-                                  !SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric)))
+            var existing = VpnDefaultRouteInspector.OnInterface(
+                VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex);
+            if (!SplitDirectPathPolicy.ShouldReinstallRelayRoute(existing.Select(r => r.Metric)))
             {
                 _relayInterfaceRouteAdded = true;
+                NoteRelayRouteKept(existing.ToList());
                 return;
             }
         }
@@ -547,10 +570,32 @@ public partial class TrafficRouterService
         }
 
         _relayInterfaceRouteAdded = added;
-        if (added)
-            Logger.Info($"[SPLIT-DIRECT] Relay route 0.0.0.0/0 metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} on VPN IF {_vpnInterfaceIndex} (physical default stays preferred)");
-        else
+        if (!added)
+        {
             Logger.Warning($"[SPLIT-DIRECT] Relay route was not added: {stderr.Trim()}");
+            return;
+        }
+
+        var tableMetric = "unread";
+        try
+        {
+            var installed = VpnDefaultRouteInspector.OnInterface(
+                VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex).ToList();
+            var installedPlan = SplitDirectPathPolicy.ClassifyVpnDefaults(installed.Select(r => r.Metric));
+            tableMetric = installedPlan.KeptRelayMetrics.Length == 0
+                ? "none"
+                : string.Join(",", installedPlan.KeptRelayMetrics);
+            if (installedPlan.RelaySurvives)
+                _loggedRelayRouteKept = true;
+            else
+                Logger.Warning($"[SPLIT-DIRECT] route.exe accepted metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} but VPN IF {_vpnInterfaceIndex} has no relay-band default (metric >= {SplitDirectPathPolicy.RelayMetricFloor}). The #60 guard can delete it. {VpnDefaultRouteInspector.FormatSummary(installed, _vpnInterfaceIndex)}");
+        }
+        catch (Exception ex)
+        {
+            tableMetric = $"unread ({ex.Message})";
+        }
+
+        Logger.Info($"[SPLIT-DIRECT] Relay route 0.0.0.0/0 metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} on VPN IF {_vpnInterfaceIndex} (table metric {tableMetric}; physical default stays preferred)");
     }
 
     private void RemoveRelayInterfaceRoute()
@@ -568,6 +613,7 @@ public partial class TrafficRouterService
         }
 
         _relayInterfaceRouteAdded = false;
+        _loggedRelayRouteKept = false;
     }
 
     private void TryRemoveHostRoute(uint dstIpNbo)
