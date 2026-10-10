@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.2.4 - 2026-10-10
+
 ### English
 
 - Selected apps in Split mode can load pages through the VPN again. v2.2.3 (PR #81) added a high-metric `0.0.0.0/0` relay route so the per-app forwarder could send TCP, UDP, and DNS from the VPN adapter without a host route that captures every process. The older split guard then deleted that route every few seconds: Windows reports it as 9000 plus the interface metric, not the exact metric 9000 the guard allowed, so the forwarder had no route and selected apps such as Chrome opened nothing. The guard now keeps relay-band metrics and still removes capturing defaults (metric 0, 1, 25, and anything below the relay floor). Unselected apps stay on the direct connection. Regression of PR #81.
@@ -450,6 +452,7 @@
 - Added in-app GitHub and donation links.
 - Added project metadata for MaxFan and GPL-3.0-or-later licensing.
 - Improved leak logging and traffic accounting in recent internal builds.
+
 
 
 
