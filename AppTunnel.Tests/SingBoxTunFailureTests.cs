@@ -4,6 +4,7 @@ using Xunit;
 
 namespace AppTunnel.Tests;
 
+[Collection(LocalizationCollection.Name)]
 public class SingBoxTunFailureTests
 {
     private const string Issue67Log =

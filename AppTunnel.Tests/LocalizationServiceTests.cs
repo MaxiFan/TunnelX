@@ -5,6 +5,7 @@ using Xunit;
 
 namespace AppTunnel.Tests;
 
+[Collection(LocalizationCollection.Name)]
 public class LocalizationServiceTests : IDisposable
 {
     private readonly LocalizationService _loc = LocalizationService.Instance;

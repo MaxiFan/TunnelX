@@ -99,6 +99,7 @@ OpenVPN 未随 TunnelX 捆绑。请单独安装 OpenVPN Community，在 TunnelX 
 - 包含的目标即使未选定对应应用也走隧道。
 - 对于 Store/MSIX、WebView2 或多进程应用，请保持应用打开并刷新应用列表。
 - 全路由模式下整个系统走隧道；direct/exclude 规则仍可用于将特定目标保留在普通路由上。
+- 分流模式下，未选择的应用保持普通直连，包括 DNS 和浏览器搜索。TunnelX 不会仅因为某个已选应用在使用某个地址，就为该地址安装 VPN `/32` 路由。
 
 ## 本地数据与日志
 

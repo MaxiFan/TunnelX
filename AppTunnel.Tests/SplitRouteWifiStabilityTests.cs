@@ -68,7 +68,7 @@ public class SplitRouteFastPathTests
     }
 
     [Fact]
-    public void SharedCdnIp_NonTargetPacket_DoesNotTouchTheRoute()
+    public void SharedCdnIp_NonTargetPacket_DropsTheCapturingRoute()
     {
         var decision = SplitRouteFastPath.Decide(
             fullRoute: false,
@@ -77,15 +77,34 @@ public class SplitRouteFastPathTests
             included: false,
             blockedProc: false,
             processIsTarget: false,
-            ipRefCount: 2);
+            ipRefCount: 2,
+            forwarderReady: true);
 
         Assert.False(decision.SendViaVpn);
-        Assert.False(decision.RemoveRouteNow);
+        Assert.False(decision.RelaySelectedApp);
+        Assert.True(decision.RemoveRouteNow);
         Assert.False(decision.ScheduleDelayedRemovalIfIdle);
     }
 
     [Fact]
-    public void StaleRoute_SchedulesOneDelayedRemoval()
+    public void ForwarderDown_SharedCdn_DoesNotBlackholeTheUnselectedApp()
+    {
+        var decision = SplitRouteFastPath.Decide(
+            fullRoute: false,
+            probeIp: false,
+            excluded: false,
+            included: false,
+            blockedProc: false,
+            processIsTarget: false,
+            ipRefCount: 2,
+            forwarderReady: false);
+
+        Assert.True(decision.SendViaVpn);
+        Assert.False(decision.RemoveRouteNow);
+    }
+
+    [Fact]
+    public void StaleRoute_IsRemovedImmediately()
     {
         var decision = SplitRouteFastPath.Decide(
             fullRoute: false,
@@ -97,8 +116,8 @@ public class SplitRouteFastPathTests
             ipRefCount: 0);
 
         Assert.False(decision.SendViaVpn);
-        Assert.False(decision.RemoveRouteNow);
-        Assert.True(decision.ScheduleDelayedRemovalIfIdle);
+        Assert.True(decision.RemoveRouteNow);
+        Assert.False(decision.ScheduleDelayedRemovalIfIdle);
     }
 
     [Fact]
@@ -114,8 +133,27 @@ public class SplitRouteFastPathTests
             ipRefCount: 1);
 
         Assert.True(decision.SendViaVpn);
+        Assert.False(decision.RelaySelectedApp);
         Assert.False(decision.RemoveRouteNow);
         Assert.False(decision.ScheduleDelayedRemovalIfIdle);
+    }
+
+    [Fact]
+    public void SelectedApp_WithForwarder_DoesNotPublishAHostRoute()
+    {
+        var decision = SplitRouteFastPath.Decide(
+            fullRoute: false,
+            probeIp: false,
+            excluded: false,
+            included: false,
+            blockedProc: false,
+            processIsTarget: true,
+            ipRefCount: 1,
+            forwarderReady: true);
+
+        Assert.True(decision.RelaySelectedApp);
+        Assert.False(decision.SendViaVpn);
+        Assert.True(decision.RemoveRouteNow);
     }
 
     [Fact]

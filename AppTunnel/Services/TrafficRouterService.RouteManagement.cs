@@ -61,6 +61,8 @@ public partial class TrafficRouterService
         RemoveFullRouteDefault();
         RemoveVpnServerPhysicalRoute();
         _fullRouteEnabled = false;
+        if (_splitForwarder?.IsRunning == true)
+            EnsureRelayInterfaceRoute();
         _hasVpnDefaultRoute = false;
         _loggedSplitDefaultPresent = false;
         MarkPolicyTransitionGrace(TimeSpan.FromSeconds(25));
@@ -195,7 +197,9 @@ public partial class TrafficRouterService
         try
         {
             var remaining = VpnDefaultRouteInspector.ReadDefaultRoutes();
-            var vpnLeft = remaining.Count(r => r.IfIndex == (uint)_vpnInterfaceIndex);
+            var vpnLeft = remaining.Count(r =>
+                r.IfIndex == (uint)_vpnInterfaceIndex &&
+                SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric));
             _hasVpnDefaultRoute = vpnLeft > 0;
             Logger.Info($"[ROUTE-AFTER] {VpnDefaultRouteInspector.FormatSummary(remaining, _vpnInterfaceIndex)}");
         }
@@ -203,6 +207,12 @@ public partial class TrafficRouterService
         {
             Logger.Warning($"[ROUTE-AFTER] Failed to re-read IPv4 forward table: {ex.Message}");
         }
+
+        // route.exe delete above also removes the metric-9000 relay route.
+        // Put it back immediately. Waiting for the stats watcher leaves
+        // selected-app sockets with no VPN route for several seconds.
+        if (_splitForwarder?.IsRunning == true && !_fullRouteEnabled)
+            EnsureRelayInterfaceRoute();
     }
 
     /// <summary>
@@ -225,7 +235,9 @@ public partial class TrafficRouterService
             return;
         }
 
-        var vpnDefaults = VpnDefaultRouteInspector.OnInterface(defaults, _vpnInterfaceIndex);
+        var vpnDefaults = VpnDefaultRouteInspector.OnInterface(defaults, _vpnInterfaceIndex)
+            .Where(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric))
+            .ToList();
         _hasVpnDefaultRoute = vpnDefaults.Count > 0;
 
         if (verboseLog || !_loggedInitialDefaultSnapshot)
@@ -240,6 +252,8 @@ public partial class TrafficRouterService
         if (vpnDefaults.Count == 0)
         {
             _loggedSplitDefaultPresent = false;
+            if (_splitForwarder?.IsRunning == true)
+                EnsureRelayInterfaceRoute();
             return;
         }
 
@@ -250,24 +264,28 @@ public partial class TrafficRouterService
         var remaining = 0;
         try
         {
-            remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex).Count;
+            remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex)
+                .Count(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric));
         }
         catch { }
 
         if (remaining > 0)
         {
-            Logger.Warning($"[ROUTE] IP helper left {remaining} VPN default(s); falling back to route.exe delete IF {_vpnInterfaceIndex}");
+            Logger.Warning($"[ROUTE] IP helper left {remaining} capturing VPN default(s); falling back to route.exe delete IF {_vpnInterfaceIndex}");
             TryRunRouteCommand($"delete 0.0.0.0 mask 0.0.0.0 IF {_vpnInterfaceIndex}", out var stderr);
             if (!string.IsNullOrWhiteSpace(stderr))
                 Logger.Warning($"[ROUTE] route.exe delete stderr={stderr.Trim()}");
             try
             {
-                remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex).Count;
+                remaining = VpnDefaultRouteInspector.OnInterface(VpnDefaultRouteInspector.ReadDefaultRoutes(), _vpnInterfaceIndex)
+                    .Count(r => SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric));
             }
             catch { }
         }
 
         _hasVpnDefaultRoute = remaining > 0;
+        if (_splitForwarder?.IsRunning == true && !_fullRouteEnabled)
+            EnsureRelayInterfaceRoute();
         var appearedAfterClean = _routeBootstrapReady && remaining > 0 && !_loggedSplitDefaultPresent;
         if (appearedAfterClean)
             Interlocked.Increment(ref _unexpectedVpnDefaultRouteEvents);
@@ -287,6 +305,12 @@ public partial class TrafficRouterService
     {
         // Exclude = direct outside tunnel (never install a VPN /32 for excluded IPs).
         if (IsExcludedDestination(dstIpNbo))
+            return false;
+
+        // A per-app /32 captures every process. While the forwarder is up,
+        // selected apps do not need one, and unselected apps must not hit it.
+        if (_splitForwarder?.IsRunning == true &&
+            !SplitDirectPathPolicy.ShouldInstallCapturingHostRoute(_fullRouteEnabled, IsIncludedDestination(dstIpNbo)))
             return false;
 
         // Per-app mode: NCSI destinations stay on the physical default route.
@@ -478,19 +502,72 @@ public partial class TrafficRouterService
 
     private bool IsPinnedWireGuardInfrastructureRoute(uint dstIpNbo)
     {
-        if (!_vpnServerIsUdpOnly)
-            return false;
+        // Public resolvers used to be pinned for the life of the tunnel.
+        // That /32 blackholed DNS and browser DoH for every unselected app.
+        _ = dstIpNbo;
+        return false;
+    }
 
-        if (dstIpNbo == _dnsRedirectIpNbo)
-            return true;
+    private bool _relayInterfaceRouteAdded;
 
-        foreach (var resolver in DnsResolverCache.DohBootstrapResolvers)
+    /// <summary>
+    /// High-metric default on the VPN adapter. IP_UNICAST_IF sockets (the
+    /// selected-app forwarder, local proxy, tunnel DoH) can egress there.
+    /// The physical default has a lower metric, so unselected apps stay direct.
+    /// </summary>
+    private void EnsureRelayInterfaceRoute()
+    {
+        if (_fullRouteEnabled || _vpnInterfaceIndex <= 0 || _splitForwarder?.IsRunning != true)
+            return;
+
+        try
         {
-            if (BitConverter.ToUInt32(resolver.GetAddressBytes(), 0) == dstIpNbo)
-                return true;
+            var existing = VpnDefaultRouteInspector.ReadDefaultRoutes();
+            if (existing.Any(r => r.IfIndex == (uint)_vpnInterfaceIndex &&
+                                  !SplitDirectPathPolicy.IsCapturingDefaultMetric(r.Metric)))
+            {
+                _relayInterfaceRouteAdded = true;
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[SPLIT-DIRECT] Could not read routes before adding relay route: {ex.Message}");
         }
 
-        return false;
+        var gateway = GetVpnRouteGateway();
+        var added = TryRunRouteCommand(
+            $"add 0.0.0.0 mask 0.0.0.0 {gateway} IF {_vpnInterfaceIndex} METRIC {SplitDirectPathPolicy.RelayInterfaceRouteMetric}",
+            out var stderr);
+        if (!added && gateway != "0.0.0.0")
+        {
+            added = TryRunRouteCommand(
+                $"add 0.0.0.0 mask 0.0.0.0 0.0.0.0 IF {_vpnInterfaceIndex} METRIC {SplitDirectPathPolicy.RelayInterfaceRouteMetric}",
+                out stderr);
+        }
+
+        _relayInterfaceRouteAdded = added;
+        if (added)
+            Logger.Info($"[SPLIT-DIRECT] Relay route 0.0.0.0/0 metric {SplitDirectPathPolicy.RelayInterfaceRouteMetric} on VPN IF {_vpnInterfaceIndex} (physical default stays preferred)");
+        else
+            Logger.Warning($"[SPLIT-DIRECT] Relay route was not added: {stderr.Trim()}");
+    }
+
+    private void RemoveRelayInterfaceRoute()
+    {
+        if (_vpnInterfaceIndex <= 0)
+            return;
+
+        try
+        {
+            VpnDefaultRouteInspector.DeleteRelayInterfaceRoutes(_vpnInterfaceIndex);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[SPLIT-DIRECT] Relay route cleanup failed: {ex.Message}");
+        }
+
+        _relayInterfaceRouteAdded = false;
     }
 
     private void TryRemoveHostRoute(uint dstIpNbo)

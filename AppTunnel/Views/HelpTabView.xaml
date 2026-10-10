@@ -335,7 +335,7 @@
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource HelpChip}">
-                            <TextBlock Text="حالت عادی: فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی وارد تونل می‌شوند."
+                            <TextBlock Text="حالت عادی: فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی وارد تونل می‌شوند. برنامه‌های دیگر روی اینترنت مستقیم می‌مانند و DNS آن‌ها به تونل نمی‌رود."
                                        Style="{StaticResource HelpBody}" FontSize="10"/>
                         </Border>
                         <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource HelpChip}">

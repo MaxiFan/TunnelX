@@ -508,6 +508,21 @@ public partial class TrafficRouterService : IDisposable
             InstallWireGuardDnsBootstrap();
         }
 
+        try
+        {
+            if (!IPAddress.TryParse(_vpnLocalIp, out var vpnBind))
+                throw new InvalidOperationException($"VPN address '{_vpnLocalIp}' is not IPv4.");
+            _splitForwarder = new SplitAppForwarder();
+            _splitForwarder.Start(vpnBind, _vpnInterfaceIndex);
+            EnsureRelayInterfaceRoute();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[SPLIT-DIRECT] Forwarder did not start ({ex.Message}). Per-app traffic will use legacy host routes; unselected apps that share a destination may be tunneled instead of dropped.");
+            try { _splitForwarder?.Dispose(); } catch { }
+            _splitForwarder = null;
+        }
+
         // Flow tracking must run before NET-OUT so DNS port→app hints exist when
         // Chrome falls back from blocked IPv6 DNS to IPv4 resolver traffic.
         _routingTask = Task.Run(() => FlowTrackingLoop(_cts.Token));
@@ -516,6 +531,8 @@ public partial class TrafficRouterService : IDisposable
         // via the VPN, and those sockets need the same strong-host NAT handling.
         _networkOutTask = Task.Run(() => NetworkOutboundLoop(_cts.Token));
         _networkInTask = Task.Run(() => NetworkInboundLoop(_cts.Token));
+        if (_splitForwarder?.IsRunning == true)
+            _loopbackReturnTask = Task.Run(() => SplitLoopbackReturnLoop(_cts.Token));
         if (_vpnServerIsUdpOnly)
         {
             _wgVpnOutTask = null;
@@ -558,11 +575,12 @@ public partial class TrafficRouterService : IDisposable
         _statsTimer = new System.Threading.Timer(_ => ReportStats(), null,
             TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
 
-        // Optional mixed SOCKS5/HTTP proxy
+        // Optional mixed SOCKS5/HTTP proxy. Bind it to the VPN interface
+        // directly so its destinations do not need a capturing /32.
         if (EnableSocks5)
         {
             _mixedProxy = new MixedProxyServer(Socks5Port, MixedProxyUsername, MixedProxyPassword);
-            _mixedProxy.Start(vpnLocalIp, EnsureHostRouteForSocks5);
+            _mixedProxy.Start(vpnLocalIp, EnsureHostRouteForSocks5, _vpnInterfaceIndex);
         }
     }
 
@@ -612,21 +630,10 @@ public partial class TrafficRouterService : IDisposable
         if (!_vpnServerIsUdpOnly || !EnableDnsRedirect)
             return;
 
-        EnsureHostRouteViaVpn(_dnsRedirectIpNbo, _dnsRedirectIp);
-        _ipToProcess[_dnsRedirectIpNbo] = "[WG-DNS]";
-        Logger.Info($"[WG-DNS] Resolver {_dnsRedirectIp} host-routed via WireGuard (NET-OUT/WG-OUT DNS + DoH bootstrap)");
-
-        // DoH resolvers from DnsResolverCache + profile DNS (no hardcoded public IP list).
-        var dohRoutes = new HashSet<uint> { _dnsRedirectIpNbo };
-        foreach (var resolver in DnsResolverCache.DohBootstrapResolvers)
-        {
-            var nbo = BitConverter.ToUInt32(resolver.GetAddressBytes(), 0);
-            if (!dohRoutes.Add(nbo) || IsExcludedDestination(nbo))
-                continue;
-            EnsureHostRouteViaVpn(nbo, resolver);
-            _ipToProcess[nbo] = "[WG-DOH]";
-        }
-
+        // Do not publish /32s for 8.8.8.8 / 1.1.1.1 / 1.0.0.1. Those addresses
+        // are also what unselected browsers use for DNS and DoH. A VPN host
+        // route blackholes them. Selected-app DNS goes through the forwarder.
+        Logger.Info($"[WG-DNS] Split mode keeps {_dnsRedirectIp} and DoH resolvers on the physical path for unselected apps. Selected-app DNS uses the VPN forwarder.");
     }
 
     private void InstallDohBootstrapRoutes()
@@ -634,26 +641,10 @@ public partial class TrafficRouterService : IDisposable
         if (!EnableDnsOptimization)
             return;
 
-        // TunnelX DoH bootstrap must not be forced through WireGuard when the peer
-        // drops UDP/53 — it would stall include/exclude refresh and health checks.
-        if (_vpnServerIsUdpOnly)
-            return;
-
-        foreach (var resolver in DnsResolverCache.DohBootstrapResolvers)
-        {
-            try
-            {
-                var nbo = BitConverter.ToUInt32(resolver.GetAddressBytes(), 0);
-                _includedIps[nbo] = true;
-                _ipToProcess[nbo] = "[DNS-DOH]";
-                EnsureHostRouteViaVpn(nbo, resolver);
-                Logger.Info($"[DNS-DOH] Bootstrap resolver routed via VPN: {resolver}");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[DNS-DOH] Could not route bootstrap resolver {resolver}: {ex.Message}");
-            }
-        }
+        // Marking 1.1.1.1/1.0.0.1 as included forced every app through the
+        // tunnel and, with a /32, dropped unselected DNS. TunnelX's own
+        // lookups bind to the VPN interface instead.
+        Logger.Info("[DNS-DOH] Bootstrap resolvers stay off the system route table; tunnel lookups use the VPN interface directly");
     }
 
     private void ReportStats()
@@ -690,6 +681,10 @@ public partial class TrafficRouterService : IDisposable
         if (logStats)
         {
             _lastStatsHealthSignature = healthSignature;
+            var forwarder = _splitForwarder;
+            var splitFwd = forwarder != null && forwarder.IsRunning
+                ? $"on:{forwarder.TcpPort}/{forwarder.UdpPort}"
+                : "off";
             Logger.Info(
                 $"[STATS] mode={mode} health={leakState} " +
                 $"flows={flowEst}/{flowDel} targetHit={flowHit} excluded={flowExcl} ipv6Drop={ipv6Blocked} " +
@@ -698,7 +693,8 @@ public partial class TrafficRouterService : IDisposable
                 $"vpnOut={vpnOut}/{vpnOutOurIp} vpnIn={vpnIn}/{vpnInOurIp} nat={_natTable.Count} " +
                 $"leakConfirmed={leakConfirmed} protectedBlocked={leakBlocked} recovered={leakBlockedRecovered} suppressed={leakBlockedSuppressed} " +
                 $"targets={_targetExecutables.Count} blockedApps={_blockedExecutables.Count} " +
-                $"vpnIfDefault={(_hasVpnDefaultRoute ? "yes" : "no")} unexpectedDefaultEvents={_unexpectedVpnDefaultRouteEvents}");
+                $"vpnIfDefault={(_hasVpnDefaultRoute ? "yes" : "no")} unexpectedDefaultEvents={_unexpectedVpnDefaultRouteEvents} " +
+                $"splitFwd={splitFwd}");
         }
 
         var splitWatchTick = Interlocked.Increment(ref _splitDefaultWatchTick);
@@ -722,6 +718,8 @@ public partial class TrafficRouterService : IDisposable
         if (_directSniffTask?.IsCompleted == true) deadLoops.Add("DirectSniff");
         if (_vpnIngressTask?.IsCompleted == true) deadLoops.Add("VpnIngress");
         if (_ipv6BlockTask?.IsCompleted == true) deadLoops.Add("IPv6Block");
+        if (_splitForwarder?.IsRunning == true && _loopbackReturnTask?.IsCompleted == true)
+            deadLoops.Add("SplitReturn");
         if (deadLoops.Count > 0)
             Logger.Warning($"[HEALTH] Dead loops detected: {string.Join(", ", deadLoops)}");
 
@@ -829,6 +827,7 @@ public partial class TrafficRouterService : IDisposable
         return new TunnelDnsResolveOptions
         {
             BindLocalAddress = bindIp,
+            VpnInterfaceIndex = _vpnInterfaceIndex,
             PreferDohFirst = true,
             TunnelOnly = true,
             Timeout = TimeSpan.FromSeconds(12)
@@ -1074,6 +1073,8 @@ public partial class TrafficRouterService : IDisposable
 
         try { _mixedProxy?.Stop(); } catch { }
         _mixedProxy = null;
+        try { _splitForwarder?.Stop(); } catch { }
+        _splitForwarder = null;
 
         // Cancel all pending delayed route removals.
         foreach (var kvp in _pendingRouteRemoval)
@@ -1134,11 +1135,18 @@ public partial class TrafficRouterService : IDisposable
             catch (OperationCanceledException) { }
         }
         _wgVpnOutTask = null;
+        if (_loopbackReturnTask != null)
+        {
+            try { await _loopbackReturnTask; }
+            catch (OperationCanceledException) { }
+        }
+        _loopbackReturnTask = null;
 
         if (_fullRouteEnabled)
             try { SetFullRouteEnabled(false); } catch (Exception ex) { Logger.Warning($"Disable full-route failed: {ex.Message}"); }
 
         // Clean up host routes we added so we don't pollute the system routing table.
+        try { RemoveRelayInterfaceRoute(); } catch (Exception ex) { Logger.Warning($"RemoveRelayInterfaceRoute failed: {ex.Message}"); }
         try { RemoveAllHostRoutes(); } catch (Exception ex) { Logger.Warning($"RemoveAllHostRoutes failed: {ex.Message}"); }
 
         // Clear stale per-session state so it doesn't affect the next connection.
@@ -1328,6 +1336,12 @@ public partial class TrafficRouterService : IDisposable
             {
                 WinDivertNative.WinDivertClose(_wgVpnOutHandle);
                 _wgVpnOutHandle = IntPtr.Zero;
+                closed++;
+            }
+            if (_loopbackReturnHandle != IntPtr.Zero && _loopbackReturnHandle != new IntPtr(-1))
+            {
+                WinDivertNative.WinDivertClose(_loopbackReturnHandle);
+                _loopbackReturnHandle = IntPtr.Zero;
                 closed++;
             }
             Logger.Info($"[HANDLE] Closed {closed} WinDivert handles");

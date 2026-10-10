@@ -4,6 +4,7 @@ using Xunit;
 
 namespace AppTunnel.Tests;
 
+[Collection(LocalizationCollection.Name)]
 public class ConnectionProfileLatencyDisplayTests
 {
     [Fact]

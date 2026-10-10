@@ -577,7 +577,7 @@ public sealed partial class LocalizationService : INotifyPropertyChanged
         ["پروفایل فعال، تست سرور، اتصال/قطع اتصال، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."] = "Active profile, server test, connect/disconnect, exit IP, ping, usage, and manual proxy guidance are here.",
         ["پروفایل فعال، اشتراک (sub)، تست تأخیر قبل از اتصال، اتصال/قطع، IP خروجی، پینگ، مصرف و راهنمای پراکسی دستی اینجاست."] = "Active profile, subscription (sub), pre-connect latency test, connect/disconnect, exit IP, ping, usage, and manual proxy guidance are here.",
         ["نکات مهم"] = "Essentials",
-        ["حالت عادی: فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی وارد تونل می‌شوند."] = "Normal mode: only selected apps and included destinations use the tunnel.",
+        ["حالت عادی: فقط برنامه‌های انتخاب‌شده و مقصدهای لزومی وارد تونل می‌شوند. برنامه‌های دیگر روی اینترنت مستقیم می‌مانند و DNS آن‌ها به تونل نمی‌رود."] = "Normal mode: only selected apps and included destinations use the tunnel. Other apps stay on the direct connection, and their DNS is not sent through the tunnel.",
         ["Full Route: کل سیستم وارد تونل می‌شود؛ استثناها می‌توانند مستقیم بمانند."] = "Full Route: the whole system uses the tunnel; exclusions can stay direct.",
         ["پراکسی داخلی"] = "Local Proxy",
         ["برای ابزارهایی که آدرس محلی می‌خواهند:"] = "For tools that need a local address:",

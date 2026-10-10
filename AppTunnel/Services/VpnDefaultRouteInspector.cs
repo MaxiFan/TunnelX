@@ -83,6 +83,13 @@ internal static class VpnDefaultRouteInspector
         => FilterDefaultRoutes(ReadIpv4ForwardTable());
 
     public static int DeleteDefaultRoutesOnInterface(int ifIndex)
+        => DeleteDefaultRoutesOnInterface(ifIndex, capturingOnly: true);
+
+    /// <summary>
+    /// Deletes 0.0.0.0/0 rows on <paramref name="ifIndex"/>.
+    /// Capturing-only keeps the high-metric relay route used by split mode.
+    /// </summary>
+    public static int DeleteDefaultRoutesOnInterface(int ifIndex, bool capturingOnly)
     {
         if (ifIndex <= 0)
             return 0;
@@ -91,6 +98,8 @@ internal static class VpnDefaultRouteInspector
         foreach (var row in ReadDefaultRoutes())
         {
             if (row.IfIndex != (uint)ifIndex)
+                continue;
+            if (capturingOnly && !SplitDirectPathPolicy.IsCapturingDefaultMetric(row.Metric))
                 continue;
 
             var native = new MIB_IPFORWARDROW
@@ -112,6 +121,40 @@ internal static class VpnDefaultRouteInspector
             {
                 // Best-effort; TrafficRouter falls back to metric/proto sweeps and route.exe.
             }
+        }
+
+        return deleted;
+    }
+
+    public static int DeleteRelayInterfaceRoutes(int ifIndex)
+    {
+        if (ifIndex <= 0)
+            return 0;
+
+        var deleted = 0;
+        foreach (var row in ReadDefaultRoutes())
+        {
+            if (row.IfIndex != (uint)ifIndex)
+                continue;
+            if (SplitDirectPathPolicy.IsCapturingDefaultMetric(row.Metric))
+                continue;
+
+            var native = new MIB_IPFORWARDROW
+            {
+                dwForwardDest = 0,
+                dwForwardMask = 0,
+                dwForwardNextHop = row.NextHop,
+                dwForwardIfIndex = row.IfIndex,
+                dwForwardType = 3,
+                dwForwardProto = row.Proto,
+                dwForwardMetric1 = row.Metric
+            };
+            try
+            {
+                if (IpHelperNative.DeleteIpForwardEntry(ref native) == 0)
+                    deleted++;
+            }
+            catch { }
         }
 
         return deleted;
