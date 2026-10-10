@@ -30,6 +30,7 @@ internal static class TunnelXCleanupService
             await CleanupOpenVpnAsync(ct);
             await CleanupWireGuardAsync(ct);
             CleanupTempConfigs();
+            TunIpv4ConflictCleanup.RemoveStaleLeftovers(reason);
 
             Logger.Info("[CLEANUP] TunnelX cleanup finished");
         }

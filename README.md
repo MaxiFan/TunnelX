@@ -176,6 +176,7 @@ Logs can contain process names, hostnames, IP addresses, ports, and connection s
 
 - If connection fails, check Administrator privileges, firewall rules, config validity, proxy ports, and prerequisites for the selected connection type.
 - If sing-box or Xray stops on TUN with `device is not ready` / `open interface take too much time`, that is a Wintun/Windows adapter issue, not a broken SocksProxy or V2Ray profile. Run as Administrator, close other Wintun apps (WireGuard, WARP, Outline, …), remove stuck `TunnelX-V2Ray` / Wintun adapters in `ncpa.cpl` or Device Manager, check antivirus, reboot, and retry.
+- If sing-box stops with `set ipv4 address: The object already exists`, the profile is fine and a Wintun adapter often never appears. Windows already has the TUN IPv4 (default `172.18.0.1/30`) on a leftover TunnelX entry or on another adapter such as Docker, Hyper-V, WSL, or a second VPN. TunnelX deletes only its own stale address and route, then retries with a free prefix and, if needed, another interface name. If it still fails, run `Get-NetIPAddress` in an Administrator PowerShell and remove that address from the other adapter.
 - If an app does not use the tunnel, enable it in the apps tab, keep it running, and refresh the app list.
 - If only one site or domain should use the tunnel, add it to include destinations. If it should stay direct, add it to exclusions.
 - If DNS or IPv6 status looks wrong, check the health cards after connection and reconnect once to rebuild routes and DNS rules.

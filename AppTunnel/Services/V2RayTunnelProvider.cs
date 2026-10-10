@@ -18,7 +18,8 @@ public class V2RayTunnelProvider : ITunnelProvider
 {
     private const string TunInterfaceName = "TunnelX-V2Ray";
     private const string TunAddress       = "172.18.0.1/30";
-    private const string VpnLocalIp       = "172.18.0.1";  // actual TUN interface address
+    private const string VpnLocalIp       = "172.18.0.1";  // historical default; a connect may pick another free prefix
+    private string _activeTunLocalIp = VpnLocalIp;
     private const int    DefaultTunMtu    = 1500;
     private const int    DefaultMixedProxyPort   = 2080;  // preferred sing-box SOCKS5/HTTP inbound for accurate ping
     private const int    TunInterfaceWaitSeconds = 20;
@@ -141,23 +142,37 @@ public class V2RayTunnelProvider : ITunnelProvider
                 return false;
             }
 
-            await File.WriteAllTextAsync(_configPath, singBoxJson, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), ct);
-            Logger.Info($"V2Ray config written to {_configPath}");
             mixedProxyPortReservation.Dispose();
 
-            const int maxTunAttempts = 2;
+            var tunSession = new TunEndpointSession();
             var capturedLogs = new StringBuilder();
             int interfaceIndex = -1;
 
-            for (var attempt = 1; attempt <= maxTunAttempts; attempt++)
+            for (var attempt = 1; attempt <= TunEndpointSession.MaxAttempts; attempt++)
             {
+                var attemptReason = attempt == 1 ? "pre-connect" : $"retry-{attempt}";
+                tunSession.PrepareForAttempt(attemptReason);
+                _activeTunLocalIp = tunSession.Address.Host;
+                singBoxJson = BuildSingBoxConfig(
+                    config.V2RayConfig,
+                    tunMtu,
+                    config.EnableDnsOptimization,
+                    mixedProxyPort,
+                    tunSession.Address.Cidr,
+                    tunSession.InterfaceName);
+                await File.WriteAllTextAsync(_configPath, singBoxJson, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), ct);
+                Logger.Info($"V2Ray config written to {_configPath} tun={tunSession.Address.Cidr} iface={tunSession.InterfaceName}");
+
                 capturedLogs = new StringBuilder();
                 await WintunAdapterHealth.PrepareForTunOpenAsync(
-                    attempt == 1 ? "pre-connect" : $"retry-{attempt}",
-                    ct);
+                    attemptReason,
+                    ct,
+                    tunSession.InterfaceName);
 
                 StartSingBoxProcess(capturedLogs);
-                Logger.Info($"sing-box started (PID {_process!.Id}) attempt={attempt}/{maxTunAttempts}");
+                Logger.Info(
+                    $"sing-box started (PID {_process!.Id}) attempt={attempt}/{TunEndpointSession.MaxAttempts} " +
+                    $"tun={tunSession.Address.Cidr} iface={tunSession.InterfaceName}");
                 ConnectionProgressService.Report("tunnel_engine", ConnectionProgressPhase.Active, "راه‌اندازی هسته تونل (Xray/V2Ray)");
                 ConnectionProgressService.Report("tun_bridge", ConnectionProgressPhase.Active, "راه‌اندازی پل TUN (sing-box)");
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Active, "شناسایی آداپتر مجازی");
@@ -170,7 +185,7 @@ public class V2RayTunnelProvider : ITunnelProvider
                     if (_process.HasExited)
                         break;
 
-                    interfaceIndex = FindInterfaceIndex(TunInterfaceName);
+                    interfaceIndex = FindInterfaceIndex(tunSession.InterfaceName);
                     if (interfaceIndex > 0)
                         break;
                     await Task.Delay(500, ct);
@@ -191,21 +206,25 @@ public class V2RayTunnelProvider : ITunnelProvider
                 await KillProcessAsync();
                 WintunAdapterHealth.LogInventory(exited ? "after-early-exit" : "after-tun-timeout");
 
-                var canRetry = attempt < maxTunAttempts &&
-                    SingBoxTunFailure.ShouldRetryTunOpen(logs, exited);
-                if (canRetry)
+                var disposition = tunSession.Classify(logs, attempt, exited);
+                if (disposition is TunFailureDisposition.RetryAddress or TunFailureDisposition.RetryReadiness)
                 {
                     Logger.Warning(
-                        $"[WINTUN] TUN open failed (exited={exited} code={exitCode}); retrying after backoff");
-                    Status.Message = LocalizationService.Instance.T("تلاش مجدد برای ساخت آداپتر TUN...");
-                    await Task.Delay(1500, ct);
+                        $"[WINTUN] TUN open failed (exited={exited} code={exitCode} disposition={disposition}); retrying after backoff");
+                    Status.Message = LocalizationService.Instance.T(
+                        disposition == TunFailureDisposition.RetryAddress
+                            ? SingBoxTunFailure.TunAddressRetryKey
+                            : "تلاش مجدد برای ساخت آداپتر TUN...");
+                    await Task.Delay(disposition == TunFailureDisposition.RetryAddress ? 700 : 1500, ct);
                     continue;
                 }
 
                 Status.State = ConnectionState.Error;
-                Status.Message = exited
-                    ? SingBoxTunFailure.FormatEarlyExitMessage(exitCode, logs)
-                    : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
+                Status.Message = disposition == TunFailureDisposition.FailAddressConflict
+                    ? SingBoxTunFailure.FormatAddressConflict($"{tunSession.Address.Cidr} (exit {exitCode})")
+                    : exited
+                        ? SingBoxTunFailure.FormatEarlyExitMessage(exitCode, logs)
+                        : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
                 Logger.Error(Status.Message);
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
                 return false;
@@ -215,7 +234,9 @@ public class V2RayTunnelProvider : ITunnelProvider
             {
                 var logs = WintunAdapterHealth.FormatCapturedLogs(capturedLogs);
                 Status.State = ConnectionState.Error;
-                Status.Message = SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
+                Status.Message = SingBoxTunFailure.ShouldRetryAsAddressConflict(logs)
+                    ? SingBoxTunFailure.FormatAddressConflict($"{tunSession.Address.Cidr} (exit 1)")
+                    : SingBoxTunFailure.FormatInterfaceWaitFailure(TunInterfaceWaitSeconds, logs);
                 Logger.Error(Status.Message);
                 ConnectionProgressService.Report("tun_interface", ConnectionProgressPhase.Fail, Status.Message);
                 await KillProcessAsync();
@@ -237,7 +258,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             var statusServerPort = ExtractServerPort(config.V2RayConfig);
             Status.State             = ConnectionState.Connected;
             Status.ConnectedSince    = DateTime.Now;
-            Status.VpnLocalIp        = VpnLocalIp;
+            Status.VpnLocalIp        = _activeTunLocalIp;
             Status.VpnServerHost     = statusServerHost;
             Status.VpnServerIp       = statusServerHost;
             Status.VpnServerPort     = statusServerPort;
@@ -245,7 +266,7 @@ public class V2RayTunnelProvider : ITunnelProvider
             Status.SingBoxMixedPort  = mixedProxyPort;
             LocalProxyAnnouncements.Connected(mixedProxyPort);
             Status.Message           = config.TunnelType == TunnelType.SocksProxy ? "Proxy connected" : "V2Ray connected";
-            Logger.Info($"{(config.TunnelType == TunnelType.SocksProxy ? "Proxy" : "V2Ray")} tunnel up — interface index {interfaceIndex}, server={Status.VpnServerIp}:{Status.VpnServerPort}");
+            Logger.Info($"{(config.TunnelType == TunnelType.SocksProxy ? "Proxy" : "V2Ray")} tunnel up — interface index {interfaceIndex}, tun={_activeTunLocalIp}, server={Status.VpnServerIp}:{Status.VpnServerPort}");
 
             return true;
         }
@@ -411,8 +432,21 @@ public class V2RayTunnelProvider : ITunnelProvider
     // Config builder
     // =========================================================================
 
-    private string BuildSingBoxConfig(string userConfig, int tunMtu, bool enableDnsOptimization, int mixedProxyPort) =>
-        BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: true, tunMtu, enableDnsOptimization);
+    private string BuildSingBoxConfig(
+        string userConfig,
+        int tunMtu,
+        bool enableDnsOptimization,
+        int mixedProxyPort,
+        string? tunAddress = null,
+        string? tunInterfaceName = null) =>
+        BuildSingBoxDocument(
+            userConfig,
+            mixedProxyPort,
+            includeTun: true,
+            tunMtu,
+            enableDnsOptimization,
+            tunAddress,
+            tunInterfaceName);
 
     internal string BuildMixedOnlySingBoxConfig(string userConfig, int mixedProxyPort, bool enableDnsOptimization = true) =>
         BuildSingBoxDocument(userConfig, mixedProxyPort, includeTun: false, DefaultTunMtu, enableDnsOptimization);
@@ -422,7 +456,9 @@ public class V2RayTunnelProvider : ITunnelProvider
         int mixedProxyPort,
         bool includeTun,
         int tunMtu,
-        bool enableDnsOptimization)
+        bool enableDnsOptimization,
+        string? tunAddress = null,
+        string? tunInterfaceName = null)
     {
         userConfig = userConfig.Trim();
         if (userConfig.StartsWith('{'))
@@ -435,12 +471,14 @@ public class V2RayTunnelProvider : ITunnelProvider
             }
 
             ApplyServerPreResolve(bareOutbound, enableDnsOptimization);
-            return SerializeSingBoxDocument(bareOutbound, bareTag, mixedProxyPort, includeTun, tunMtu);
+            return SerializeSingBoxDocument(
+                bareOutbound, bareTag, mixedProxyPort, includeTun, tunMtu, tunAddress, tunInterfaceName);
         }
 
         var (outbound, outboundTag) = ParseShareLinkOutbound(userConfig);
         ApplyServerPreResolve(outbound, enableDnsOptimization);
-        return SerializeSingBoxDocument(outbound, outboundTag, mixedProxyPort, includeTun, tunMtu);
+        return SerializeSingBoxDocument(
+            outbound, outboundTag, mixedProxyPort, includeTun, tunMtu, tunAddress, tunInterfaceName);
     }
 
     internal async Task<long> ProbeMixedProxyLatencyAsync(
@@ -590,7 +628,9 @@ public class V2RayTunnelProvider : ITunnelProvider
         string outboundTag,
         int mixedProxyPort,
         bool includeTun,
-        int tunMtu)
+        int tunMtu,
+        string? tunAddress = null,
+        string? tunInterfaceName = null)
     {
         var inbounds = new JsonArray();
         if (includeTun)
@@ -599,8 +639,8 @@ public class V2RayTunnelProvider : ITunnelProvider
             {
                 ["type"] = "tun",
                 ["tag"] = "tun-in",
-                ["interface_name"] = TunInterfaceName,
-                ["address"] = new JsonArray { TunAddress },
+                ["interface_name"] = string.IsNullOrWhiteSpace(tunInterfaceName) ? TunInterfaceName : tunInterfaceName,
+                ["address"] = new JsonArray { string.IsNullOrWhiteSpace(tunAddress) ? TunAddress : tunAddress },
                 ["mtu"] = TunnelPerformanceTuner.ClampTunMtu(tunMtu),
                 ["auto_route"] = false,
                 ["strict_route"] = false,

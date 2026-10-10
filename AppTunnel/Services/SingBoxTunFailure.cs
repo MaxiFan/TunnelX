@@ -22,9 +22,15 @@ internal static class SingBoxTunFailure
     public const string InterfaceTimeoutKey =
         "interface TunnelX-V2Ray ظاهر نشد (timeout {0}s)";
 
+    public const string TunAddressConflictKey =
+        "آدرس IPv4 آداپتر TUN {0} از قبل روی ویندوز وجود دارد. این خطای کانفیگ نیست و آداپتر Wintun غیب نشده است. TunnelX آدرس و مسیر باقی‌ماندهٔ خودش را پاک کرد و آدرس دیگری را امتحان کرد. اگر باز هم نشد، آداپتر دیگری (Docker، Hyper-V، WSL یا یک VPN دیگر) همان بازه را دارد؛ آن را قطع کنید یا در PowerShell با Administrator فقط همان آدرس را با Get-NetIPAddress و Remove-NetIPAddress بردارید و دوباره وصل شوید.";
+
+    public const string TunAddressRetryKey =
+        "آدرس TUN تکراری بود؛ در حال امتحان آدرس آزاد بعدی...";
+
     public static bool IsReadinessFailure(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(text) || ShouldRetryAsAddressConflict(text))
             return false;
 
         return ContainsAny(text,
@@ -35,6 +41,30 @@ internal static class SingBoxTunFailure
             "ERROR_NOT_READY",
             "not ready for use");
     }
+
+    /// <summary>
+    /// sing-box wraps Win32 ERROR_OBJECT_ALREADY_EXISTS from CreateUnicastIpAddressEntry.
+    /// The "set ipv4 address" prefix is stable; the Windows text is localized, so any
+    /// assignment failure other than access denied is treated as this conflict.
+    /// </summary>
+    public static bool IsIpv4AddressConflict(string? text)
+        => IsIpv4AddressAssignmentFailure(text) &&
+           ContainsAny(text!, "already exists", "ERROR_OBJECT_ALREADY_EXISTS", "object already");
+
+    public static bool IsIpv4AddressAssignmentFailure(string? text)
+        => !string.IsNullOrWhiteSpace(text) &&
+           text.Contains("set ipv4 address", StringComparison.OrdinalIgnoreCase);
+
+    public static bool ShouldRetryAsAddressConflict(string? text)
+    {
+        if (!IsIpv4AddressAssignmentFailure(text))
+            return false;
+
+        return !ContainsAny(text!, "access is denied", "ERROR_ACCESS_DENIED");
+    }
+
+    public static string FormatAddressConflict(string addressLabel)
+        => LocalizationService.Instance.Format(TunAddressConflictKey, addressLabel);
 
     public static bool LooksLikeConfigError(string? text)
     {
@@ -54,6 +84,9 @@ internal static class SingBoxTunFailure
     public static string FormatEarlyExitMessage(int exitCode, string? capturedLogs, bool isBridge = false)
     {
         var loc = LocalizationService.Instance;
+        if (ShouldRetryAsAddressConflict(capturedLogs))
+            return FormatAddressConflict($"(exit {exitCode})");
+
         if (IsReadinessFailure(capturedLogs))
             return loc.Format(TunNotReadyExitKey, exitCode);
 

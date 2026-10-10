@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### English
+
+- SocksProxy and V2Ray connects that failed with sing-box `set ipv4 address: The object already exists` no longer show a generic “Wintun adapter was not ready” error. That Win32 error means the TUN IPv4 (default `172.18.0.1/30`) is already assigned, often on Docker, Hyper-V, WSL, another VPN, or a leftover TunnelX entry that does not show up as a Wintun adapter. TunnelX now removes only its own stale address, route, and saved interface profile, then retries with a free prefix and, if needed, another interface name. If every choice still conflicts, the UI explains the collision in Persian, English, and Russian (`Fixes #78`).
+
+### فارسی
+
+<div dir="rtl" align="right">
+
+- اتصال SocksProxy و V2Ray که با `set ipv4 address: The object already exists` شکست می‌خورد دیگر پیام کلی «آداپتر Wintun آماده نیست» را نشان نمی‌دهد. این خطای ویندوز یعنی آدرس IPv4 تونل (پیش‌فرض `172.18.0.1/30`) از قبل اختصاص داده شده؛ معمولاً روی Docker، Hyper-V، WSL، یک VPN دیگر، یا باقی‌ماندهٔ TunnelX که به شکل آداپتر Wintun دیده نمی‌شود. TunnelX فقط آدرس، مسیر و پروفایل ذخیره‌شدهٔ خودش را پاک می‌کند و با یک پیشوند آزاد و در صورت نیاز نام رابط دیگر دوباره تلاش می‌کند. اگر همهٔ گزینه‌ها تکراری بمانند، رابط برخورد را به فارسی، انگلیسی و روسی توضیح می‌دهد (رفع #78).
+
+</div>
+
+### Русский
+
+- Подключения SocksProxy и V2Ray, которые падали с `set ipv4 address: The object already exists`, больше не показывают общую ошибку «адаптер Wintun не готов». Эта ошибка Windows значит, что IPv4 туннеля (по умолчанию `172.18.0.1/30`) уже занят — часто Docker, Hyper-V, WSL, другим VPN или остатком TunnelX, который не виден как адаптер Wintun. TunnelX удаляет только свой устаревший адрес, маршрут и сохранённый профиль интерфейса, затем повторяет попытку со свободным префиксом и при необходимости с другим именем интерфейса. Если конфликт остаётся на всех вариантах, интерфейс объясняет его на персидском, английском и русском (`Fixes #78`).
+
 ## 2.2.2 - 2026-09-30
 
 ### English
