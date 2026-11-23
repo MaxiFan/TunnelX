@@ -46,7 +46,7 @@
 连接期间，TunnelX 在面板显示公网出口 IP。国家名称与旗帜为可选增强：
 
 - 出口 IP 通过本地 SOCKS/混合代理查询，使请求经隧道出口（`ipv4.icanhazip.com`、`api.ipify.org`、`ifconfig.me`）。
-- 国家查询经同一路径的备用 API：`ip-api.com`、`ipwho.is`、`ipapi.co`。
+- 国家查询经同一路径的备用 API：`ip-api.com`、`ipwho.is`、`ipapi.co`、`api.internetdata.io`。
 - 旗帜为 `flagcdn.com` 的小 PNG（`/h20/{country-code}.png`），同样经隧道下载。
 
 这些请求不是发送给 TunnelX 维护者的分析数据，而是应用按需发起的查询。详见 `docs/PRIVACY.md`。

@@ -17,7 +17,7 @@ When the connected dashboard shows your public exit IP, optional country name, o
 | Purpose | Third-party hosts | Notes |
 | --- | --- | --- |
 | Public exit IP | `ipv4.icanhazip.com`, `api.ipify.org`, `ifconfig.me` | Fallback chain; retries while connected |
-| Country / region lookup | `ip-api.com`, `ipwho.is`, `ipapi.co` | Tried in order until one succeeds |
+| Country / region lookup | `ip-api.com`, `ipwho.is`, `ipapi.co`, `api.internetdata.io` | Tried in order until one succeeds |
 | Flag image (PNG) | `flagcdn.com` | Path pattern `/h20/{country-code}.png` |
 
 These services receive requests that appear to come from your tunnel exit IP. They are not used for maintainer-side tracking. If you disconnect, these lookups stop for that session.

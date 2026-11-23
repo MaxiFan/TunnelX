@@ -96,7 +96,7 @@ The connected ping field follows the first custom target until you edit it. Spli
 While connected, TunnelX shows your public exit IP on the dashboard. Country name and flag image are optional enrichments:
 
 - Exit IP is queried through the local SOCKS/mixed proxy so the request exits via the tunnel (`ipv4.icanhazip.com`, `api.ipify.org`, `ifconfig.me`).
-- Country lookup uses fallback APIs through the same tunnel path: `ip-api.com`, `ipwho.is`, `ipapi.co`.
+- Country lookup uses fallback APIs through the same tunnel path: `ip-api.com`, `ipwho.is`, `ipapi.co`, `api.internetdata.io`.
 - The flag is a small PNG from `flagcdn.com` (`/h20/{country-code}.png`), also downloaded through the tunnel.
 
 These calls are not analytics sent to the TunnelX maintainer; they are on-demand lookups initiated by the app. See `docs/PRIVACY.md` for details.

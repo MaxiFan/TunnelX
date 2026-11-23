@@ -19,7 +19,7 @@ When the user is connected, TunnelX may call the hosts below **through the local
 | Host | Purpose |
 | --- | --- |
 | `ipv4.icanhazip.com`, `api.ipify.org`, `ifconfig.me` | Public exit IP detection |
-| `ip-api.com`, `ipwho.is`, `ipapi.co` | Country / region lookup |
+| `ip-api.com`, `ipwho.is`, `ipapi.co`, `api.internetdata.io` | Country / region lookup |
 | `flagcdn.com` | Country flag PNG images |
 | `api.github.com`, `github.com` | Release update checks |
 
