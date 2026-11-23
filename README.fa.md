@@ -53,7 +53,7 @@
 در حالت متصل، <span dir="ltr">IP</span> عمومی خروجی روی داشبورد نمایش داده می‌شود. نام کشور و تصویر پرچم اختیاری و تکمیلی هستند:
 
 - <span dir="ltr">IP</span> خروجی از طریق پراکسی محلی <span dir="ltr">SOCKS/mixed</span> پرسیده می‌شود تا از همان تونل خارج شود (<span dir="ltr">`ipv4.icanhazip.com`</span>، <span dir="ltr">`api.ipify.org`</span>، <span dir="ltr">`ifconfig.me`</span>).
-- تشخیص کشور با چند سرویس پشت‌سرهم از همان مسیر تونل: <span dir="ltr">`ip-api.com`</span>، <span dir="ltr">`ipwho.is`</span>، <span dir="ltr">`ipapi.co`</span>.
+- تشخیص کشور با چند سرویس پشت‌سرهم از همان مسیر تونل: <span dir="ltr">`ip-api.com`</span>، <span dir="ltr">`ipwho.is`</span>، <span dir="ltr">`ipapi.co`</span>، <span dir="ltr">`api.internetdata.io`</span>.
 - پرچم یک تصویر کوچک <span dir="ltr">PNG</span> از <span dir="ltr">`flagcdn.com`</span> است که از داخل تونل دانلود می‌شود.
 
 این درخواست‌ها تحلیل آماری به نگهدارنده <span dir="ltr">TunnelX</span> نیستند؛ فقط هنگام نیاز توسط خود برنامه انجام می‌شوند. جزئیات در <span dir="ltr">`docs/PRIVACY.md`</span>.

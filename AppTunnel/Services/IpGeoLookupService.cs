@@ -114,6 +114,7 @@ public static class IpGeoLookupService
                 $"/json/{encodedIp}?fields=status,country,countryCode,message&lang={lang}", false),
             ("ipwho.is", 443, $"/{encodedIp}", true),
             ("ipapi.co", 443, $"/{encodedIp}/json/", true),
+            ("api.internetdata.io", 443, $"/{encodedIp}", true),
         };
 
         foreach (var (host, port, path, tls) in endpoints)
@@ -154,6 +155,15 @@ public static class IpGeoLookupService
 
             var country = GetString(root, "country", "country_name");
             var code = GetString(root, "countryCode", "country_code");
+
+            // api.internetdata.io nests it: "location": { "country": "US", "country_name": "United States" }.
+            if ((string.IsNullOrWhiteSpace(country) || string.IsNullOrWhiteSpace(code)) &&
+                root.TryGetProperty("location", out var location) &&
+                location.ValueKind == JsonValueKind.Object)
+            {
+                country = GetString(location, "country_name");
+                code = GetString(location, "country");
+            }
 
             if (string.IsNullOrWhiteSpace(country) || string.IsNullOrWhiteSpace(code))
                 return false;
